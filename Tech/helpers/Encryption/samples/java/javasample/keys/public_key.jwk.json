@@ -1,0 +1,8 @@
+{
+    "kty": "RSA",
+    "use": "enc",
+    "alg": "RSA-OAEP-256",
+    "kid": "9cda129c-375e-4953-aa03-a3951ad0b352",
+    "n": "oslRa0f4FR7wOxBhka4SbhqelzD5a9g-zHrDl4R_gar2rZ0vcyBI1EQgP46X_yivUm4-WlCrkHBPwGGYjpYrIRMofxt4rvY7ddA3sKjHScx_G3qe5oJxpft1qi0ihnd4SLfBqyWDdkNuYmvFwtQDcSscD84bgGJTnbCXBpmd6MoFcH0CPh6Y_uPLL1H-4O8ElYoRpBQcbxWYwt6G3k10WkvCdsvQDa-PFKkOaCepb78qHY5erYYYqQrrmKLMlCES2XwOYA-5M2wgVn7qa7Yfcs0IkLgKG06cGzQ7bsrs5letys_3ugfHsB1nswfexPT37M1_FrBmKg-3rRwEVfV9Cw",
+    "e": "AQAB"
+}

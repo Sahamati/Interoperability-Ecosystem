@@ -1,0 +1,929 @@
+swagger: "2.0"
+info:
+  description: |-
+    # Summary
+
+    # Proposed by Sahamati, subject to approval by ReBIT.
+
+       The Financial Information User (FIU) Interoperability APIs enable communication between unconnected FIUs and AAs. These APIs facilitate the flow of information between unconnected entities, with their mutually linked AAs acting as gateways. Eventually, customers would be able to use any FIU of their choice to fetch their financial information from any FIP of their choice. Subject to approval by ReBIT.
+
+    ---
+  version: 1.0.0
+  title: Financial Information User Interoperability Callback API
+  x-custom-tags:
+    x-api-name: Financial Information User (FIU) Interoperability Callback API
+tags:
+- name: Notifications
+  description: These APIs are used by AAs to send consent status update and financial information request related notifications to FIU/AA Client.
+schemes:
+- https
+consumes:
+- application/json
+produces:
+- application/json
+security:
+- x-conn_aa_api_key: []
+paths:
+  /iop/Consent/Notification:
+    post:
+      tags:
+      - Notifications
+      description: |-
+        This API is called by a connected-AA to an FIU.
+        Business purpose: This API is intended to be used by AA to notify FIU about the change in consent status due to the consent management operations performed by the Customer.
+
+        <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
+      parameters:
+      - name: x-jws-signature 
+        type: string          
+        in: header
+        required: true
+        description: Detached JWS of the body
+      - in: body
+        name: body
+        required: true
+        schema:
+          $ref: "#/definitions/IOPConsentNotificationRequest"
+      security:
+      - x-conn_aa_api_key: []
+      responses:
+        "200":
+          description: OK
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPConsentNotificationResponse"
+        "400":
+          description: Bad Request
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPBadRequestConsentNotification"
+        "401":
+          description: Unauthorized Access
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPUnauthorizedAccess"
+        "404":
+          description: Not Found
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPNotFound"
+        "409":
+          description: Conflict
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPConflict"
+        "412":
+          description: Precondition failed
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPPreconditionFailed"
+        "500":
+          description: Internal Server Error
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPInternalServerError"
+        "501":
+          description: Not Implemented
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPNotImplemented"
+        "503":
+          description: Service Unavailable
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPServiceUnavailable"
+  /iop/FI/Notification:
+    post:
+      tags:
+      - Notifications
+      description: |-
+        This API is called by a connected-AA to an FIU.
+        Business purpose: This API can be used by AAs to send notifications related to Financial Information (FI) fetch to FIU/AA Client.
+
+        <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
+      parameters:
+      - name: x-jws-signature 
+        type: string          
+        in: header
+        required: true
+        description: Detached JWS of the body
+      - in: body
+        name: body
+        required: true
+        schema:
+          $ref: "#/definitions/IOPFINotificationRequest"
+      security:
+        - x-conn_aa_api_key: []
+      responses:
+        "200":
+          description: OK
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPFINotificationResponse"
+        "400":
+          description: Bad Request
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPBadRequestFINotification"
+        "401":
+          description: Unauthorized Access
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPUnauthorizedAccess"
+        "404":
+          description: Not Found
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPNotFound"
+        "409":
+          description: Conflict
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPConflict"
+        "412":
+          description: Precondition failed
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPPreconditionFailed"
+        "500":
+          description: Internal Server Error
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPInternalServerError"
+        "501":
+          description: Not Implemented
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPNotImplemented"
+        "503":
+          description: Service Unavailable
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPServiceUnavailable"
+securityDefinitions:
+  x-conn_aa_api_key:
+    description: x-conn_aa_api_key is provided by the connected-AA to FIU
+    type: apiKey
+    name: x-conn_aa_api_key
+    in: header
+definitions:
+  CorrelationId:
+    type: string
+    example: 550e8400-e29b-41d4-a716-446655440000
+    xml:
+      attribute: true
+    description: "A unique correlation identifier used to provide end-to-end traceability\nof that flow.\n\nIt identifies all the API calls pertaining to each flow.\n\nA flow could be one of the following:\n- User discovery\n- Account discovery\n- Account linking\n- Consent creation and approval\n- All the APIs of Data pull\n\nThis correlation ID is generated during the first API call for that flow\nand is carried forward and reused by every entity for subsequent API calls\nof that flow. "
+  Initiator:
+    type: object
+    properties:
+      type:
+        type: string
+        example: "AA"
+      id:
+        type: string
+        example: "aa-003"
+    xml:
+      attribute: true
+    description: The initiator customer-AA id, where the request originated.
+  SourceOfError:
+    type: object
+    properties:
+      type:
+        type: string
+        example: "FIP"
+      id:
+        type: string
+        example: "fipid-001"
+    description: Optionally set by the entity generating the error in response. A hop forwards it back to its immediate caller.
+    xml:
+      attribute: true
+  EncryptedData:
+    type: string
+    xml:
+      attribute: true
+    description: |-
+      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
+
+      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
+
+      The value consists of five base64url-encoded parts separated by `.`:
+
+      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
+
+      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JOSE"}`
+      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
+      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
+      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
+      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
+
+      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
+      ```json
+            {
+              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
+              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
+              "iv": "BASE64URL(96BIT_NONCE)",
+              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
+              "tag": "BASE64URL(128BIT_AUTH_TAG)"
+            }
+      ```
+      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
+    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
+  IopConsentNotificationPayload:
+    type: string
+    xml:
+      attribute: true
+    description: |-
+      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
+
+      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
+
+      The value consists of five base64url-encoded parts separated by `.`:
+
+      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
+
+      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JOSE"}`
+      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
+      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
+      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
+      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
+
+      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
+      ```json
+            {
+              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
+              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
+              "iv": "BASE64URL(96BIT_NONCE)",
+              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
+              "tag": "BASE64URL(128BIT_AUTH_TAG)"
+            }
+      ```
+      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
+      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the ConsentStatusNotification model for more details.
+    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
+  IopNotificationResponsePayload:
+    type: string
+    xml:
+      attribute: true
+    description: |-
+      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
+
+      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
+
+      The value consists of five base64url-encoded parts separated by `.`:
+
+      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
+
+      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JOSE"}`
+      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
+      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
+      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
+      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
+
+      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
+      ```json
+            {
+              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
+              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
+              "iv": "BASE64URL(96BIT_NONCE)",
+              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
+              "tag": "BASE64URL(128BIT_AUTH_TAG)"
+            }
+      ```
+      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
+      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the NotificationResponse model for more details.
+    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
+  IopFINotificationPayload:
+    type: string
+    xml:
+      attribute: true
+    description: |-
+      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
+
+      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
+
+      The value consists of five base64url-encoded parts separated by `.`:
+
+      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
+
+      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JOSE"}`
+      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
+      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
+      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
+      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
+
+      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
+      ```json
+            {
+              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
+              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
+              "iv": "BASE64URL(96BIT_NONCE)",
+              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
+              "tag": "BASE64URL(128BIT_AUTH_TAG)"
+            }
+      ```
+      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
+      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the FIStatusNotification model for more details.
+    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
+  IOPRequest:
+    type: object
+    required:
+    - timestamp
+    - txnid
+    - ver
+    - correlationId
+    - encryptedData
+    - Initiator
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-10-07T07:35:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      Initiator:
+        $ref: "#/definitions/Initiator"  
+      encryptedData:
+        $ref: "#/definitions/EncryptedData"
+  IOPConsentNotificationRequest:
+    type: object
+    required:
+    - timestamp
+    - txnid
+    - ver
+    - correlationId
+    - encryptedData
+    - Initiator
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-10-07T07:35:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      Initiator:
+        $ref: "#/definitions/Initiator"  
+      encryptedData:
+        $ref: "#/definitions/IopConsentNotificationPayload"
+  IOPFINotificationRequest:
+    type: object
+    required:
+    - timestamp
+    - txnid
+    - ver
+    - correlationId
+    - encryptedData
+    - Initiator
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-10-07T07:35:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      Initiator:
+        $ref: "#/definitions/Initiator"  
+      encryptedData:
+        $ref: "#/definitions/IopFINotificationPayload"
+  IOPResponse:
+    type: object
+    required:
+    - encryptedData
+    - timestamp
+    - txnid
+    - ver
+    - correlationId
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-10-07T07:35:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      encryptedData:
+        $ref: "#/definitions/EncryptedData"
+  IOPConsentNotificationResponse:
+    type: object
+    required:
+    - encryptedData
+    - timestamp
+    - txnid
+    - ver
+    - correlationId
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-10-07T07:35:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      encryptedData:
+        $ref: "#/definitions/IopNotificationResponsePayload"
+  IOPFINotificationResponse:
+    type: object
+    required:
+    - encryptedData
+    - timestamp
+    - txnid
+    - ver
+    - correlationId
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-10-07T07:35:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      encryptedData:
+        $ref: "#/definitions/IopNotificationResponsePayload"
+  ErrorResponse:
+    type: object
+    required:
+    - timestamp
+    - correlationId
+    - txnid
+    - ver
+    properties:
+      ver:
+        type: string
+        example: 2.0.0
+        xml:
+          attribute: true
+        description: API version.
+      txnid:
+        type: string
+        example: 0b811819-9044-4856-b0ee-8c88035f8858
+        xml:
+          attribute: true
+        description: Transaction id of the request. Must be same as the value sent in the request
+      timestamp:
+        type: string
+        format: date-time
+        example: 2023-06-26T11:33:34.509Z
+        xml:
+          attribute: true
+        description: Response timestamp
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: Error code indicating the problem with the request.
+      errorMsg:
+        type: string
+        example: Error code specific error message
+        description: Error message with additional details. Ensure no sensitive information is included in the error message.
+    description: Generic Error Response. Specific Error Responses extend from this.
+  IOPErrorResponse:
+    type: object
+    required:
+    - encryptedData
+    properties:
+      encryptedData:
+        $ref: "#/definitions/EncryptedData"
+    description: Generic Error Response. Specific Error Responses extend from this.
+  IOPBadRequest:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: Error code pertaining to the invalid request.
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Response to bad request.
+  IOPNotFound:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: Indicates that the resource specified in the request was not found.
+        enum:
+        - NoSuchResource
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Requested resource was not found.
+  IOPConflict:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: IdempotencyError when UUID/Id is not unique.
+        enum:
+        - IdempotencyError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: IdempotencyError when UUID/Id is not unique
+  IOPPreconditionFailed:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - PreconditionFailed
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: At least one of the preconditions you specified did not hold.
+  IOPInternalServerError:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InternalError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Encountered an internal error. Please try again.
+  IOPNotImplemented:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - NotImplemented
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Trying to access an unimplemented feature/API. Required when we provide backward compatiable API.
+  IOPServiceUnavailable:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - ServiceUnavailable
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Service is unavailable. Set to IopUpstreamError when forwarding an error in the encryptedData field.
+  IOPBadRequestConsentNotification:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - InvalidNotifier
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during Consent Notification
+  IOPBadRequestFINotification:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - InvalidFIStatusNotification
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during Consent Notification
+  IOPUnauthorizedAccess:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - Unauthorized
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Unauthorized Access
+  ConsentStatusNotification:
+      type: object
+      required:
+        - Notifier
+        - ConsentStatusNotification
+      properties:
+        Notifier:
+          type: object
+          description: Information about the notifier
+          required:
+            - type
+            - id
+          properties:
+            type:
+              type: string
+              example: AA
+              description: Type of the notifier entity
+              xml:
+                attribute: true
+            id:
+              type: string
+              example: AA-1
+              description: Unique ID to identify the entity
+              xml:
+                attribute: true
+        ConsentStatusNotification:
+          type: object
+          description: Contains the Consent ID, Consent Handle and Consent Status details.
+          required:
+            - consentStatus
+          properties:
+            consentId:
+              type: string
+              example: XXXX0-XXXX-XXXX
+              description: Unique ID generated by AA after consent approval is given by the customer.
+              xml:
+                attribute: true
+            consentHandle:
+              type: string
+              example: XXXX0-XXXX-XXXX
+              description: >-
+                Unique ID generated by AA after receiving the consent request. Consent Handle can 
+                be used by FIU/AA Client to check the consent status and also to retrieve the 
+                consent ID once consent is approved by the customer.
+              xml:
+                attribute: true
+            consentStatus:
+              type: string
+              example: PAUSED
+              description: Specifies the status of consent artefact.
+              xml:
+                attribute: true
+              enum:
+                - ACTIVE
+                - PENDING
+                - REVOKED
+                - PAUSED
+                - REJECTED
+                - EXPIRED
+
+
+  NotificationResponse:
+        type: object
+        properties:
+            response:
+              type: string
+              example: "OK"
+        xml:
+            attribute: true
+  FIStatusNotification:
+      type: object
+      required:
+        - Notifier
+        - FIStatusNotification
+      properties:
+        Notifier:
+          type: object
+          description: Information about the notifier
+          required:
+            - type
+            - id
+          properties:
+            type:
+              type: string
+              example: AA
+              description: Type of the notifier entity
+              xml:
+                attribute: true
+            id:
+              type: string
+              example: AA-1
+              description: Unique ID to identify the entity
+              xml:
+                attribute: true
+        FIStatusNotification:
+          type: object
+          description: Contains the financial information fetch session id, and session status details.
+          required:
+            - sessionId
+            - sessionStatus
+            - FIStatusResponse
+          properties:
+            sessionId:
+              type: string
+              example: XXXX0-XXXX-XXXX
+              description: A session ID is a base-64 encoded UUID number that an AA returns to the FIU or AA Client for each financial information access request.
+              xml:
+                attribute: true
+            sessionStatus:
+              type: string
+              example: ACTIVE
+              description: Status of the Financial Information fetch session.
+              enum:
+                - ACTIVE
+                - COMPLETED
+                - EXPIRED
+                - FAILED
+            FIStatusResponse:
+              type: array
+              description: List of financial information provider responses.
+              items:
+                type: object
+                required:
+                  - fipID
+                  - Accounts
+                properties:
+                  fipID:
+                    type: string
+                    example: FIP-1
+                    description: FIP ID as defined in the Account Aggregator Ecosystem.
+                  Accounts:
+                    type: array
+                    description: List of accounts linked with the FIP.
+                    items:
+                      type: object
+                      required:
+                        - linkRefNumber
+                        - FIStatus
+                        - description
+                      properties:
+                        linkRefNumber:
+                          type: string
+                          example: XXXX-XXXX-XXXX
+                          description: Reference number assigned by FIP as part of Account Linking Process.
+                        FIStatus:
+                          type: string
+                          example: READY
+                          description: Fetch Status of the Financial Information.
+                          xml:
+                            attribute: true
+                          enum:
+                            - READY
+                            - DENIED
+                            - PENDING
+                            - DELIVERED
+                            - TIMEOUT
+                        description:
+                          type: string
+                          example: "Status details description"
+                          description: Description associated with the current account fetch status.
+

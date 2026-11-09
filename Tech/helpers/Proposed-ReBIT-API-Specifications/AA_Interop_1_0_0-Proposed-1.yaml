@@ -158,7 +158,6 @@ paths:
         schema:
           allOf:
           - $ref: "#/definitions/IOPRequest"
-          - $ref: "#/definitions/TargetFIP"
           - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIU"
           - type: object
@@ -171,7 +170,6 @@ paths:
       security:
       - client_api_key: []
       - x-conn_aa_api_key: []
-      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -245,7 +243,7 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPServiceUnavailable"
-  /iop/Account/discover:
+  /iop/Accounts/discover:
     post:
       tags:
       - Account Discovery
@@ -366,7 +364,7 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPGatewayTimeout"
-  /iop/Account/link:
+  /iop/Accounts/link:
     post:
       tags:
       - Account Linking
@@ -486,7 +484,7 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPGatewayTimeout"
-  /iop/Account/link/verify:
+  /iop/Accounts/link/verify:
     post:
       tags:
       - Account Linking
@@ -728,7 +726,7 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPGatewayTimeout"
-  /iop/Account/delink:
+  /iop/Accounts/delink:
     post:
       tags:
       - Account Linking
@@ -3167,49 +3165,6 @@ definitions:
         description: List of user handles identified.
         items:
           $ref: "#/definitions/CustDiscoveryResponse_customerDiscoveryResponse"
-  IOPCustDiscoveryRequest:
-    type: object
-    required:
-    - correlationId
-    - Initiator
-    - clientSignature
-    - clientRequest
-    - timestamp
-    - txnid
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-08-18T09:30:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-        description: Unique transaction identifier used for providing an end to end traceability.
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      Initiator:
-        $ref: "#/definitions/InitiatorFIU"
-      clientSignature:
-        type: string
-        example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2...
-        xml:
-          attribute: true
-        description: |-
-          Detached JWS of the payload, signed by the client entity.
-      clientRequest:
-        $ref: "#/definitions/CustDiscoveryRequest"
   IOPRequest:
     type: object
     description: |-
@@ -4299,12 +4254,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      iopPayload:
+      encryptedData:
         $ref: "#/definitions/ConsentNotiResponsePayload"
   IOPFINotificationResponse:
     type: object
     required:
-    - iopPayload
+    - encryptedData
     - timestamp
     - txnid
     - correlationId
@@ -4330,7 +4285,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      iopPayload:
+      encryptedData:
         $ref: "#/definitions/FINotiResponsePayload"
   ErrorResponse:
     type: object

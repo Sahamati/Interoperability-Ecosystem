@@ -1,0 +1,442 @@
+openapi: 3.0.3
+info:
+  title: Sahamati AA Interoperability Graph (AIG) APIs
+  version: 1.0.0
+  description: |
+    Document Classification: Restricted.
+
+    AIG stands for AA-Interoperability-Graph. The graph describes connectivity links between
+    entities in the AA ecosystem (FIP↔AA, FIU↔AA, and AA↔AA for interoperability). Entities use it
+    to identify routes to target entities.
+
+    | Entity | Purpose |
+    |--------|---------|
+    | AA  | Identify connected-AAs towards an FIU, and inter-AAs towards an FIP. |
+    | FIU | Identify connected-AAs towards a customer-AA (not needed once all AAs are interconnected). |
+    | FIP | Identify inter-AAs towards an origin-AA (not needed once all AAs are interconnected). |
+
+    Error response codes 400, 401, 403, 429, 500, 501 and 503 apply to all APIs (per v1.0).
+servers:
+  - url: https://cr.sahamati.org.in
+    description: Production
+  - url: https://uatcr.sahamati.org.in
+    description: UAT
+tags:
+  - name: Read
+    description: Lookup APIs for the AIG graph
+  - name: Write
+    description: APIs to publish AIG graph data
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/aig/fip:
+    get:
+      tags: [Read]
+      operationId: getAigFip
+      summary: Lookup AIG for all FIPs
+      description: Called only by AAs. Returns, for each FIP, the list of inter-AAs that route to it.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: AIG for all FIPs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FipGraphResponse'
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-10-07T07:35:00.000Z"
+                txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+                fip:
+                  - id: "fip-1"
+                    inter-AA:
+                      - id: "aa-1"
+                        verified: true
+                        attr:
+                          key1: "value1"
+                          key2: "value2"
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '501': { $ref: '#/components/responses/NotImplemented' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /v1/aig/fiu:
+    get:
+      tags: [Read]
+      operationId: getAigFiu
+      summary: Lookup AIG for all FIUs
+      description: Called only by AAs. Returns, for each FIU, the list of connected-AAs.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: AIG for all FIUs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiuGraphResponse'
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-10-07T07:35:00.000Z"
+                txnid: "3a4adbbe-29ae-11e8-a8d7-0289437bf331"
+                fiu:
+                  - id: "fiu-4"
+                    connected-AA:
+                      - id: "aa-4"
+                        verified: true
+                        attr:
+                          key1: "value1"
+                          key2: "value2"
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '501': { $ref: '#/components/responses/NotImplemented' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /v1/aig/aa:
+    get:
+      tags: [Read]
+      operationId: getAigAa
+      summary: Lookup AIG for all AAs
+      description: Called by FIUs or FIPs. Returns, for each AA, the list of peer-AAs it interoperates with.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: AIG for all AAs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AaGraphResponse'
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-10-07T07:35:00.000Z"
+                txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+                aa:
+                  - id: "aa-1"
+                    peer-AA:
+                      - id: "aa-2"
+                        verified: true
+                        attr:
+                          key1: "value1"
+                          key2: "value2"
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '501': { $ref: '#/components/responses/NotImplemented' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /v1/aig/update:
+    put:
+      tags: [Write]
+      operationId: updateAig
+      summary: Publish AIG graph by AA
+      description: Called by AAs to publish the FIPs, FIUs and peer AAs they are connected to.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AigUpdateRequest'
+            example:
+              ver: "1.0.0"
+              timestamp: "2026-11-03T10:00:00.000Z"
+              txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+              fip: ["fip-entity-01"]
+              fiu: ["fiu-entity-02"]
+              aa: ["aa-entity-03"]
+      responses:
+        '200':
+          description: AIG graph uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AigUpdateResponse'
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-11-06T06:22:34.258596480Z"
+                txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+                responseText: "Uploaded"
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '501': { $ref: '#/components/responses/NotImplemented' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Bearer token of the calling entity.
+        - /v1/aig/fip, /v1/aig/fiu, /v1/aig/update: token of an AA
+        - /v1/aig/aa: token of an FIU or FIP
+
+  schemas:
+    BaseMessage:
+      type: object
+      required: [ver, timestamp, txnid]
+      properties:
+        ver:
+          type: string
+          description: API version
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+          description: Message timestamp (ISO 8601, UTC)
+          example: "2026-10-07T07:35:00.000Z"
+        txnid:
+          type: string
+          format: uuid
+          description: Transaction identifier
+          example: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+
+    RouteAttributes:
+      type: object
+      description: For future use; parameters indicating the health of the route.
+      additionalProperties:
+        type: string
+      example:
+        key1: "value1"
+        key2: "value2"
+
+    AaLink:
+      type: object
+      required: [id, verified]
+      properties:
+        id:
+          type: string
+          description: AA entity identifier
+          example: "aa-1"
+        verified:
+          type: boolean
+          description: |
+            true — flow through this interface has been verified (through SLA data).
+            false — interface is published, but traffic flow is yet to be verified.
+        attr:
+          $ref: '#/components/schemas/RouteAttributes'
+
+    FipNode:
+      type: object
+      required: [id, inter-AA]
+      properties:
+        id:
+          type: string
+          description: FIP entity identifier
+          example: "fip-1"
+        inter-AA:
+          type: array
+          description: AAs that provide a route to this FIP
+          items:
+            $ref: '#/components/schemas/AaLink'
+
+    FiuNode:
+      type: object
+      required: [id, connected-AA]
+      properties:
+        id:
+          type: string
+          description: FIU entity identifier
+          example: "fiu-4"
+        connected-AA:
+          type: array
+          description: AAs connected to this FIU
+          items:
+            $ref: '#/components/schemas/AaLink'
+
+    AaNode:
+      type: object
+      required: [id, peer-AA]
+      properties:
+        id:
+          type: string
+          description: AA entity identifier
+          example: "aa-1"
+        peer-AA:
+          type: array
+          description: Peer AAs this AA interoperates with
+          items:
+            $ref: '#/components/schemas/AaLink'
+
+    FipGraphResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseMessage'
+        - type: object
+          required: [fip]
+          properties:
+            fip:
+              type: array
+              items:
+                $ref: '#/components/schemas/FipNode'
+
+    FiuGraphResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseMessage'
+        - type: object
+          required: [fiu]
+          properties:
+            fiu:
+              type: array
+              items:
+                $ref: '#/components/schemas/FiuNode'
+
+    AaGraphResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseMessage'
+        - type: object
+          required: [aa]
+          properties:
+            aa:
+              type: array
+              items:
+                $ref: '#/components/schemas/AaNode'
+
+    AigUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/BaseMessage'
+        - type: object
+          properties:
+            fip:
+              type: array
+              description: FIP entity IDs the calling AA is connected to
+              items:
+                type: string
+              example: ["fip-entity-01"]
+            fiu:
+              type: array
+              description: FIU entity IDs the calling AA is connected to
+              items:
+                type: string
+              example: ["fiu-entity-02"]
+            aa:
+              type: array
+              description: Peer AA entity IDs the calling AA interoperates with
+              items:
+                type: string
+              example: ["aa-entity-03"]
+
+    AigUpdateResponse:
+      allOf:
+        - $ref: '#/components/schemas/BaseMessage'
+        - type: object
+          required: [responseText]
+          properties:
+            responseText:
+              type: string
+              example: "Uploaded"
+
+    ErrorResponse:
+      description: Error response returned for all non-2xx status codes.
+      allOf:
+        - $ref: '#/components/schemas/BaseMessage'
+        - type: object
+          required: [errorCode, errorMsg]
+          properties:
+            errorCode:
+              type: string
+              enum:
+                - InvalidRequest
+                - Unauthorized
+                - Forbidden
+                - RateLimitExceeded
+                - InternalError
+                - NotImplemented
+                - ServiceUnavailable
+              example: "InvalidRequest"
+            errorMsg:
+              type: string
+              example: "Error code specific error message"
+
+  responses:
+    BadRequest:
+      description: Bad Request — invalid or malformed request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            ver: "1.0.0"
+            timestamp: "2026-11-06T06:22:34.258Z"
+            txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+            errorCode: "InvalidRequest"
+            errorMsg: "Error code specific error message"
+    Unauthorized:
+      description: Unauthorized — missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            ver: "1.0.0"
+            timestamp: "2026-11-06T06:22:34.258Z"
+            txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+            errorCode: "Unauthorized"
+            errorMsg: "Invalid or expired token"
+    Forbidden:
+      description: Forbidden — caller entity type not permitted for this API
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            ver: "1.0.0"
+            timestamp: "2026-11-06T06:22:34.258Z"
+            txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+            errorCode: "Forbidden"
+            errorMsg: "Cannot access resource"
+    TooManyRequests:
+      description: Too Many Requests — rate limit exceeded
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            ver: "1.0.0"
+            timestamp: "2026-11-06T06:22:34.258Z"
+            txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+            errorCode: "RateLimitExceeded"
+            errorMsg: "Too many requests. Please try later"
+    InternalError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            ver: "1.0.0"
+            timestamp: "2026-11-06T06:22:34.258Z"
+            txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+            errorCode: "InternalError"
+            errorMsg: "Error code specific error message"
+    NotImplemented:
+      description: Not Implemented
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            ver: "1.0.0"
+            timestamp: "2026-11-06T06:22:34.258Z"
+            txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+            errorCode: "NotImplemented"
+            errorMsg: "Error code specific error message"
+    ServiceUnavailable:
+      description: Service Unavailable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            ver: "1.0.0"
+            timestamp: "2026-11-06T06:22:34.258Z"
+            txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+            errorCode: "ServiceUnavailable"
+            errorMsg: "Error code specific error message"

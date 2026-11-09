@@ -1,0 +1,1250 @@
+swagger: "2.0"
+info:
+  description: |-
+    # Summary
+
+       Addition of updated User discovery APIs & IOP Accounts Link Reverify specification - (Sahamati), subject to the final ReBIT specification.
+
+    ---
+  version: 1.0.0+
+  title: Account Aggregator Interoperability API - User Discovery APIs
+  x-custom-tags:
+    x-api-name: Account Aggregator (AA) Interoperability API
+tags:
+- name: User Discovery
+  description: APIs for Customer Discovery
+schemes:
+- https
+consumes:
+- application/json
+produces:
+- application/json
+security:
+- client_api_key: []
+- fip_api_key: []
+- aa_api_key: []
+- x-conn_aa_api_key: []
+- x-inter_aa_api_key: []
+- x-cust_aa_api_key: []
+- x-orig_aa_api_key: []
+paths:
+  /User/discover:
+    post:
+      tags:
+      - User Discovery
+      description: |-
+        The FIU uses this API to identify existing user handles on the AA.
+
+        <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
+      parameters:
+      - name: x-jws-signature
+        in: header
+        description: Detached JWS of the body
+        required: true
+        type: string
+      - in: body
+        name: body
+        description: Information of the user for discovering existing handles at the AAs
+        required: false
+        schema:
+          $ref: "#/definitions/CustDiscoveryRequest"
+      security:
+      - client_api_key: []
+      responses:
+        "200":
+          description: OK
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/CustDiscoveryResponse"
+        "400":
+          description: Bad Request
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/BadRequest"
+        "401":
+          description: Unauthorized Access
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/UnauthorizedAccess"
+        "404":
+          description: Not Found
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/NotFound"
+        "409":
+          description: Conflict
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/Conflict"
+        "412":
+          description: Precondition failed
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/PreconditionFailed"
+        "500":
+          description: Internal Server Error
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/InternalServerError"
+        "501":
+          description: Not Implemented
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/NotImplemented"
+        "503":
+          description: Service Unavailable
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/ServiceUnavailable"
+  /iop/User/discover:
+    post:
+      tags:
+      - User Discovery
+      description: |-
+        This API is called by an FIU to a connected-AA or by a connected-AA to a customer-AA.
+        Business purpose: The FIU uses this API to identify existing user handles on the AA.
+
+        <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
+      parameters:
+      - name: x-jws-signature
+        in: header
+        description: Detached JWS of the body
+        required: true
+        type: string
+      - in: body
+        name: body
+        required: true
+        schema:
+          allOf:
+          - $ref: "#/definitions/IOPRequest"
+          - $ref: "#/definitions/TargetFIP"
+          - $ref: "#/definitions/TargetAA"
+          - $ref: "#/definitions/InitiatorFIU"
+          - type: object
+            description: |-
+              Exactly one of `Target` or `Initiator` MUST be present.
+              A request containing both, or neither, MUST be rejected with 400 Bad Request.
+            x-oneOf-required:
+            - Target
+            - Initiator
+      security:
+      - client_api_key: []
+      - x-conn_aa_api_key: []
+      - x-orig_aa_api_key: []
+      responses:
+        "200":
+          description: OK
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPResponse"
+        "400":
+          description: Bad Request
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPBadRequestConsent"
+        "401":
+          description: Unauthorized Access
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPUnauthorizedAccess"
+        "404":
+          description: Not Found
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPNotFound"
+        "409":
+          description: Conflict
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPConflict"
+        "412":
+          description: Precondition failed
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPPreconditionFailed"
+        "500":
+          description: Internal Server Error
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPInternalServerError"
+        "501":
+          description: Not Implemented
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPNotImplemented"
+        "503":
+          description: Service Unavailable
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPServiceUnavailable"
+  /iop/Accounts/link/reverify:
+    post:
+      tags:
+      - Account Linking
+      description: |-
+        This API is called by an origin-AA to an inter-AA.
+        Business purpose: This API is used by an AA to reverify the account linking for a given customerhandle and link reference number. The primary purpose of this API is to generate attestation of handles that existed before interoperability.
+
+        <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
+      parameters:
+      - name: x-jws-signature
+        in: header
+        description: Detached JWS of the body
+        required: true
+        type: string
+      - in: body
+        name: body
+        description: Information of the customer handle and link reference number to be verified
+        required: false
+        schema:
+          allOf:
+          - $ref: "#/definitions/IOPRequest"
+          - $ref: "#/definitions/TargetFIP"
+          - type: object
+            description: |-
+              Exactly one of `Target` or `Initiator` MUST be present.
+              A request containing both, or neither, MUST be rejected with 400 Bad Request.
+            x-oneOf-required:
+            - Target
+            - Initiator
+      security:
+      - x-orig_aa_api_key: []
+      responses:
+        "200":
+          description: OK
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPResponse"
+        "400":
+          description: Bad Request
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPBadRequest"
+        "401":
+          description: Unauthorized Access
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPUnauthorizedAccess"
+        "404":
+          description: Not Found
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPNotFound"
+        "409":
+          description: Conflict
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPConflict"
+        "412":
+          description: Precondition failed
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPPreconditionFailed"
+        "500":
+          description: Internal Server Error
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPInternalServerError"
+        "501":
+          description: Not Implemented
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPNotImplemented"
+        "503":
+          description: Service Unavailable
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPServiceUnavailable"
+securityDefinitions:
+  client_api_key:
+    description: client_api_key is provided to AA by the AA Client or the FIU
+    type: apiKey
+    name: client_api_key
+    in: header
+  fip_api_key:
+    description: fip_api_key is provided to AA by the FIP
+    type: apiKey
+    name: fip_api_key
+    in: header
+  aa_api_key:
+    description: aa_api_key is provided by the AA to the FIU and the FIP
+    type: apiKey
+    name: aa_api_key
+    in: header
+  x-conn_aa_api_key:
+    description: x-conn_aa_api_key is provided by the connected-AA to the customer-AA
+    type: apiKey
+    name: x-conn_aa_api_key
+    in: header
+  x-cust_aa_api_key:
+    description: x-cust_aa_api_key is provided by the customer-AA to the connected-AA
+    type: apiKey
+    name: x-cust_aa_api_key
+    in: header
+  x-orig_aa_api_key:
+    description: x-orig_aa_api_key is provided by the origin-AA to the inter-AA
+    type: apiKey
+    name: x-orig_aa_api_key
+    in: header
+  x-inter_aa_api_key:
+    description: x-inter_aa_api_key is provided by the inter-AA to the origin-AA
+    type: apiKey
+    name: x-inter_aa_api_key
+    in: header
+definitions:
+  CorrelationId:
+    type: string
+    example: 550e8400-e29b-41d4-a716-446655440000
+    xml:
+      attribute: true
+    description: "A unique correlation identifier used to provide end-to-end traceability\nof that flow.\n\nIt identifies all the API calls pertaining to each flow.\n\nA flow could be one of the following:\n- User discovery\n- Account discovery\n- Account linking\n- Consent creation and approval\n- All the APIs of Data pull\n\nThis correlation ID is generated during the first API call for that flow\nand is carried forward and reused by every entity for subsequent API calls\nof that flow. "
+  TargetAA:
+    type: object
+    properties:
+      Target:
+        type: object
+        properties:
+          type:
+            type: string
+            example: "AA"
+          id:
+            type: string
+            example: "aa-003"
+        description: The target entityid, to which the request is intended. Applicable when receiving a request to be forwarded.
+    xml:
+      attribute: true
+  TargetFIU:
+    type: object
+    properties:
+      Target:
+        type: object
+        properties:
+          type:
+            type: string
+            example: "FIU"
+          id:
+            type: string
+            example: "fiuid-001"
+        description: The target entityid, to which the request is intended. Applicable when receiving a request to be forwarded.
+    xml:
+      attribute: true
+  TargetFIP:
+    type: object
+    properties:
+      Target:
+        type: object
+        properties:
+          type:
+            type: string
+            example: "FIP"
+          id:
+            type: string
+            example: "fipid-001"
+        description: The target entityid, to which the request is intended. Applicable when receiving a request to be forwarded.
+    xml:
+      attribute: true
+  InitiatorFIU:
+    type: object
+    properties:
+      Initiator:
+        type: object
+        properties:
+          type:
+            type: string
+            example: "FIU"
+          id:
+            type: string
+            example: "fiuid-001"
+        description: The initiator entityid, where the request originated. Applicable when forwarding a request to the target entity.
+    xml:
+      attribute: true
+  InitiatorFIP:
+    type: object
+    properties:
+      Initiator:
+        type: object
+        properties:
+          type:
+            type: string
+            example: "FIP"
+          id:
+            type: string
+            example: "fipid-001"
+        description: The initiator entityid, where the request originated. Applicable when forwarding a request to the target entity.
+    xml:
+      attribute: true
+  IopPayload:
+    type: string
+    xml:
+      attribute: true
+    description: |-
+      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
+
+      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
+
+      The value consists of five base64url-encoded parts separated by `.`:
+
+      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
+
+      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JOSE"}`
+      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
+      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
+      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
+      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
+
+      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
+      ```json
+            {
+              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
+              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
+              "iv": "BASE64URL(96BIT_NONCE)",
+              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
+              "tag": "BASE64URL(128BIT_AUTH_TAG)"
+            }
+      ```
+      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
+    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
+  CustDiscoveryRequest:
+    type: object
+    required:
+    - correlationId
+    - customer
+    - timestamp
+    - txnid
+    - ver
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-08-18T09:30:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+        description: Unique transaction identifier used for providing an end to end traceability.
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      customer:
+        $ref: "#/definitions/CustDiscoveryRequest_customer"
+  CustDiscoveryResponse:
+    type: object
+    required:
+    - customerDiscoveryResponse
+    - status
+    - timestamp
+    - txnid
+    - correlationId
+    - ver
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-10-07T07:30:03Z
+        xml:
+          attribute: true
+        description: Creation timestamp of the message.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+        description: Unique transaction identifier used for providing an end to end traceability.
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      status:
+        type: string
+        example: User Found
+        xml:
+          attribute: true
+        description: The status of the user discovery operation. Enumeration value "User Found" or "User Not Found".
+        enum:
+        - User Found
+        - User Not Found
+      customerDiscoveryResponse:
+        type: array
+        description: List of customer handles identified.
+        items:
+          $ref: "#/definitions/CustDiscoveryResponse_customerDiscoveryResponse"
+  IOPCustDiscoveryRequest:
+    type: object
+    required:
+    - correlationId
+    - Initiator
+    - clientSignature
+    - clientRequest
+    - timestamp
+    - txnid
+    - ver
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-08-18T09:30:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+        description: Unique transaction identifier used for providing an end to end traceability.
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      Initiator:
+        $ref: "#/definitions/InitiatorFIU"
+      clientSignature:
+        type: string
+        example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2...
+        xml:
+          attribute: true
+        description: |-
+          Detached JWS of the payload, signed by the client entity.
+      clientRequest:
+        $ref: "#/definitions/CustDiscoveryRequest"
+  IOPRequest:
+    type: object
+    description: |-
+      Exactly one of `Initiator` or `Target` MUST be present.
+  
+      A request containing both, or neither, MUST be rejected with 400 Bad Request.
+      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+        <tbody>
+          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+        </tbody>
+      </table>
+
+    required:
+    - timestamp
+    - txnid
+    - correlationId
+    - ver
+    - iopPayload
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-10-07T07:35:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      iopPayload:
+        $ref: "#/definitions/IopPayload"
+  IOPResponse:
+    type: object
+    required:
+    - iopPayload
+    - timestamp
+    - txnid
+    - correlationId
+    - ver
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-10-07T07:35:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      iopPayload:
+        $ref: "#/definitions/IopPayload"
+  ErrorResponse:
+    type: object
+    required:
+    - errorCode
+    - errorMsg
+    - timestamp
+    - correlationId
+    - txnid
+    - ver
+    properties:
+      ver:
+        type: string
+        example: 2.0.0
+        xml:
+          attribute: true
+        description: API version.
+      txnid:
+        type: string
+        example: 0b811819-9044-4856-b0ee-8c88035f8858
+        xml:
+          attribute: true
+        description: Transaction id of the request. Must be same as the value sent in the request
+      timestamp:
+        type: string
+        format: date-time
+        example: 2023-06-26T11:33:34.509Z
+        xml:
+          attribute: true
+        description: Response timestamp
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: Error code indicating the problem with the request. Set to IopUpstreamError when forwarding an error in the iopError field.
+      errorMsg:
+        type: string
+        example: Error code specific error message
+        description: Error message with additional details. Ensure no sensitive information is included in the error message.
+    description: Generic Error Response. Specific Error Responses extend from this.
+  IOPErrorResponse:
+    type: object
+    properties:
+      iopError:
+        $ref: "#/definitions/IopPayload"
+    description: Generic Error Response. Specific Error Responses extend from this.
+  BadRequest:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: Error code pertaining to the invalid request. Set to IopUpstreamError when forwarding an error in the iopError field.
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - {}
+    description: Response to bad request.
+  NotFound:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: Indicates that the resource specified in the request was not found. Set to IopUpstreamError when forwarding an error in the iopError field.
+        enum:
+        - NoSuchResource
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - {}
+    description: Requested resource was not found.
+  Conflict:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: IdempotencyError when UUID/Id is not unique. Set to IopUpstreamError when forwarding an error in the iopError field.
+        enum:
+        - IdempotencyError
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - {}
+    description: IdempotencyError when UUID/Id is not unique
+  PreconditionFailed:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - PreconditionFailed
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - {}
+    description: At least one of the preconditions you specified did not hold. Set to IopUpstreamError when forwarding an error in the iopError field.
+  InternalServerError:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InternalError
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - {}
+    description: Encountered an internal error. Please try again. Set to IopUpstreamError when forwarding an error in the iopError field.
+  NotImplemented:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - NotImplemented
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - {}
+    description: Trying to access an unimplemented feature/API. Required when we provide backward compatiable API. Set to IopUpstreamError when forwarding an error in the iopError field.
+  ServiceUnavailable:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - ServiceUnavailable
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - {}
+    description: Service is unavailable. Set to IopUpstreamError when forwarding an error in the iopError field.
+  UnauthorizedAccess:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - Unauthorized
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - {}
+    description: Unauthorized Access
+  IOPBadRequest:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: Error code pertaining to the invalid request. Set to IopUpstreamError when forwarding an error in the iopError field.
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Response to bad request.
+  IOPNotFound:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: Indicates that the resource specified in the request was not found. Set to IopUpstreamError when forwarding an error in the iopError field.
+        enum:
+        - NoSuchResource
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Requested resource was not found.
+  IOPConflict:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        description: IdempotencyError when UUID/Id is not unique. Set to IopUpstreamError when forwarding an error in the iopError field.
+        enum:
+        - IdempotencyError
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: IdempotencyError when UUID/Id is not unique
+  IOPPreconditionFailed:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - PreconditionFailed
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: At least one of the preconditions you specified did not hold. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPInternalServerError:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InternalError
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Encountered an internal error. Please try again. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPNotImplemented:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - NotImplemented
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Trying to access an unimplemented feature/API. Required when we provide backward compatiable API. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPServiceUnavailable:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - ServiceUnavailable
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Service is unavailable. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPBadRequestConsent:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - InvalidCustomerAddress
+        - InvalidConsentPurpose
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during Consent Request. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPBadRequestConsentStatus:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - InvalidConsentHandle
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during Consent Request Status. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPBadRequestConsentFetch:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - InvalidConsentId
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during Consent Fetch. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPBadRequestFIRequest:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - InvalidKey
+        - InvalidDateRange
+        - InvalidConsentId
+        - InvalidConsentStatus
+        - InvalidConsentDetail
+        - InvalidConsentUse
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during FIRequest. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPForbiddenFIRequest:
+    properties:
+      ver:
+        type: string
+        example: 2.0.0
+        xml:
+          attribute: true
+        description: API version
+      timestamp:
+        type: string
+        format: date-time
+        example: 2023-06-26T06:13:30.967+0000
+        xml:
+          attribute: true
+        description: Creation timestamp of the message.
+      txnid:
+        type: string
+        example: f35761ac-4a18-11e8-96ff-0277a9fbfed
+        description: Unique transaction identifier used for providing an end to end traceability.
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - ConsentExpired
+        - ConsentRevoked
+        - ConsentPaused
+        - IopUpstreamError
+      errorMsg:
+        type: string
+        example: Error code specific error message
+        description: Error message with additional details. Ensure no sensitive information is included in the error message.
+    allOf:
+    - $ref: "#/definitions/IOPNotFound"
+    - {}
+    description: Access is forbidden. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPNotFoundFIRequest:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - NoSuchVersion
+        - ExpiredKeyMaterial
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/IOPNotFound"
+    - {}
+    description: Not Found error during FI Request. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPBadRequestFIFetch:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - InvalidFIPId
+        - InvalidKey
+        - InvalidDateRange
+        - InvalidSessionId
+        - InvalidConsentId
+        - InvalidConsentStatus
+        - InvalidConsentDetail
+        - InvalidConsentUse
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during FI Fetch. Set to IopUpstreamError when forwarding an error in the iopError field.
+  IOPForbiddenFIFetch:
+    properties:
+      ver:
+        type: string
+        example: 2.0.0
+        xml:
+          attribute: true
+        description: API version.
+      txnid:
+        type: string
+        example: 0b811819-9044-4856-b0ee-8c88035f8858
+        xml:
+          attribute: true
+        description: Transaction id of the request. Must be same as the value sent in the request
+      timestamp:
+        type: string
+        format: date-time
+        example: 2023-06-26T11:33:34.509Z
+        xml:
+          attribute: true
+        description: Response timestamp
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - DataFetchRequestInProgress
+        - ConsentExpired
+        - ConsentRevoked
+        - ConsentPaused
+        - IopUpstreamError
+      errorMsg:
+        type: string
+        example: Error code specific error message
+    allOf:
+    - $ref: "#/definitions/IOPNotFound"
+    - {}
+    description: Forbidden Request during FI Fetch
+  IOPNotFoundFIFetch:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - NoSuchVersion
+        - NoDataFound
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/IOPNotFound"
+    - {}
+    description: Not found error during FI Fetch
+  IOPBadRequestConsentNotification:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - InvalidNotifier
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during Consent Notification
+  IOPBadRequestFINotification:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidURI
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - InvalidFIStatusNotification
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during Consent Notification
+  IOPUnauthorizedAccess:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - Unauthorized
+        - IopUpstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Unauthorized Access
+  CustDiscoveryRequest_customer:
+    type: object
+    properties:
+      vuaHash:
+        type: string
+        example: zcp-JR6K5rSUvaK-IHj5DR2PQi6-xPyVgF_H8FrNIrg
+        xml:
+          attribute: true
+        description: SHA-256 hash of the vua after applying the prescribed canonicalization rules, encoded using Base64URL. Mandatory, if mobileHash is not provided.
+      mobileHash:
+        type: string
+        example: 86R85c49TKitFSJaJFsnWQIveUifXGJxm4yUkPequQ4
+        xml:
+          attribute: true
+        description: SHA-256 hash of the mobile number normalized to E.164 format and encoded using Base64URL. Mandatory, if vuaHash is not provided.
+    description: |- 
+      Customer identifiers to be searched for. At least one of vuaHash or mobileHash is mandatory.
+  CustDiscoveryResponse_customerDiscoveryResponse:
+    type: object
+    required:
+    - aaId
+    - customerAddress
+    - maskedMobile
+    - vuaAttestation
+    properties:
+      customerAddress:
+        type: string
+        example: customer@AA
+        xml:
+          attribute: true
+        description: The customer-vua generated during the registration with the AA.
+      maskedMobile:
+        type: string
+        example: XXXXXXXXXX
+        xml:
+          attribute: true
+        description: Customer’s registered mobile number. Used particularly when broadcast discovery is required.
+      aaId:
+        type: string
+        example: AA-003
+        xml:
+          attribute: true
+        description: EntityID of the Account Aggregator where the customer's VUA was discovered.
+      vuaAttestation:
+        type: string
+        example: eyJhbGciOiJFUzI1NiIsImtpZCI6InRzLTIwMjYtMTAifQ.eyJpc3MiOi...
+        xml:
+          attribute: true
+        description: Signed attestation (JWS) of the customer's Virtual User Address.

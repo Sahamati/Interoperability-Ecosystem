@@ -1,5 +1,9 @@
 # PRD — Hashing Guide for User Discovery
 
+> **Disclaimer:** Please review and verify the contents of this document against the applicable system requirements and specifications.
+>
+> Kindly note that this document is subject to change as development, integration, and testing progress.
+
 |  |  |
 |---|---|
 | **Audience** | AA and FIU application teams that send or answer user discovery (`/User/discover`, `/iop/User/discover`) |

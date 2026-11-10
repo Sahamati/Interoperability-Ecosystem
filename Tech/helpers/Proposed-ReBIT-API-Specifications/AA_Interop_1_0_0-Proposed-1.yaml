@@ -2260,7 +2260,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the CustomerDiscoverIdentifier model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopAccLinkPayload:
@@ -2293,7 +2293,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the AccountLinkRequest model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopAccLinkVerifyPayload:
@@ -2326,7 +2326,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the AccLinkVerifyDetailsRequest model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopAccDelinkPayload:
@@ -2359,7 +2359,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the AccDeLinkRequests model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopConsentPayload:
@@ -2392,7 +2392,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the ConsentDetail model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopConsentartefactPayload:
@@ -2425,7 +2425,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the SignedEncryptedModel  model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopConsentHandlePayload:
@@ -2458,7 +2458,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the ConsentHandleAA model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopConsentfetchPayload:
@@ -2491,7 +2491,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the consentIdFetch model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopFIPayload:
@@ -2524,7 +2524,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the FIRequestEncryptedData model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopFIFetchPayload:
@@ -2557,7 +2557,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the FIFetchRequestEncryptedData model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopNotificationPayload:
@@ -2590,7 +2590,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the AccountLinkStatusNotificationReq model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopConsentNotificationPayload:
@@ -2623,7 +2623,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the ConsentStatusNotificationRequest model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopFINotificationPayload:
@@ -2656,10 +2656,10 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the FinancialInformationStatusNotification model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccDiscoveryResonsePayload:
+  IopAccDiscoveryResponsePayload:
     type: string
     xml:
       attribute: true
@@ -2689,12 +2689,12 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the DiscoveredAccounts model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   
   
-  IopAccLinkResonsePayload:
+  IopAccLinkResponsePayload:
     type: string
     xml:
       attribute: true
@@ -2724,10 +2724,10 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the AccLinkVerifyDetailsResponse model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccLinkVerifyResonsePayload:
+  IopAccLinkVerifyResponsePayload:
     type: string
     xml:
       attribute: true
@@ -2757,10 +2757,10 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the TokenDetails model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccDelinkResonsePayload:
+  IopAccDelinkResponsePayload:
     type: string
     xml:
       attribute: true
@@ -2790,10 +2790,10 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the AccDeLinkResponses model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopFIFetchResonsePayload:
+  IopFIFetchResponsePayload:
     type: string
     xml:
       attribute: true
@@ -2823,10 +2823,10 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the FinancialInformation model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentResonsePayload:
+  IopConsentResponsePayload:
     type: string
     xml:
       attribute: true
@@ -2856,10 +2856,10 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the ConsentRequestResponse model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentHandleResonsePayload:
+  IopConsentHandleResponsePayload:
     type: string
     xml:
       attribute: true
@@ -2889,10 +2889,10 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the ConsentHandleResponse model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentFetchResonsePayload:
+  IopConsentFetchResponsePayload:
     type: string
     xml:
       attribute: true
@@ -2922,7 +2922,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the ConsentArtefact model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopFIResponsePayload:
@@ -2955,7 +2955,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the FIResponseEncryptedData model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopFIFetchResponePayload:
@@ -2988,7 +2988,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the FinancialInformation model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   AccountLinkNotiResponsePayload:
@@ -3021,7 +3021,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the NotificationResponse model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   ConsentNotiResponsePayload:
@@ -3054,7 +3054,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the NotificationResponse model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   FINotiResponsePayload:
@@ -3087,7 +3087,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the NotificationResponse model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   CustDiscoveryRequest:
@@ -3915,7 +3915,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
-        $ref: "#/definitions/IopAccDiscoveryResonsePayload"
+        $ref: "#/definitions/IopAccDiscoveryResponsePayload"
   IOPAccLinkResponse:
     type: object
     required:
@@ -3946,7 +3946,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
-        $ref: "#/definitions/IopAccLinkResonsePayload"
+        $ref: "#/definitions/IopAccLinkResponsePayload"
   IOPAccLinkVerifyResponse:
     type: object
     required:
@@ -3977,7 +3977,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
-        $ref: "#/definitions/IopAccLinkVerifyResonsePayload"
+        $ref: "#/definitions/IopAccLinkVerifyResponsePayload"
   IOPAccDeLinkResponse:
     type: object
     required:
@@ -4008,7 +4008,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
-        $ref: "#/definitions/IopAccDelinkResonsePayload"
+        $ref: "#/definitions/IopAccDelinkResponsePayload"
   IOPConsentResponse:
     type: object
     required:
@@ -4039,7 +4039,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
-        $ref: "#/definitions/IopConsentResonsePayload"
+        $ref: "#/definitions/IopConsentResponsePayload"
  
   IOPConsentartefactResponse:
     type: object
@@ -4102,7 +4102,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
-        $ref: "#/definitions/IopConsentHandleResonsePayload"
+        $ref: "#/definitions/IopConsentHandleResponsePayload"
   IOPConsentfetchResponse:
     type: object
     required:
@@ -4133,7 +4133,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
-        $ref: "#/definitions/IopConsentFetchResonsePayload"
+        $ref: "#/definitions/IopConsentFetchResponsePayload"
   IOPFIFetchResponse:
     type: object
     required:

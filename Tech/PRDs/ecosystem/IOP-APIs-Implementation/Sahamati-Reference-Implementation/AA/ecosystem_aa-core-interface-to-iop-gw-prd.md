@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | AA core application teams (AA ecosystem participants) |
-| **Version** | Draft 4.2, 2026-11-10 |
+| **Version** | Draft 4.5, 2026-11-10 |
 | **Covers** | How the aa-core sends and receives messages through the aa-iop-gw, when to call it, how the aa-core gives it keys and its list of linked AAs, and how the aa-iop-gw is configured |
 
 All identifiers in examples are illustrative.
@@ -81,12 +81,13 @@ To work with the aa-iop-gw, the aa-core needs the changes below. "Yes" means nee
 
 **Sending the request.** For each call, the aa-iop-gw:
 
-1. **Signs the payload, if the aa-core has not already signed it.** If the aa-core sends its own
-   `x-jws-signature`, the aa-iop-gw checks it and uses it. Otherwise the aa-iop-gw signs the payload
-   with the AA's signing key.
+1. **Signs the payload.** If the aa-core sends its own `x-jws-signature` (RFC 7797), the aa-iop-gw
+   checks it first. The aa-iop-gw then signs the payload with the AA's signing key: the signature inside
+   the encrypted payload is a standard JWS (RFC 7515), so the aa-core's RFC 7797 signature is not
+   carried in it.
 2. **Encrypts** the signed payload for the Target.
 3. **Builds the IOP request** around the encrypted payload (`ver`, `timestamp`, `txnid`,
-   `correlationId`, `Target`, `encryptedData`) and **signs it**. The request carries only `Target`;
+   `correlationId`, `Target`, `encryptedPayload`) and **signs it**. The request carries only `Target`;
    the route sets `Initiator` when it forwards the request. Its `txnid` is **not** the
    payload's: it identifies the transaction between the aa-iop-gw and the route, a new one for each
    route.
@@ -95,14 +96,14 @@ To work with the aa-iop-gw, the aa-core needs the changes below. "Yes" means nee
 **Receiving the response.** When the answer comes back, the aa-iop-gw:
 
 1. **Checks the signature of the Connected-AA / Inter-AA** on the answer.
-2. **Decrypts** the Target's encrypted reply (`encryptedData`, in success and error answers alike;
+2. **Decrypts** the Target's encrypted reply (`encryptedPayload`, in success and error answers alike;
    the HTTP status tells them apart).
 3. **Checks the Target's signature** on the reply.
 4. **Returns the Target's reply** to the aa-core: the Target's payload, the Target's status and
    the Target's signature (`x-jws-signature`).
 
 A Heartbeat has no encrypted payload: sending steps 1 and 2 are skipped, and the IOP request
-(always `POST /iop/Heartbeat`) carries only the `Target`, without `encryptedData`. `/iop/Heartbeat` is only for a Target that is
+(always `POST /iop/Heartbeat`) carries only the `Target`, without `encryptedPayload`. `/iop/Heartbeat` is only for a Target that is
 not directly connected: a directly connected participant (for example the route itself) is
 checked with the Direct API `GET /Heartbeat`.
 
@@ -112,7 +113,6 @@ checked with the Direct API `GET /Heartbeat`.
 |---|---|---|---|---|---|---|
 | `POST` | `/aa-dgw/FI/Notification` | aa-core | aa-iop-gw | `FIU` | `/FI/Notification` | FI notification to an FIU (as Customer-AA) |
 | `POST` | `/aa-dgw/Consent/Notification` | aa-core | aa-iop-gw | `FIU` | `/Consent/Notification` | Consent notification to an FIU (as Customer-AA) |
-| `POST` | `/aa-dgw/User/discover` | aa-core | aa-iop-gw | `FIU` | — | **Not implemented yet:** always answered `501 NotImplemented` |
 | `POST` | `/aa-sgw/Accounts/discover` | aa-core | aa-iop-gw | `FIP` | `/Accounts/discover` | Account discovery at a FIP (as Origin-AA) |
 | `POST` | `/aa-sgw/Accounts/link` | aa-core | aa-iop-gw | `FIP` | `/Accounts/link` | Account linking |
 | `POST` | `/aa-sgw/Accounts/link/verify` | aa-core | aa-iop-gw | `FIP` | `/Accounts/link/verify` | Account link verification |
@@ -133,7 +133,7 @@ checked with the Direct API `GET /Heartbeat`.
 | `Authorization` | Yes, if the aa-iop-gw is configured with an internal API token | `Bearer <internal API token>`. Without it (or with a wrong one) the call is refused with `401`. |
 | `Target-Entity` | Yes | The final recipient, as compact JSON: `{"type":"<AA\|FIU\|FIP>","id":"<entity id>"}`. The type must match the API (section 3.3). The Target must be marked interop ready in the Central Registry. |
 | `Correlation-Id` | Yes | The flow's correlation id, in standard UUID format (see section 1). It is carried in the IOP message and returned on every response. A missing value, or one that is not a UUID, is refused with `400 InvalidRequest`. |
-| `x-jws-signature` | No | The aa-core's own detached JWS (RS256 or PS256, base64url-encoded payload) over the request body, made with one of the AA's registered signing keys. If omitted, the aa-iop-gw signs. |
+| `x-jws-signature` | No | The aa-core's own detached JWS over the request body (RFC 7797 unencoded payload: protected header `{"alg": "RS256", "kid", "b64": false, "crit": ["b64"]}`, signed over the raw body), made with one of the AA's registered signing keys. The aa-iop-gw checks it: if it does not verify, the call is refused with `400`. The aa-iop-gw signs the payload either way (section 3.2). |
 | `Preferred-Hop` | No | The entity id of the AA the core prefers as the route. Used first only if it is an eligible route (section 3.11); otherwise ignored. |
 | `Http-Retries` | No | How many times to retry the same route when it does not answer (no connection, or a timeout). An error answer from the route, `502`/`503`/`504` included, is not retried on that route. **`0` means: do not retry.** Default `2`; capped by the gateway (by default at `3`). Waits 200 ms, doubling up to 2 s, between retries. |
 | `Route-Retries` | No | How many **other** routes to try after the first route fails (section 3.7). **`0` means: do not try another route.** Default `2`; capped by the gateway (by default at `2`). |
@@ -160,14 +160,14 @@ What the core receives depends on what comes back from the Connected-AA / Inter-
 | The Target answered (success or error) | The Target's status | **Exactly the same payload** the Target returns in the matching Direct API call, as the Target signed it (decrypted by the gateway). |
 | The Target answered an error without a payload | The Target's status (passed on by the Connected-AA / Inter-AA) | Empty. |
 | Every route failed | `503` | An `ErrorResponse` with `errorCode` `AllRoutesUnavailable` (section 3.9). |
-| The aa-iop-gw refused the call | 400, 401, 404, 405, 413, 500, 501, 502, 503 or 504 | An `ErrorResponse` (section 3.9). |
+| The aa-iop-gw refused the call | 400, 401, 404, 405, 413, 500, 502, 503 or 504 | An `ErrorResponse` (section 3.9). |
 
 ### 3.7 How the gateway handles an error from the Connected-AA / Inter-AA
 
 This applies only when the Connected-AA / Inter-AA answers with an error (status `4xx` or `5xx`). Success
 answers (`2xx`, `3xx`) are opened and passed on as in section 3.6.
 
-| Payload from the Connected-AA / Inter-AA | `encryptedData` in the payload | `errorCode` in the payload | What the aa-iop-gw does | Status to the core | Body to the core | `IOP-Gw-Error` |
+| Payload from the Connected-AA / Inter-AA | `encryptedPayload` in the payload | `errorCode` in the payload | What the aa-iop-gw does | Status to the core | Body to the core | `IOP-Gw-Error` |
 |---|---|---|---|---|---|---|
 | Yes | Yes | Any | Answers the core | The Connected-AA / Inter-AA's status | The Target's error payload (decrypted), with the Target's signature | Not set |
 | Yes | No | `IopDownstreamError` | Answers the core | The Connected-AA / Inter-AA's status | Empty | Not set |
@@ -180,7 +180,7 @@ answers (`2xx`, `3xx`) are opened and passed on as in section 3.6.
   route at once.
 - When the Connected-AA / Inter-AA does not answer at all (no connection, or a timeout), it is handled like the
   last row.
-- `IopDownstreamError` without `encryptedData` means the Connected-AA / Inter-AA reached the Target, but the Target
+- `IopDownstreamError` without `encryptedPayload` means the Connected-AA / Inter-AA reached the Target, but the Target
   answered an error without a payload. Another route would reach the same Target, so the
   gateway does not try one.
 
@@ -188,7 +188,7 @@ answers (`2xx`, `3xx`) are opened and passed on as in section 3.6.
 
 | Header | Present | Value |
 |---|---|---|
-| `x-jws-signature` | When the Target answered with a payload | **The Target's** detached JWS over the body. Never present on an empty body or on an error generated by the gateway. |
+| `x-jws-signature` | When the Target answered with a payload | **The Target's** detached JWS over the body, taken from the Target's signed payload: a standard detached JWS (RFC 7515, base64url-encoded payload), **not** RFC 7797. Already checked by the gateway; the core may store it as proof of what the Target sent. Checking it is optional: to check it, verify RS256 over `BASE64URL(header) + "." + BASE64URL(body)` with the other party's signing key from the Central Registry, not with an RFC 7797 verifier. Never present on an empty body or on an error generated by the gateway. |
 | `Correlation-Id` | Always (when the request carried one) | The value the core sent. |
 | `Forwarding-Hop` | When the answer came through a Connected-AA / Inter-AA | The entity id of the Connected-AA / Inter-AA that carried the call. Not present when every route failed. |
 | `IOP-Gw-Error` | Only on errors generated by the aa-iop-gw | `true`. The body is then the gateway's `ErrorResponse` (section 3.9). Without this header, an error came from the Target, through the Connected-AA / Inter-AA. |
@@ -222,7 +222,6 @@ Errors generated by the aa-iop-gw itself carry `IOP-Gw-Error: true` and have thi
 | `405` | `InvalidRequest` | Wrong HTTP method (see `Allow`) |
 | `413` | `InvalidRequest` | The request body is too large |
 | `500` | `InternalError` | The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target) |
-| `501` | `NotImplemented` | `User/discover` (not implemented yet) |
 | `502` | `BadGateway` | The AIG is not available; the answer of the Connected-AA / Inter-AA has an invalid signature, cannot be decrypted, or is malformed |
 | `502` | `SignatureDoesNotMatch` | The Target's signature on the reply does not verify |
 | `503` | `AllRoutesUnavailable` | Every route failed: no Connected-AA / Inter-AA answered, or each answered an error that is not from the Target (section 3.7) |
@@ -270,7 +269,7 @@ IOP-Gw-Error: true
 
 **3. The Target returns an error without a body** — for example, `POST /aa-sgw/FI/request` and the Target
 (`fip-test-001`) answers `500` with no payload. The Inter-AA (`aa-test-004`) answers `IopDownstreamError`
-without `encryptedData`. The core receives the status with an **empty body**. This answer is final:
+without `encryptedPayload`. The core receives the status with an **empty body**. This answer is final:
 the gateway does not retry it or try another route.
 
 ```http
@@ -325,10 +324,10 @@ refused with `400 InvalidRequest` before any route is chosen.
 |---|---|---|
 | No answer (no connection, or a timeout) | Yes, up to `Http-Retries` | Yes, up to `Route-Retries` |
 | Any error not from the Target, `502`/`503`/`504` included (for example `400 InvalidRoute`\*) | No | Yes, up to `Route-Retries` |
-| An error with `encryptedData`, or with `IopDownstreamError` | No | No (the answer goes to the core, section 3.7) |
+| An error with `encryptedPayload`, or with `IopDownstreamError` | No | No (the answer goes to the core, section 3.7) |
 | Success | No | No |
 
-"Not from the Target" means: no `encryptedData` in the payload, and `errorCode` is not
+"Not from the Target" means: no `encryptedPayload` in the payload, and `errorCode` is not
 `IopDownstreamError` (section 3.7).
 
 \* `InvalidRoute` is the code the IOP Gateway uses when, as a hop, it cannot route to the Target: the Target is unknown to the hop, or is not linked to the hop AA. Linked means: an FIU Target lists the hop AA as a Connected-AA in the AIG; a FIP Target lists the hop AA as an Inter-AA in the AIG; an AA Target is in the hop AA's linkedAAs. The hop then does not call the Target. If the hop cannot check this (its AIG is not loaded), it answers `503 InternalError`; both answers lead to the next route. **It is not yet confirmed as a ReBIT IOP error code.**
@@ -343,14 +342,14 @@ The aa-iop-gw retries a call from the aa-core as follows.
 | Retries the same route | `Http-Retries` header: default 2, capped by the gateway (by default at 3) |
 | … when | The Connected-AA / Inter-AA does not answer (no connection, or a timeout). An error answer from the Connected-AA / Inter-AA, `502`/`503`/`504` included, is never retried on the same route |
 | Tries another route | `Route-Retries` header: default 2, capped by the gateway (by default at 2). After the retries when the Connected-AA / Inter-AA does not answer; at once on any error from the Connected-AA / Inter-AA that is not from the Target (for example `503` or `400 InvalidRoute`) |
-| Never retries | Success; an answer with `encryptedData` (the Target's error); `IopDownstreamError` without `encryptedData` |
+| Never retries | Success; an answer with `encryptedPayload` (the Target's error); `IopDownstreamError` without `encryptedPayload` |
 | Wait between attempts | 200 ms, doubling, at most 2 s |
 | Most sends per call (defaults) | (1 + 2 routes) × (1 + 2 retries) = 9 |
 | When all attempts fail | The aa-core gets `503 AllRoutesUnavailable` with `IOP-Gw-Error: true` |
 
 **Received in response to an `/iop/*` API from the Connected-AA / Inter-AA**
 
-| StatusCode | ErrorCode | EncryptedData | Inference | RetryHttp | RetryRoute |
+| StatusCode | ErrorCode | EncryptedPayload | Inference | RetryHttp | RetryRoute |
 |---|---|---|---|---|---|
 | — (no response) | — | — | The Connected-AA / Inter-AA could not be reached, or did not answer in time | Yes, up to `Http-Retries` | Yes, after the retries |
 | `2xx`, `3xx` | — | — | Success: the Target's answer. The aa-core gets the Target's payload, status and signature | No | No |
@@ -363,13 +362,13 @@ The aa-iop-gw retries a call from the aa-core as follows.
 
 - **StatusCode:** the HTTP status code of the Connected-AA / Inter-AA's response.
 - **ErrorCode:** the `errorCode` set by the Connected-AA / Inter-AA.
-- **EncryptedData:** the `encryptedData` field: the Target's encrypted answer, forwarded by the Connected-AA / Inter-AA.
+- **EncryptedPayload:** the `encryptedPayload` field: the Target's encrypted answer, forwarded by the Connected-AA / Inter-AA.
 - **RetryHttp:** whether the same route is retried. **RetryRoute:** whether a different route is tried.
 - When every route has failed, the aa-core gets `503 AllRoutesUnavailable` with `IOP-Gw-Error: true`.
 
 \* See the note in section 3.11.
 
-1. **Errors from beyond the Connected-AA / Inter-AA are final.** `IopDownstreamError` without `encryptedData` means the
+1. **Errors from beyond the Connected-AA / Inter-AA are final.** `IopDownstreamError` without `encryptedPayload` means the
    Target could not be reached, or answered an error without a payload. Every route leads to the
    same Target, so the aa-iop-gw neither retries nor tries another route.
 2. **Every resend carries the same payload and `correlationId`.** The payload's `txnid` stays the
@@ -429,7 +428,7 @@ For IOP calls addressed to the AA, the aa-iop-gw:
 | `Initiator-Entity` | Yes | The Initiator, as compact JSON `{"type":"…","id":"…"}`. |
 | `Correlation-Id` | Yes | The flow's correlation id, copied unchanged from the IOP message (the gateway never creates one). |
 | `Forwarding-Hop` | Yes | The entity id of the AA that delivered the call. |
-| `x-jws-signature` | Yes, when there is a body | The Initiator's detached JWS over the body. Already checked by the gateway; the core may check it again and store it for non-repudiation. |
+| `x-jws-signature` | Yes, when there is a body | The Initiator's detached JWS over the body, taken from the Initiator's signed payload. It is a standard detached JWS (RFC 7515, base64url-encoded payload), **not** RFC 7797, because it is the Initiator's own signature. Already checked by the gateway; the core may store it as proof of what the Initiator sent. Checking it is optional: to check it, verify RS256 over `BASE64URL(header) + "." + BASE64URL(body)` with the other party's signing key from the Central Registry, not with an RFC 7797 verifier. |
 
 The role api-key header of the calling AA and `Content-Type` are **not** sent to the core.
 
@@ -457,9 +456,13 @@ The role api-key header of the calling AA and `Content-Type` are **not** sent to
 | Header | Mandatory | Value |
 |---|---|---|
 | `Correlation-Id` | Yes | The value received in the request, unchanged. |
-| `x-jws-signature` | No | The aa-core's own detached JWS (RS256 or PS256, base64url-encoded payload) over the response body, made with one of the AA's registered signing keys. If omitted, the gateway signs. |
+| `x-jws-signature` | No | The aa-core's own detached JWS over the response body (RFC 7797 unencoded payload: protected header `{"alg": "RS256", "kid", "b64": false, "crit": ["b64"]}`, signed over the raw body), made with one of the AA's registered signing keys. If it is sent and does not verify, the Initiator receives `502 InternalError`. The gateway signs the response either way. |
 
 `Content-Type` is not required.
+
+**errorSource.** On an error reply (status `400` or above) the aa-iop-gw adds `errorSource`
+`{"type": "AA", "id": "<the AA's id>"}` to the reply envelope, for errors from the aa-core and for
+its own errors as Target. The aa-core does not set it.
 
 **If the aa-iop-gw cannot use the response**, the Initiator receives this error instead:
 
@@ -467,6 +470,7 @@ The role api-key header of the calling AA and `Content-Type` are **not** sent to
 |---|---|---|
 | `502` | `InternalError` | The aa-core is unreachable, or its response is unreadable or larger than the gateway's limit |
 | `502` | `InternalError` | The response has no `Correlation-Id`, or a different value |
+| `502` | `InternalError` | The response carries an `x-jws-signature` that does not verify with the AA's signing keys |
 | `500` | `InternalError` | The gateway cannot sign or encrypt the response for the Initiator |
 
 ### 4.7 Messages the aa-iop-gw only forwards (hop)
@@ -483,9 +487,9 @@ Customer-AA (the call comes with `x-conn_aa_api_key`), it calls `POST /aa-core/U
 
 | Step | What the aa-iop-gw does |
 |---|---|
-| Checks the route | The Target must be linked to the AA: an FIU Target lists the AA as a Connected-AA in the AIG; a FIP Target lists the AA as an Inter-AA in the AIG; an AA Target is in the AA's linkedAAs (section 6). Otherwise it answers `400 InvalidRoute`\* without calling the Target. If the AIG is not loaded, it answers `503 InternalError`. |
-| Forwards | Replaces `Target` with `Initiator` (the calling participant) in the envelope, with a new `txnid`, signs the envelope and sends it to the Target. `encryptedData` is passed on unchanged. |
-| Returns the Target's answer | Success: the Target's answer (with its `encryptedData`), with the `txnid` of the caller's request, signed by the aa-iop-gw. Error: the Target's status, with an envelope that carries `errorCode` `IopDownstreamError`, the Target's `encryptedData` (if any) and the Target's `errorSource` object (if any), copied unchanged, for example `"errorSource": {"type": "FIP", "id": "fip-test-001"}`. |
+| Checks the route | The Target must be linked to the AA: an FIU Target lists the AA as a Connected-AA in the AIG; a FIP Target lists the AA as an Inter-AA in the AIG; an AA Target is in the AA's linkedAAs (section 6). Otherwise it answers `400 InvalidRoute`\* without calling the Target. If the AIG is not loaded (FIU or FIP Target), or the linkedAAs list is not loaded (AA Target), it answers `503 InternalError`. |
+| Forwards | Replaces `Target` with `Initiator` (the calling participant) in the envelope, with a new `txnid`, signs the envelope and sends it to the Target. `encryptedPayload` is passed on unchanged. |
+| Returns the Target's answer | Success: the Target's answer (with its `encryptedPayload`), with the `txnid` of the caller's request, signed by the aa-iop-gw. Error: the Target's status, with an envelope that carries `errorCode` `IopDownstreamError`, the Target's `encryptedPayload` (if any) and the Target's `errorSource` object (if any), copied unchanged, for example `"errorSource": {"type": "FIP", "id": "fip-test-001"}`. |
 
 \* See the note in section 3.11.
 
@@ -496,8 +500,8 @@ number of every customer whose attested handle is held by the AA.
 
 | Entry | Value |
 |---|---|
-| VUA hash | SHA-256 of the canonicalised VUA, base64url-encoded (as `customer.vuaHash` in the request) |
-| Mobile hash | SHA-256 of the customer's mobile number in E.164 format, base64url-encoded (as `customer.mobileHash` in the request) |
+| VUA hash | SHA-256 of the VUA as it is, base64url-encoded without padding (User Discovery Hashing Guide, `user-discovery-hashing-guide.md`) (as `customer.vuaHash` in the request) |
+| Mobile hash | SHA-256 of the customer's mobile number normalised to `+91` followed by 10 digits, base64url-encoded without padding (User Discovery Hashing Guide) (as `customer.mobileHash` in the request) |
 | VUA | The customer address (user handle) |
 | `linkRefNumber` | The link reference number of the attested handle |
 | Attestation | The VUA attestation |

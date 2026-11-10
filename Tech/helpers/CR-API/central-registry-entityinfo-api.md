@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | AA, FIU and FIP application teams, and implementers of the IOP gateway, that read participant data from the Central Registry for AA Interoperability |
-| **Version** | Draft 1.0, 2026-11-09 |
+| **Version** | Draft 1.3, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Scope** | The Central Registry call that returns participants' base URLs, signature and encryption public keys, and the `interop` flag, and how AA Interoperability reads its response |
 
@@ -88,11 +88,30 @@ The participant's type is the list it came from (`<type>` in the path), not a fi
 | `id` | string | Every participant | The participant's entity id. An element without `id` is skipped. |
 | `baseurl` | string | Participants that receive `/iop/*` calls | Absolute URL. A trailing `/` is removed and `/iop/<api>` is added. A value that is not an absolute URL is ignored. |
 | `interop` | boolean | Every participant | `true` = interop ready. **Absent or `false` = not interop ready.** Must be a JSON boolean, not a string. |
-| `keys.signature` | array of JWK | Every participant that signs | Public keys that verify the participant's signatures, matched by the JWS `kid`. |
-| `certificate` | JWK | Optional | Used as the only signature key when `keys.signature` is empty or absent. Ignored otherwise. |
-| `keys.encryption` | array of JWK | Participants that receive encrypted messages | Public keys to encrypt for the participant. One is chosen at random per message. |
+| `keys.signature` | array of key items (section 5.4) | Every participant that signs | Public keys that verify the participant's signatures, matched by the JWS `kid`. |
+| `certificate` | JWK | Optional | Used as the only signature key when `keys.signature` is empty or absent. Ignored otherwise. It has no `validFrom` or `validTo`. |
+| `keys.encryption` | array of key items (section 5.4) | Participants that receive encrypted messages | Public keys to encrypt for the participant. One is chosen at random per message. |
 
-### 5.4 Key (JWK) fields
+### 5.4 Key items
+
+Each element of `keys.signature` and `keys.encryption` is a key with its validity window:
+
+| Field | Type | Mandatory | Use |
+|---|---|---|---|
+| `key` | JWK | Yes | The public key (section 5.5). |
+| `validFrom` | string | No | From when the key may be used. Absent or empty: no limit. |
+| `validTo` | string | No | Until when the key may be used. Absent or empty: no limit. |
+
+| Rule | Detail |
+|---|---|
+| Format of `validFrom` and `validTo` | An RFC 3339 timestamp with its time zone, for example `2026-11-01T00:00:00Z` (UTC) or `2026-11-01T05:30:00+05:30` (IST). A date alone, such as `2026-11-01`, is not accepted. |
+| Window | A key is used, to verify a signature or to encrypt, only while the current time is between `validFrom` and `validTo`, both included. |
+| When it is checked | Each time the key is used, not only when the lists load. A key comes into use at its `validFrom` and goes out of use at its `validTo` without a new fetch. |
+| Keys outside their window | Kept in the lists, but not used. |
+| Invalid window | A key whose `validFrom` or `validTo` is not an RFC 3339 timestamp, or whose `validTo` is before its `validFrom`, is skipped. |
+| Bare JWK | A JWK placed directly in `keys.signature` or `keys.encryption`, without `key`, is skipped. |
+
+### 5.5 Key (JWK) fields
 
 | Field | Signature key | Encryption key |
 |---|---|---|
@@ -105,15 +124,15 @@ The participant's type is the list it came from (`<type>` in the path), not a fi
 
 A key that does not meet these rules is skipped. The participant's other keys are still used.
 
-### 5.5 How the data is used
+### 5.6 How the data is used
 
 | Need | Field |
 |---|---|
 | Is the Target interop ready? | `interop` |
 | Can this AA be used as a route (hop)? | `interop` and `baseurl` (with the AIG and linkedAAs) |
 | Where to send an `/iop/*` call | `baseurl` |
-| Verify a participant's signature | `keys.signature` (or `certificate`), matched by `kid` |
-| Encrypt for a participant | `keys.encryption`, one chosen at random per message |
+| Verify a participant's signature | `keys.signature` within their window (or `certificate`), matched by `kid` |
+| Encrypt for a participant | `keys.encryption` within their window, one chosen at random per message |
 
 ## 6. Example
 
@@ -145,14 +164,24 @@ Accept: application/json
       },
       "keys": {
         "signature": [
-          { "kty": "RSA", "kid": "aa-test-002-sig-2026-10", "use": "sig", "alg": "RS256",
-            "n": "<base64url modulus>", "e": "AQAB" }
+          {
+            "key": { "kty": "RSA", "kid": "aa-test-002-sig-2026-10", "use": "sig", "alg": "RS256",
+                     "n": "<base64url modulus>", "e": "AQAB" },
+            "validFrom": "2026-10-01T00:00:00Z"
+          }
         ],
         "encryption": [
-          { "kty": "RSA", "kid": "aa-test-002-enc-2026-10", "use": "enc", "alg": "RSA-OAEP-256",
-            "n": "<base64url modulus>", "e": "AQAB" },
-          { "kty": "RSA", "kid": "aa-test-002-enc-2026-11", "use": "enc", "alg": "RSA-OAEP-256",
-            "n": "<base64url modulus>", "e": "AQAB" }
+          {
+            "key": { "kty": "RSA", "kid": "aa-test-002-enc-2026-10", "use": "enc", "alg": "RSA-OAEP-256",
+                     "n": "<base64url modulus>", "e": "AQAB" },
+            "validFrom": "2026-10-01T00:00:00Z",
+            "validTo": "2026-11-30T23:59:59+05:30"
+          },
+          {
+            "key": { "kty": "RSA", "kid": "aa-test-002-enc-2026-11", "use": "enc", "alg": "RSA-OAEP-256",
+                     "n": "<base64url modulus>", "e": "AQAB" },
+            "validFrom": "2026-11-15T00:00:00Z"
+          }
         ]
       }
     }
@@ -160,7 +189,9 @@ Accept: application/json
 ]
 ```
 
-Here `certificate` is not used, because `keys.signature` is not empty. `/iop/<api>` calls to this
+Here `certificate` is not used, because `keys.signature` is not empty. The signature key has no
+end. The first encryption key is used until 30 November 2026, 23:59:59 IST; the second from
+15 November 2026, 00:00 UTC. Between those times either may be chosen. `/iop/<api>` calls to this
 AA go to `https://aa-test-002.example.invalid/v2/iop/<api>`.
 
 ## 7. Failures
@@ -189,7 +220,8 @@ These cases do **not** fail the fetch; only the affected item is skipped:
 |---|---|
 | Element without `entityinfo.id` | That element is skipped. |
 | `baseurl` that is not an absolute URL | The participant has no base URL; calls cannot be sent to it. |
-| A key that breaks the rules in section 5.4 | That key is skipped. |
+| A key that breaks the rules in section 5.5 | That key is skipped. |
+| A key item whose `validFrom` or `validTo` is not an RFC 3339 timestamp, or `validTo` before `validFrom` (section 5.4) | That key is skipped. |
 
 ## 8. Requirements on Central Registry entries
 
@@ -199,5 +231,5 @@ For a participant to take part in AA Interoperability, its entry must have:
 |---|---|
 | `interop: true` | Others send to, route through, and accept messages from interop-ready participants only. |
 | `baseurl` | Others send `/iop/*` calls to `<baseurl>/iop/<api>`. |
-| `keys.signature` | Others verify its signatures. It must list the public key of **every** signing key the participant may use. |
-| `keys.encryption` | Others encrypt requests and replies for it. |
+| `keys.signature` | Others verify its signatures. It must list the public key of **every** signing key the participant may use, with a window that covers every time that key may sign. |
+| `keys.encryption` | Others encrypt requests and replies for it. A key's `validTo` must come before the participant stops being able to decrypt with it. |

@@ -37,10 +37,10 @@ security:
 - client_api_key: []
 - fip_api_key: []
 - aa_api_key: []
-- x-conn_aa_api_key: []
-- x-inter_aa_api_key: []
-- x-cust_aa_api_key: []
-- x-orig_aa_api_key: []
+- conn_aa_api_key: []
+- inter_aa_api_key: []
+- cust_aa_api_key: []
+- orig_aa_api_key: []
 paths:
   /User/discover:
     post:
@@ -169,7 +169,7 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - x-conn_aa_api_key: []
+      - conn_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -186,7 +186,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequestConsent"
+            $ref: "#/definitions/IOPBadDiscoverRequest"
         "401":
           description: Unauthorized Access
           headers:
@@ -274,7 +274,7 @@ paths:
             - Target
             - Initiator
       security:
-      - x-orig_aa_api_key: []
+      - orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -394,7 +394,7 @@ paths:
             - Target
             - Initiator
       security:
-      - x-orig_aa_api_key: []
+      - orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -515,7 +515,7 @@ paths:
             - Target
             - Initiator
       security:
-      - x-orig_aa_api_key: []
+      - orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -636,7 +636,7 @@ paths:
             - Target
             - Initiator
       security:
-      - x-orig_aa_api_key: []
+      - orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -757,7 +757,7 @@ paths:
             - Target
             - Initiator
       security:
-      - x-orig_aa_api_key: []
+      - orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -880,7 +880,7 @@ paths:
             - Initiator
       security:
       - fip_api_key: []
-      - x-inter_aa_api_key: []
+      - inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1003,8 +1003,8 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - x-conn_aa_api_key: []
-      - x-orig_aa_api_key: []
+      - conn_aa_api_key: []
+      - orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1126,7 +1126,7 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - x-conn_aa_api_key: []
+      - conn_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1248,7 +1248,7 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - x-conn_aa_api_key: []
+      - conn_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1372,8 +1372,8 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - x-conn_aa_api_key: []
-      - x-orig_aa_api_key: []
+      - conn_aa_api_key: []
+      - orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1504,8 +1504,8 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - x-conn_aa_api_key: []
-      - x-orig_aa_api_key: []
+      - conn_aa_api_key: []
+      - orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1639,10 +1639,11 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - x-conn_aa_api_key: []
-      - x-orig_aa_api_key: []
-      - x-inter_aa_api_key: []
-      - x-cust_aa_api_key: []
+      - fip_api_key: []
+      - conn_aa_api_key: []
+      - orig_aa_api_key: []
+      - inter_aa_api_key: []
+      - cust_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1765,8 +1766,8 @@ paths:
             - Initiator
       security:
         - fip_api_key: []
-        - x-inter_aa_api_key: []
-        - x-cust_aa_api_key: []
+        - inter_aa_api_key: []
+        - cust_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1876,6 +1877,7 @@ paths:
         required: true
         schema:
           allOf:
+          - $ref: "#/definitions/IOPBaseRequest"
           - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIU"
           - $ref: "#/definitions/TargetFIP"
@@ -1891,10 +1893,10 @@ paths:
       security:
       - client_api_key: []
       - fip_api_key: []
-      - x-conn_aa_api_key: []
-      - x-cust_aa_api_key: []
-      - x-inter_aa_api_key: []
-      - x-orig_aa_api_key: []
+      - conn_aa_api_key: []
+      - cust_aa_api_key: []
+      - inter_aa_api_key: []
+      - orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1984,25 +1986,25 @@ securityDefinitions:
     type: apiKey
     name: aa_api_key
     in: header
-  x-conn_aa_api_key:
-    description: x-conn_aa_api_key is provided by the connected-AA to the customer-AA
+  conn_aa_api_key:
+    description: conn_aa_api_key is provided by the connected-AA to the customer-AA
     type: apiKey
-    name: x-conn_aa_api_key
+    name: conn_aa_api_key
     in: header
-  x-cust_aa_api_key:
-    description: x-cust_aa_api_key is provided by the customer-AA to the connected-AA
+  cust_aa_api_key:
+    description: cust_aa_api_key is provided by the customer-AA to the connected-AA
     type: apiKey
-    name: x-cust_aa_api_key
+    name: cust_aa_api_key
     in: header
-  x-orig_aa_api_key:
-    description: x-orig_aa_api_key is provided by the origin-AA to the inter-AA
+  orig_aa_api_key:
+    description: orig_aa_api_key is provided by the origin-AA to the inter-AA
     type: apiKey
-    name: x-orig_aa_api_key
+    name: orig_aa_api_key
     in: header
-  x-inter_aa_api_key:
-    description: x-inter_aa_api_key is provided by the inter-AA to the origin-AA
+  inter_aa_api_key:
+    description: inter_aa_api_key is provided by the inter-AA to the origin-AA
     type: apiKey
-    name: x-inter_aa_api_key
+    name: inter_aa_api_key
     in: header
 definitions:
   CorrelationId:
@@ -2189,10 +2191,10 @@ definitions:
     properties:
       type:
         type: string
-        example: "FIP"
+        example: "AA"
       id:
         type: string
-        example: "fipid-001"
+        example: "aaid-001"
     description: Optionally set by the entity generating the error in response. A hop forwards it back to its immediate caller.
     xml:
       attribute: true
@@ -3975,7 +3977,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       encryptedData:
-        $ref: "#/definitions/IopAccLinkResonsePayload"
+        $ref: "#/definitions/IopAccLinkVerifyResonsePayload"
   IOPAccDeLinkResponse:
     type: object
     required:
@@ -4577,6 +4579,21 @@ definitions:
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
     description: Encountered a gateway timeout error. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+  IOPBadDiscoverRequest:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - InvalidRequest
+        - InvalidSecurity
+        - SignatureDoesNotMatch
+        - IopDownstreamError
+    allOf:
+    - $ref: "#/definitions/IOPBadRequest"
+    - {}
+    description: Bad Request during Consent Request. Set to IopDownstreamError when forwarding an error in the encryptedData field.
   IOPBadRequestConsent:
     properties:
       errorCode:
@@ -4869,6 +4886,35 @@ definitions:
         xml:
           attribute: true
         description: Signed attestation (JWS) of the customer's Virtual User Address.
+  IOPBaseRequest:
+    type: object
+    required:
+    - correlationId
+    - timestamp
+    - txnid
+    - ver
+    properties:
+      ver:
+        type: string
+        example: 1.0.0
+        xml:
+          attribute: true
+        description: API version.
+      timestamp:
+        type: string
+        format: date-time
+        example: 2026-08-18T09:30:00Z
+        xml:
+          attribute: true
+        description: Request creation timestamp.
+      txnid:
+        type: string
+        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
+        xml:
+          attribute: true
+        description: Unique transaction identifier used for providing an end to end traceability.
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
   FITypes:
     type: array
     minItems: 1
@@ -4977,7 +5023,7 @@ definitions:
       type: object
       description: A list of discovered accounts
       required:
-        - Account
+        - Accounts
       properties:
        Account:
           $ref: '#/definitions/Account'          

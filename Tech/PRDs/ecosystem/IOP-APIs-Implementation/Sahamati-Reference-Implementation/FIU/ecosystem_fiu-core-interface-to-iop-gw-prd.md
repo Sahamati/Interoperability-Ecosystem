@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIU core application teams (AA ecosystem participants) |
-| **Version** | Draft 2.1, 2026-11-09 |
+| **Version** | Draft 3.1, 2026-11-09 |
 | **Covers** | How the fiu-core sends and receives messages through the fiu-iop-gw, when to call it, how the fiu-core gives it keys and its list of linked AAs, and how the fiu-iop-gw is configured |
 
 All identifiers in examples are illustrative.
@@ -18,15 +18,16 @@ To work with the fiu-iop-gw, the fiu-core needs the changes below. "Yes" means n
 | 2 | Send `Target-Entity` and `Correlation-Id` on every call, and `Authorization` with the internal API token. Optionally send `Preferred-Hop`, `Http-Retries`, `Route-Retries` and the fiu-core's own `x-jws-signature`. | Yes | 3.4 |
 | 3 | Create a non-empty correlation id for each new flow, and keep it on every message of that flow. | Yes | 2 |
 | 4 | Handle the responses: the Target's payload and signature; Target errors (with a payload, or a status with an empty body); errors from the fiu-iop-gw (`IOP-Gw-Error: true`, for example `503 AllRoutesUnavailable`). | Yes | 3.6 – 3.10 |
-| 5 | Expose the `/fiu-core/*` APIs to receive messages from participants that are not directly connected. The payloads are those of the Direct APIs. | Yes | 4.3 – 4.5 |
-| 6 | Return `Correlation-Id` unchanged on every `/fiu-core/*` response. | Yes | 4.6 |
-| 7 | Check `Authorization` on every `/fiu-core/*` call (the token the fiu-iop-gw sends to the fiu-core). | Recommended | 4.4, 7 |
-| 8 | De-duplicate incoming messages on `txnid`: retries can deliver a message twice, and the fiu-core must not process it twice. | Yes | 4.5 |
-| 9 | Serve the key endpoints `GET /fiu-core/keys/signing` and `GET /fiu-core/keys/decryption` over HTTPS, checking the key-fetch token. | Yes | 5.1 |
-| 10 | Push new key sets to `/fiu-dgw/keys/*` when keys rotate. | Recommended | 5.2 |
-| 11 | Serve `GET /fiu-core/linkedAAs` with the AAs the FIU is linked to. | Yes | 6.1 |
-| 12 | Push the list to `/fiu-dgw/linkedAAs` when it changes. | Recommended | 6.2 |
-| 13 | Set the fiu-iop-gw's configuration and provide its tokens, certificates and credentials before starting it. | Yes | 8 |
+| 5 | To find which AAs know a customer, call `POST /fiu-dgw/broadcast/User/discover` (one call asks every AA) and handle its merged answer. | Optional | 3.13 |
+| 6 | Expose the `/fiu-core/*` APIs to receive messages from participants that are not directly connected. The payloads are those of the Direct APIs. | Yes | 4.3 – 4.5 |
+| 7 | Return `Correlation-Id` unchanged on every `/fiu-core/*` response. | Yes | 4.6 |
+| 8 | Check `Authorization` on every `/fiu-core/*` call (the token the fiu-iop-gw sends to the fiu-core). | Recommended | 4.4, 7 |
+| 9 | De-duplicate incoming messages on `txnid`: retries can deliver a message twice, and the fiu-core must not process it twice. | Yes | 4.5 |
+| 10 | Serve the key endpoints `GET /fiu-core/keys/signing` and `GET /fiu-core/keys/decryption` over HTTPS, checking the key-fetch token. | Yes | 5.1 |
+| 11 | Push new key sets to `/fiu-dgw/keys/*` when keys rotate. | Recommended | 5.2 |
+| 12 | Serve `GET /fiu-core/linkedAAs` with the AAs the FIU is linked to. | Yes | 6.1 |
+| 13 | Push the list to `/fiu-dgw/linkedAAs` when it changes. | Recommended | 6.2 |
+| 14 | Set the fiu-iop-gw's configuration and provide its tokens, certificates and credentials before starting it. | Yes | 8 |
 
 ## 1. Terminology
 
@@ -56,6 +57,7 @@ To work with the fiu-iop-gw, the fiu-core needs the changes below. "Yes" means n
 | The customer's AA is **directly connected** to the FIU | **No.** The fiu-core calls that AA's Direct APIs. |
 | The customer's AA is **not directly connected** to the FIU | **Yes.** The fiu-core calls the fiu-iop-gw (`/fiu-dgw/*`). The fiu-iop-gw sends the message through one of the FIU's Connected-AAs. |
 | A customer's AA that is not directly connected sends a notification | **No call needed.** The fiu-iop-gw receives it and calls the fiu-core (`/fiu-core/*`), see section 4. |
+| The fiu-core wants to find which AAs know a customer | **Optional.** The fiu-core can call `POST /fiu-dgw/broadcast/User/discover` (section 3.13). One call asks every AA, directly connected or not. |
 
 **Every message must carry a correlation id.**
 
@@ -83,7 +85,7 @@ To work with the fiu-iop-gw, the fiu-core needs the changes below. "Yes" means n
    with the FIU's signing key.
 2. **Encrypts** the signed payload for the Target.
 3. **Builds the IOP request** around the encrypted payload (`ver`, `timestamp`, `txnid`,
-   `correlationId`, `Target`, `iopPayload`) and **signs it**. The request carries only `Target`;
+   `correlationId`, `Target`, `encryptedData`) and **signs it**. The request carries only `Target`;
    the route sets `Initiator` when it forwards the request. Its `txnid` is **not** the
    payload's: it identifies the transaction between the fiu-iop-gw and the route, a new one for each
    route.
@@ -92,13 +94,14 @@ To work with the fiu-iop-gw, the fiu-core needs the changes below. "Yes" means n
 **Receiving the response.** When the answer comes back, the fiu-iop-gw:
 
 1. **Checks the signature of the Connected-AA** on the answer.
-2. **Decrypts** the Target's encrypted reply.
+2. **Decrypts** the Target's encrypted reply (`encryptedData`, in success and error answers alike;
+   the HTTP status tells them apart).
 3. **Checks the Target's signature** on the reply.
 4. **Returns the Target's reply** to the fiu-core: the Target's payload, the Target's status and
    the Target's signature (`x-jws-signature`).
 
 A Heartbeat has no encrypted payload: sending steps 1 and 2 are skipped, and the IOP request
-carries only the `Target`, without `iopPayload`. `/iop/Heartbeat` is only for a Target that is
+(always `POST /iop/Heartbeat`) carries only the `Target`, without `encryptedData`. `/iop/Heartbeat` is only for a Target that is
 not directly connected: a directly connected participant (for example the route itself) is
 checked with the Direct API `GET /Heartbeat`.
 
@@ -113,9 +116,11 @@ checked with the Direct API `GET /Heartbeat`.
 | `POST` | `/fiu-dgw/FI/fetch` | fiu-core | fiu-iop-gw | `AA` | `/FI/fetch` | FI data fetch |
 | `POST` | `/fiu-dgw/Consent/Notification` | fiu-core | fiu-iop-gw | `AA` | `/Consent/Notification` | Consent status notification to the AA |
 | `GET` | `/fiu-dgw/Heartbeat` | fiu-core | fiu-iop-gw | `AA` | `/Heartbeat` | Heartbeat towards the AA (no body) |
-| `POST` | `/fiu-dgw/User/discover` | fiu-core | fiu-iop-gw | `AA` | — | **Not implemented yet:** always answered `501 NotImplemented` |
+| `POST` | `/fiu-dgw/User/discover` | fiu-core | fiu-iop-gw | `AA` | `/User/discover` | User discovery at the customer's AA |
 
 The Target (`Target-Entity`) is the **customer's AA** (the Customer-AA).
+
+To ask **every** AA at once whether it knows a customer, the fiu-core calls `POST /fiu-dgw/broadcast/User/discover` instead (section 3.13).
 
 ### 3.4 Request headers
 
@@ -136,6 +141,7 @@ No other header is needed. `Content-Type` is not required.
 - The request body is **exactly the same payload** the FIU would send to a directly connected
   participant in the matching Direct API call (column "Same payload as the Direct API" in section 3.3).
 - Example: `POST /fiu-dgw/Consent` carries exactly the payload the FIU would send in the Direct API `/Consent` call to an AA it is directly connected to.
+- Example: `POST /fiu-dgw/User/discover` carries the same payload as the Direct API `/User/discover` call (a `CustDiscoveryRequest`). The response is the Customer-AA's `CustDiscoveryResponse`.
 - The body must contain `txnid`; `ver` is taken from it.
 - A Heartbeat (`GET`) has no body.
 - Retries and further routes resend the **same payload, with the same `txnid` in the payload**.
@@ -151,17 +157,17 @@ What the core receives depends on what comes back from the Connected-AA. Section
 | The Target answered (success or error) | The Target's status | **Exactly the same payload** the Target returns in the matching Direct API call, as the Target signed it (decrypted by the gateway). |
 | The Target answered an error without a payload | The Target's status (passed on by the Connected-AA) | Empty. |
 | Every route failed | `503` | An `ErrorResponse` with `errorCode` `AllRoutesUnavailable` (section 3.9). |
-| The fiu-iop-gw refused the call | 400, 401, 404, 405, 413, 500, 501, 502, 503 or 504 | An `ErrorResponse` (section 3.9). |
+| The fiu-iop-gw refused the call | 400, 401, 404, 405, 413, 500, 502, 503 or 504 | An `ErrorResponse` (section 3.9). |
 
 ### 3.7 How the gateway handles an error from the Connected-AA
 
 This applies only when the Connected-AA answers with an error (status `4xx` or `5xx`). Success
 answers (`2xx`, `3xx`) are opened and passed on as in section 3.6.
 
-| Payload from the Connected-AA | `iopError` in the payload | `errorCode` in the payload | What the fiu-iop-gw does | Status to the core | Body to the core | `IOP-Gw-Error` |
+| Payload from the Connected-AA | `encryptedData` in the payload | `errorCode` in the payload | What the fiu-iop-gw does | Status to the core | Body to the core | `IOP-Gw-Error` |
 |---|---|---|---|---|---|---|
 | Yes | Yes | Any | Answers the core | The Connected-AA's status | The Target's error payload (decrypted), with the Target's signature | Not set |
-| Yes | No | `IopUpstreamError` | Answers the core | The Connected-AA's status | Empty | Not set |
+| Yes | No | `IopDownstreamError` | Answers the core | The Connected-AA's status | Empty | Not set |
 | Yes | No | Anything else | Tries another route (see below); if every route fails, answers the core | `503` | Generated: `errorCode` `AllRoutesUnavailable` | `true` |
 | No | No | None | Tries another route (see below); if every route fails, answers the core | `503` | Generated: `errorCode` `AllRoutesUnavailable` | `true` |
 
@@ -171,7 +177,7 @@ answers (`2xx`, `3xx`) are opened and passed on as in section 3.6.
   route at once.
 - When the Connected-AA does not answer at all (no connection, or a timeout), it is handled like the
   last row.
-- `IopUpstreamError` without `iopError` means the Connected-AA reached the Target, but the Target
+- `IopDownstreamError` without `encryptedData` means the Connected-AA reached the Target, but the Target
   answered an error without a payload. Another route would reach the same Target, so the
   gateway does not try one.
 
@@ -213,7 +219,6 @@ Errors generated by the fiu-iop-gw itself carry `IOP-Gw-Error: true` and have th
 | `405` | `InvalidRequest` | Wrong HTTP method (see `Allow`) |
 | `413` | `InvalidRequest` | The request body is too large |
 | `500` | `InternalError` | The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target) |
-| `501` | `NotImplemented` | `User/discover` (not implemented yet) |
 | `502` | `BadGateway` | The AIG is not available; the answer of the Connected-AA has an invalid signature, cannot be decrypted, or is malformed |
 | `502` | `SignatureDoesNotMatch` | The Target's signature on the reply does not verify |
 | `503` | `AllRoutesUnavailable` | Every route failed: no Connected-AA answered, or each answered an error that is not from the Target (section 3.7) |
@@ -260,8 +265,8 @@ IOP-Gw-Error: true
 ```
 
 **3. The Target returns an error without a body** — for example, `POST /fiu-dgw/FI/request` and the Target
-(`aa-test-002`) answers `500` with no payload. The Connected-AA (`aa-test-001`) answers `IopUpstreamError`
-without `iopError`. The core receives the status with an **empty body**. This answer is final:
+(`aa-test-002`) answers `500` with no payload. The Connected-AA (`aa-test-001`) answers `IopDownstreamError`
+without `encryptedData`. The core receives the status with an **empty body**. This answer is final:
 the gateway does not retry it or try another route.
 
 ```http
@@ -316,13 +321,13 @@ refused with `400 InvalidRequest` before any route is chosen.
 |---|---|---|
 | No answer (no connection, or a timeout) | Yes, up to `Http-Retries` | Yes, up to `Route-Retries` |
 | Any error not from the Target, `502`/`503`/`504` included (for example `400 InvalidRoute`\*) | No | Yes, up to `Route-Retries` |
-| An error with `iopError`, or with `IopUpstreamError` | No | No (the answer goes to the core, section 3.7) |
+| An error with `encryptedData`, or with `IopDownstreamError` | No | No (the answer goes to the core, section 3.7) |
 | Success | No | No |
 
-"Not from the Target" means: no `iopError` in the payload, and `errorCode` is not
-`IopUpstreamError` (section 3.7).
+"Not from the Target" means: no `encryptedData` in the payload, and `errorCode` is not
+`IopDownstreamError` (section 3.7).
 
-\* `InvalidRoute` is the code the IOP Gateway uses when, as a hop, it cannot route to the Target. **It is not yet confirmed as a ReBIT IOP error code.**
+\* `InvalidRoute` is the code the IOP Gateway uses when, as a hop, it cannot route to the Target: the Target is unknown to the hop, or is not linked to the hop AA. Linked means: an FIU Target lists the hop AA as a Connected-AA in the AIG; a FIP Target lists the hop AA as an Inter-AA in the AIG; an AA Target is in the hop AA's linkedAAs. The hop then does not call the Target. If the hop cannot check this (its AIG is not loaded), it answers `503 InternalError`; both answers lead to the next route. **It is not yet confirmed as a ReBIT IOP error code.**
 
 ### 3.12 Retries
 
@@ -334,33 +339,33 @@ The fiu-iop-gw retries a call from the fiu-core as follows.
 | Retries the same route | `Http-Retries` header: default 2, capped by the gateway (by default at 3) |
 | … when | The Connected-AA does not answer (no connection, or a timeout). An error answer from the Connected-AA, `502`/`503`/`504` included, is never retried on the same route |
 | Tries another route | `Route-Retries` header: default 2, capped by the gateway (by default at 2). After the retries when the Connected-AA does not answer; at once on any error from the Connected-AA that is not from the Target (for example `503` or `400 InvalidRoute`) |
-| Never retries | Success; an answer with `iopError` (the Target's error); `IopUpstreamError` without `iopError` |
+| Never retries | Success; an answer with `encryptedData` (the Target's error); `IopDownstreamError` without `encryptedData` |
 | Wait between attempts | 200 ms, doubling, at most 2 s |
 | Most sends per call (defaults) | (1 + 2 routes) × (1 + 2 retries) = 9 |
 | When all attempts fail | The fiu-core gets `503 AllRoutesUnavailable` with `IOP-Gw-Error: true` |
 
 **Received in response to an `/iop/*` API from the Connected-AA**
 
-| StatusCode | ErrorCode | IopError | Inference | RetryHttp | RetryRoute |
+| StatusCode | ErrorCode | EncryptedData | Inference | RetryHttp | RetryRoute |
 |---|---|---|---|---|---|
 | — (no response) | — | — | The Connected-AA could not be reached, or did not answer in time | Yes, up to `Http-Retries` | Yes, after the retries |
 | `2xx`, `3xx` | — | — | Success: the Target's answer. The fiu-core gets the Target's payload, status and signature | No | No |
 | Any `4xx`/`5xx` | Any | Present | The Target answered with an error. The fiu-core gets the Target's error payload, status and signature | No | No |
-| `4xx` | `IopUpstreamError` | Absent | The Target answered `4xx` without a payload. The fiu-core gets the same status with an empty body | No | No |
-| `5xx` | `IopUpstreamError` | Absent | The Target failed (`5xx` without a payload), or the Connected-AA could not reach it (`502`) or got no answer in time (`504`). Every route leads to the same Target. The fiu-core gets the same status with an empty body | No | No |
-| `502`, `503`, `504` | Other than `IopUpstreamError`, or none | Absent | The Connected-AA itself is unavailable | No | Yes, at once |
+| `4xx` | `IopDownstreamError` | Absent | The Target answered `4xx` without a payload. The fiu-core gets the same status with an empty body | No | No |
+| `5xx` | `IopDownstreamError` | Absent | The Target failed (`5xx` without a payload), or the Connected-AA could not reach it (`502`) or got no answer in time (`504`). Every route leads to the same Target. The fiu-core gets the same status with an empty body | No | No |
+| `502`, `503`, `504` | Other than `IopDownstreamError`, or none | Absent | The Connected-AA itself is unavailable | No | Yes, at once |
 | `400` | `InvalidRoute`\* | Absent | The Connected-AA cannot route to the Target | No | Yes, at once |
-| Any other `4xx`/`5xx` | Other than `IopUpstreamError`, or none | Absent | The Connected-AA refused the call, or failed | No | Yes, at once |
+| Any other `4xx`/`5xx` | Other than `IopDownstreamError`, or none | Absent | The Connected-AA refused the call, or failed | No | Yes, at once |
 
 - **StatusCode:** the HTTP status code of the Connected-AA's response.
 - **ErrorCode:** the `errorCode` set by the Connected-AA.
-- **IopError:** the `iopError` field set by the Target and forwarded by the Connected-AA.
+- **EncryptedData:** the `encryptedData` field: the Target's encrypted answer, forwarded by the Connected-AA.
 - **RetryHttp:** whether the same route is retried. **RetryRoute:** whether a different route is tried.
 - When every route has failed, the fiu-core gets `503 AllRoutesUnavailable` with `IOP-Gw-Error: true`.
 
 \* See the note in section 3.11.
 
-1. **Errors from beyond the Connected-AA are final.** `IopUpstreamError` without `iopError` means the
+1. **Errors from beyond the Connected-AA are final.** `IopDownstreamError` without `encryptedData` means the
    Target could not be reached, or answered an error without a payload. Every route leads to the
    same Target, so the fiu-iop-gw neither retries nor tries another route.
 2. **Every resend carries the same payload and `correlationId`.** The payload's `txnid` stays the
@@ -372,6 +377,157 @@ The fiu-iop-gw retries a call from the fiu-core as follows.
    Choose `Http-Retries` and `Route-Retries` so that this fits the fiu-core's HTTP client timeout
    for the internal APIs; for example, with a 60 s timeout, send `Http-Retries: 0` and
    `Route-Retries: 0` (one attempt, at most 32 s).
+
+### 3.13 User discovery at every AA (broadcast)
+
+`POST /fiu-dgw/broadcast/User/discover` asks **every AA at once** whether it knows a customer, and
+returns one merged answer. The fiu-core does not need to know which AA holds the customer, or
+whether that AA is directly connected to the FIU.
+
+**Who calls**
+
+| Caller | Callee | Connection |
+|---|---|---|
+| fiu-core | fiu-iop-gw | The fiu-iop-gw's internal APIs, as in section 3.1. |
+
+**API**
+
+| Method | Path | Caller | Callee | `Target-Entity` type | Same payload as the Direct API | Use |
+|---|---|---|---|---|---|---|
+| `POST` | `/fiu-dgw/broadcast/User/discover` | fiu-core | fiu-iop-gw | — (not sent) | `/User/discover` | Ask every AA whether it knows the customer |
+
+**Request headers**
+
+| Header | Mandatory | Value |
+|---|---|---|
+| `Authorization` | Yes, if the fiu-iop-gw is configured with an internal API token | `Bearer <internal API token>`, as in section 3.4. |
+| `Correlation-Id` | Yes | The flow's correlation id, in standard UUID format. It is copied as `correlationId` into every request the fiu-iop-gw sends for this call, and returned on the response. A missing value, or one that is not a UUID, is refused with `400 InvalidRequest`. |
+| `Http-Retries` | No | As in section 3.4. Applies to the `/iop/User/discover` requests sent through a Connected-AA. |
+| `Route-Retries` | No | As in section 3.4. Applies to the `/iop/User/discover` requests sent through a Connected-AA. |
+
+`Target-Entity`, `Preferred-Hop` and `x-jws-signature` are not used: the fiu-iop-gw chooses the
+AAs and signs every request itself. `Content-Type` is not required.
+
+**Request body**
+
+- A `CustDiscoveryRequest`: the same payload as the Direct API `/User/discover` call (`ver`,
+  `timestamp`, `txnid`, `correlationId`, and `customer` with `vuaHash`, `mobileHash` or both).
+- The body must be a JSON object with `txnid`.
+- Each AA receives a copy with **its own new `txnid`** and with `correlationId` set to the
+  `Correlation-Id` header value. All other fields are sent as the fiu-core sent them.
+
+**How it works**
+
+The fiu-iop-gw takes every AA in its copy of the Central Registry participant list and, for all of
+them at the same time:
+
+| The AA is | What the fiu-iop-gw sends | The answer is used when |
+|---|---|---|
+| In the FIU's linkedAAs (section 6) | The Direct API `POST <AA base URL>/User/discover`, with a plaintext body and the headers `client_api_key` (the FIU's api-key from the Sahamati token service) and `x-jws-signature` (a detached JWS made by the fiu-iop-gw with the FIU's signing key). | The status is `200` and the AA's `x-jws-signature` verifies with the AA's keys from the Central Registry. |
+| Not in linkedAAs, and marked interop ready | `/iop/User/discover` through a Connected-AA, with the route chosen and retried as for `/fiu-dgw/User/discover` (sections 3.11 and 3.12). The reply is opened and checked as in section 3.2. | The Customer-AA's status is `200`. |
+| Not in linkedAAs, and not marked interop ready | Nothing: the AA is not asked. | — |
+
+- The fiu-iop-gw waits until every AA asked has answered, or until `gwApi.broadcastTimeoutSeconds`
+  (default 10 seconds) has passed. Later answers are ignored.
+- An AA that does not answer, or answers with an error, is left out of the result.
+- The fiu-core's HTTP client timeout for this call should be longer than
+  `gwApi.broadcastTimeoutSeconds`.
+
+**Response**
+
+`200` with a `CustDiscoveryResponse`:
+
+| Field | Value |
+|---|---|
+| `ver` | From the request body (the gateway's configured version if the body has none) |
+| `timestamp` | The time of the response |
+| `txnid` | The fiu-core's `txnid`, from the request body |
+| `correlationId` | The `Correlation-Id` header value |
+| `status` | `User Found` if at least one AA found the customer; otherwise `User Not Found` |
+| `customerDiscoveryResponse` | The `customerDiscoveryResponse` entries of every AA answer whose `status` is `User Found`, merged into one list. An empty list when no AA found the customer. |
+
+| Response header | Present | Value |
+|---|---|---|
+| `Correlation-Id` | Always | The value the fiu-core sent. |
+| `IOP-Gw-Error` | Only on errors generated by the fiu-iop-gw | `true` |
+| `Allow` | On `405` | `POST` |
+
+There is no `x-jws-signature` (the entries come from several AAs, each answer checked by the
+fiu-iop-gw), no `Forwarding-Hop` and no `Content-Type`.
+
+**Errors**
+
+Errors carry `IOP-Gw-Error: true` and the `ErrorResponse` body of section 3.9.
+
+| Status | `errorCode` | When |
+|---|---|---|
+| `400` | `InvalidRequest` | `Correlation-Id` missing or not in standard UUID format; the body is not a JSON object with `txnid`; `Http-Retries` or `Route-Retries` not a non-negative number |
+| `401` | `InvalidSecurity` | The internal API token is missing or wrong (when one is configured) |
+| `405` | `InvalidRequest` | Wrong HTTP method (see `Allow`) |
+| `413` | `InvalidRequest` | The request body is too large |
+| `503` | `InternalError` | The Central Registry participant list is not loaded yet |
+| `503` | `AllRoutesUnavailable` | No AA answered successfully |
+
+**Examples**
+
+All values are synthetic.
+
+Request:
+
+```http
+POST /fiu-dgw/broadcast/User/discover HTTP/1.1
+Authorization: Bearer <internal API token>
+Correlation-Id: 9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94
+
+{
+  "ver": "2.0.0",
+  "timestamp": "2026-11-07T11:33:34.509Z",
+  "txnid": "3f2b8c1e-7d4a-4c9e-9b1f-2a6d5e8c4b71",
+  "correlationId": "9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94",
+  "customer": {
+    "vuaHash": "synthetic-vua-hash",
+    "mobileHash": "synthetic-mobile-hash"
+  }
+}
+```
+
+Response — one AA (`aa-test-002`) found the customer:
+
+```http
+HTTP/1.1 200 OK
+Correlation-Id: 9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94
+
+{
+  "ver": "2.0.0",
+  "timestamp": "2026-11-07T11:33:36.112Z",
+  "txnid": "3f2b8c1e-7d4a-4c9e-9b1f-2a6d5e8c4b71",
+  "correlationId": "9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94",
+  "status": "User Found",
+  "customerDiscoveryResponse": [
+    {
+      "customerAddress": "customer-test-001@aa-test-002",
+      "maskedMobile": "XXXXXXXXXX",
+      "vuaAttestation": "<the AA's attestation>"
+    }
+  ]
+}
+```
+
+Error — no AA answered successfully:
+
+```http
+HTTP/1.1 503 Service Unavailable
+Correlation-Id: 9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94
+IOP-Gw-Error: true
+
+{
+  "ver": "2.0.0",
+  "txnid": "3f2b8c1e-7d4a-4c9e-9b1f-2a6d5e8c4b71",
+  "timestamp": "2026-11-07T11:33:44.509Z",
+  "errorCode": "AllRoutesUnavailable",
+  "errorMsg": "no AA answered the user discovery (3 asked)"
+}
+```
 
 ## 4. Receiving messages from the fiu-iop-gw
 
@@ -782,6 +938,7 @@ gwApi:
   token: "${IOPGW_GWAPI_TOKEN}"      # the fiu-core sends it as Authorization: Bearer
   maxRetries: 3                        # cap on Http-Retries
   maxRouteRetries: 2                   # cap on Route-Retries
+  broadcastTimeoutSeconds: 10          # how long /fiu-dgw/broadcast/User/discover waits for the AAs (section 3.13)
 
 # Linked AAs: from the fiu-core (section 6)
 linkedAAs:
@@ -888,6 +1045,7 @@ gwApi:                                 # internal APIs (/fiu-dgw) for the fiu-co
   token: "${IOPGW_GWAPI_TOKEN}"
   maxRetries: 3
   maxRouteRetries: 2
+  broadcastTimeoutSeconds: 10
 
 linkedAAs:
   source: config                       # list from this file, not the fiu-core's API
@@ -919,11 +1077,9 @@ cache:
   empty. Keep them secret, and give each the same value on the fiu-core's side.
 - `hopPreference` lists the FIU's preferred routes, tried first in that order (section 3.11).
 - `gwApi.maxRetries` and `gwApi.maxRouteRetries` cap `Http-Retries` and `Route-Retries`.
+- `gwApi.broadcastTimeoutSeconds` is how long `POST /fiu-dgw/broadcast/User/discover` waits for
+  the AAs' answers (section 3.13). Default `10`; it must not be negative.
 - `logging.audit` writes one JSON log record tagged `IOPGW_AUDIT` per request and per response
   (headers, lengths, ids, status and error code; never the body), and
   `logging.statsIntervalSeconds` one record tagged `IOPGW_STATS` per interval with
   `|`-separated counts. Both can be fetched from the gateway's logs by their tag.
-
-## 9. To do
-
-- User discovery

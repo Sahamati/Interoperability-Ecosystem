@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIP core application teams (AA ecosystem participants) |
-| **Version** | Draft 2.1, 2026-11-09 |
+| **Version** | Draft 3.0, 2026-11-09 |
 | **Covers** | How the fip-core sends and receives messages through the fip-iop-gw, when to call it, how the fip-core gives it keys and its list of linked AAs, and how the fip-iop-gw is configured |
 
 All identifiers in examples are illustrative.
@@ -18,7 +18,7 @@ To work with the fip-iop-gw, the fip-core needs the changes below. "Yes" means n
 | 2 | Send `Target-Entity` and `Correlation-Id` on every call, and `Authorization` with the internal API token. Optionally send `Preferred-Hop`, `Http-Retries`, `Route-Retries` and the fip-core's own `x-jws-signature`. | Yes | 3.4 |
 | 3 | Create a non-empty correlation id for each new flow, and keep it on every message of that flow. | Yes | 2 |
 | 4 | Handle the responses: the Target's payload and signature; Target errors (with a payload, or a status with an empty body); errors from the fip-iop-gw (`IOP-Gw-Error: true`, for example `503 AllRoutesUnavailable`). | Yes | 3.6 – 3.10 |
-| 5 | Expose the `/fip-core/*` APIs to receive messages from participants that are not directly connected. The payloads are those of the Direct APIs. | Yes | 4.3 – 4.5 |
+| 5 | Expose the `/fip-core/*` APIs (including `POST /fip-core/Accounts/link/reverify`) to receive messages from participants that are not directly connected. The payloads are those of the Direct APIs. | Yes | 4.3 – 4.5 |
 | 6 | Return `Correlation-Id` unchanged on every `/fip-core/*` response. | Yes | 4.6 |
 | 7 | Check `Authorization` on every `/fip-core/*` call (the token the fip-iop-gw sends to the fip-core). | Recommended | 4.4, 7 |
 | 8 | De-duplicate incoming messages on `txnid`: retries can deliver a message twice, and the fip-core must not process it twice. | Yes | 4.5 |
@@ -83,7 +83,7 @@ To work with the fip-iop-gw, the fip-core needs the changes below. "Yes" means n
    with the FIP's signing key.
 2. **Encrypts** the signed payload for the Target.
 3. **Builds the IOP request** around the encrypted payload (`ver`, `timestamp`, `txnid`,
-   `correlationId`, `Target`, `iopPayload`) and **signs it**. The request carries only `Target`;
+   `correlationId`, `Target`, `encryptedData`) and **signs it**. The request carries only `Target`;
    the route sets `Initiator` when it forwards the request. Its `txnid` is **not** the
    payload's: it identifies the transaction between the fip-iop-gw and the route, a new one for each
    route.
@@ -92,13 +92,14 @@ To work with the fip-iop-gw, the fip-core needs the changes below. "Yes" means n
 **Receiving the response.** When the answer comes back, the fip-iop-gw:
 
 1. **Checks the signature of the Inter-AA** on the answer.
-2. **Decrypts** the Target's encrypted reply.
+2. **Decrypts** the Target's encrypted reply (`encryptedData`, in success and error answers alike;
+   the HTTP status tells them apart).
 3. **Checks the Target's signature** on the reply.
 4. **Returns the Target's reply** to the fip-core: the Target's payload, the Target's status and
    the Target's signature (`x-jws-signature`).
 
 A Heartbeat has no encrypted payload: sending steps 1 and 2 are skipped, and the IOP request
-carries only the `Target`, without `iopPayload`. `/iop/Heartbeat` is only for a Target that is
+(always `POST /iop/Heartbeat`) carries only the `Target`, without `encryptedData`. `/iop/Heartbeat` is only for a Target that is
 not directly connected: a directly connected participant (for example the route itself) is
 checked with the Direct API `GET /Heartbeat`.
 
@@ -154,10 +155,10 @@ What the core receives depends on what comes back from the Inter-AA. Section 3.7
 This applies only when the Inter-AA answers with an error (status `4xx` or `5xx`). Success
 answers (`2xx`, `3xx`) are opened and passed on as in section 3.6.
 
-| Payload from the Inter-AA | `iopError` in the payload | `errorCode` in the payload | What the fip-iop-gw does | Status to the core | Body to the core | `IOP-Gw-Error` |
+| Payload from the Inter-AA | `encryptedData` in the payload | `errorCode` in the payload | What the fip-iop-gw does | Status to the core | Body to the core | `IOP-Gw-Error` |
 |---|---|---|---|---|---|---|
 | Yes | Yes | Any | Answers the core | The Inter-AA's status | The Target's error payload (decrypted), with the Target's signature | Not set |
-| Yes | No | `IopUpstreamError` | Answers the core | The Inter-AA's status | Empty | Not set |
+| Yes | No | `IopDownstreamError` | Answers the core | The Inter-AA's status | Empty | Not set |
 | Yes | No | Anything else | Tries another route (see below); if every route fails, answers the core | `503` | Generated: `errorCode` `AllRoutesUnavailable` | `true` |
 | No | No | None | Tries another route (see below); if every route fails, answers the core | `503` | Generated: `errorCode` `AllRoutesUnavailable` | `true` |
 
@@ -167,7 +168,7 @@ answers (`2xx`, `3xx`) are opened and passed on as in section 3.6.
   route at once.
 - When the Inter-AA does not answer at all (no connection, or a timeout), it is handled like the
   last row.
-- `IopUpstreamError` without `iopError` means the Inter-AA reached the Target, but the Target
+- `IopDownstreamError` without `encryptedData` means the Inter-AA reached the Target, but the Target
   answered an error without a payload. Another route would reach the same Target, so the
   gateway does not try one.
 
@@ -255,8 +256,8 @@ IOP-Gw-Error: true
 ```
 
 **3. The Target returns an error without a body** — for example, `POST /fip-sgw/Consent/Notification` and the Target
-(`aa-test-002`) answers `500` with no payload. The Inter-AA (`aa-test-001`) answers `IopUpstreamError`
-without `iopError`. The core receives the status with an **empty body**. This answer is final:
+(`aa-test-002`) answers `500` with no payload. The Inter-AA (`aa-test-001`) answers `IopDownstreamError`
+without `encryptedData`. The core receives the status with an **empty body**. This answer is final:
 the gateway does not retry it or try another route.
 
 ```http
@@ -311,13 +312,13 @@ refused with `400 InvalidRequest` before any route is chosen.
 |---|---|---|
 | No answer (no connection, or a timeout) | Yes, up to `Http-Retries` | Yes, up to `Route-Retries` |
 | Any error not from the Target, `502`/`503`/`504` included (for example `400 InvalidRoute`\*) | No | Yes, up to `Route-Retries` |
-| An error with `iopError`, or with `IopUpstreamError` | No | No (the answer goes to the core, section 3.7) |
+| An error with `encryptedData`, or with `IopDownstreamError` | No | No (the answer goes to the core, section 3.7) |
 | Success | No | No |
 
-"Not from the Target" means: no `iopError` in the payload, and `errorCode` is not
-`IopUpstreamError` (section 3.7).
+"Not from the Target" means: no `encryptedData` in the payload, and `errorCode` is not
+`IopDownstreamError` (section 3.7).
 
-\* `InvalidRoute` is the code the IOP Gateway uses when, as a hop, it cannot route to the Target. **It is not yet confirmed as a ReBIT IOP error code.**
+\* `InvalidRoute` is the code the IOP Gateway uses when, as a hop, it cannot route to the Target: the Target is unknown to the hop, or is not linked to the hop AA. Linked means: an FIU Target lists the hop AA as a Connected-AA in the AIG; a FIP Target lists the hop AA as an Inter-AA in the AIG; an AA Target is in the hop AA's linkedAAs. The hop then does not call the Target. If the hop cannot check this (its AIG is not loaded), it answers `503 InternalError`; both answers lead to the next route. **It is not yet confirmed as a ReBIT IOP error code.**
 
 ### 3.12 Retries
 
@@ -329,33 +330,33 @@ The fip-iop-gw retries a call from the fip-core as follows.
 | Retries the same route | `Http-Retries` header: default 2, capped by the gateway (by default at 3) |
 | … when | The Inter-AA does not answer (no connection, or a timeout). An error answer from the Inter-AA, `502`/`503`/`504` included, is never retried on the same route |
 | Tries another route | `Route-Retries` header: default 2, capped by the gateway (by default at 2). After the retries when the Inter-AA does not answer; at once on any error from the Inter-AA that is not from the Target (for example `503` or `400 InvalidRoute`) |
-| Never retries | Success; an answer with `iopError` (the Target's error); `IopUpstreamError` without `iopError` |
+| Never retries | Success; an answer with `encryptedData` (the Target's error); `IopDownstreamError` without `encryptedData` |
 | Wait between attempts | 200 ms, doubling, at most 2 s |
 | Most sends per call (defaults) | (1 + 2 routes) × (1 + 2 retries) = 9 |
 | When all attempts fail | The fip-core gets `503 AllRoutesUnavailable` with `IOP-Gw-Error: true` |
 
 **Received in response to an `/iop/*` API from the Inter-AA**
 
-| StatusCode | ErrorCode | IopError | Inference | RetryHttp | RetryRoute |
+| StatusCode | ErrorCode | EncryptedData | Inference | RetryHttp | RetryRoute |
 |---|---|---|---|---|---|
 | — (no response) | — | — | The Inter-AA could not be reached, or did not answer in time | Yes, up to `Http-Retries` | Yes, after the retries |
 | `2xx`, `3xx` | — | — | Success: the Target's answer. The fip-core gets the Target's payload, status and signature | No | No |
 | Any `4xx`/`5xx` | Any | Present | The Target answered with an error. The fip-core gets the Target's error payload, status and signature | No | No |
-| `4xx` | `IopUpstreamError` | Absent | The Target answered `4xx` without a payload. The fip-core gets the same status with an empty body | No | No |
-| `5xx` | `IopUpstreamError` | Absent | The Target failed (`5xx` without a payload), or the Inter-AA could not reach it (`502`) or got no answer in time (`504`). Every route leads to the same Target. The fip-core gets the same status with an empty body | No | No |
-| `502`, `503`, `504` | Other than `IopUpstreamError`, or none | Absent | The Inter-AA itself is unavailable | No | Yes, at once |
+| `4xx` | `IopDownstreamError` | Absent | The Target answered `4xx` without a payload. The fip-core gets the same status with an empty body | No | No |
+| `5xx` | `IopDownstreamError` | Absent | The Target failed (`5xx` without a payload), or the Inter-AA could not reach it (`502`) or got no answer in time (`504`). Every route leads to the same Target. The fip-core gets the same status with an empty body | No | No |
+| `502`, `503`, `504` | Other than `IopDownstreamError`, or none | Absent | The Inter-AA itself is unavailable | No | Yes, at once |
 | `400` | `InvalidRoute`\* | Absent | The Inter-AA cannot route to the Target | No | Yes, at once |
-| Any other `4xx`/`5xx` | Other than `IopUpstreamError`, or none | Absent | The Inter-AA refused the call, or failed | No | Yes, at once |
+| Any other `4xx`/`5xx` | Other than `IopDownstreamError`, or none | Absent | The Inter-AA refused the call, or failed | No | Yes, at once |
 
 - **StatusCode:** the HTTP status code of the Inter-AA's response.
 - **ErrorCode:** the `errorCode` set by the Inter-AA.
-- **IopError:** the `iopError` field set by the Target and forwarded by the Inter-AA.
+- **EncryptedData:** the `encryptedData` field: the Target's encrypted answer, forwarded by the Inter-AA.
 - **RetryHttp:** whether the same route is retried. **RetryRoute:** whether a different route is tried.
 - When every route has failed, the fip-core gets `503 AllRoutesUnavailable` with `IOP-Gw-Error: true`.
 
 \* See the note in section 3.11.
 
-1. **Errors from beyond the Inter-AA are final.** `IopUpstreamError` without `iopError` means the
+1. **Errors from beyond the Inter-AA are final.** `IopDownstreamError` without `encryptedData` means the
    Target could not be reached, or answered an error without a payload. Every route leads to the
    same Target, so the fip-iop-gw neither retries nor tries another route.
 2. **Every resend carries the same payload and `correlationId`.** The payload's `txnid` stays the
@@ -398,6 +399,7 @@ For IOP calls addressed to the FIP, the fip-iop-gw:
 | `POST` | `/fip-core/Accounts/discover` | fip-iop-gw | fip-core | `/Accounts/discover` | Account discovery |
 | `POST` | `/fip-core/Accounts/link` | fip-iop-gw | fip-core | `/Accounts/link` | Account linking |
 | `POST` | `/fip-core/Accounts/link/verify` | fip-iop-gw | fip-core | `/Accounts/link/verify` | Account link verification |
+| `POST` | `/fip-core/Accounts/link/reverify` | fip-iop-gw | fip-core | `/Accounts/link/reverify` | Account link re-verification |
 | `POST` | `/fip-core/Accounts/delink` | fip-iop-gw | fip-core | `/Accounts/delink` | Account delinking |
 | `POST` | `/fip-core/Consent` | fip-iop-gw | fip-core | `/Consent` | Consent artefact |
 | `POST` | `/fip-core/FI/request` | fip-iop-gw | fip-core | `/FI/request` | FI data request |
@@ -426,7 +428,7 @@ The role api-key header of the calling AA and `Content-Type` are **not** sent to
   payload, because gateways retry and try other routes. The fip-core **must** de-duplicate on the
   payload's `txnid`: a repeated `txnid` must not be processed again (for example, return the
   earlier response).
-- A Heartbeat (`GET /fip-core/Heartbeat`) has no body and no `x-jws-signature`.
+- A Heartbeat (`GET /fip-core/Heartbeat`, called when the fip-iop-gw receives `POST /iop/Heartbeat`) has no body and no `x-jws-signature`.
 
 ### 4.6 Response
 

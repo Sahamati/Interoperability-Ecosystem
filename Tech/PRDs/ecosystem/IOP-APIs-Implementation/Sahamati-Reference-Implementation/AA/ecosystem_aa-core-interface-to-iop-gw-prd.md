@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | AA core application teams (AA ecosystem participants) |
-| **Version** | Draft 2.1, 2026-11-09 |
+| **Version** | Draft 3.1, 2026-11-09 |
 | **Covers** | How the aa-core sends and receives messages through the aa-iop-gw, when to call it, how the aa-core gives it keys and its list of linked AAs, and how the aa-iop-gw is configured |
 
 All identifiers in examples are illustrative.
@@ -19,14 +19,15 @@ To work with the aa-iop-gw, the aa-core needs the changes below. "Yes" means nee
 | 3 | Create a non-empty correlation id for each new flow, and keep it on every message of that flow. | Yes | 2 |
 | 4 | Handle the responses: the Target's payload and signature; Target errors (with a payload, or a status with an empty body); errors from the aa-iop-gw (`IOP-Gw-Error: true`, for example `503 AllRoutesUnavailable`). | Yes | 3.6 – 3.10 |
 | 5 | Expose the `/aa-core/*` APIs to receive messages from participants that are not directly connected. The payloads are those of the Direct APIs. | Yes | 4.3 – 4.5 |
-| 6 | Return `Correlation-Id` unchanged on every `/aa-core/*` response. | Yes | 4.6 |
-| 7 | Check `Authorization` on every `/aa-core/*` call (the token the aa-iop-gw sends to the aa-core). | Recommended | 4.4, 7 |
-| 8 | De-duplicate incoming messages on `txnid`: retries can deliver a message twice, and the aa-core must not process it twice. | Yes | 4.5 |
-| 9 | Serve the key endpoints `GET /aa-core/keys/signing` and `GET /aa-core/keys/decryption` over HTTPS, checking the key-fetch token. | Yes | 5.1 |
-| 10 | Push new key sets to `/aa-dgw/keys/*` or `/aa-sgw/keys/*` when keys rotate. | Recommended | 5.2 |
-| 11 | Serve `GET /aa-core/linkedAAs` with the AAs the AA is linked to. | Yes | 6.1 |
-| 12 | Push the list to `/aa-dgw/linkedAAs` or `/aa-sgw/linkedAAs` when it changes. | Recommended | 6.2 |
-| 13 | Set the aa-iop-gw's configuration and provide its tokens, certificates and credentials before starting it. | Yes | 8 |
+| 6 | Expose `POST /aa-core/User/discover` to answer user discovery from FIUs that are not directly connected. The payload is the same as in the Direct API `/User/discover` call. | Yes | 4.3, 4.5 |
+| 7 | Return `Correlation-Id` unchanged on every `/aa-core/*` response. | Yes | 4.6 |
+| 8 | Check `Authorization` on every `/aa-core/*` call (the token the aa-iop-gw sends to the aa-core). | Recommended | 4.4, 7 |
+| 9 | De-duplicate incoming messages on `txnid`: retries can deliver a message twice, and the aa-core must not process it twice. | Yes | 4.5 |
+| 10 | Serve the key endpoints `GET /aa-core/keys/signing` and `GET /aa-core/keys/decryption` over HTTPS, checking the key-fetch token. | Yes | 5.1 |
+| 11 | Push new key sets to `/aa-dgw/keys/*` or `/aa-sgw/keys/*` when keys rotate. | Recommended | 5.2 |
+| 12 | Serve `GET /aa-core/linkedAAs` with the AAs the AA is linked to. | Yes | 6.1 |
+| 13 | Push the list to `/aa-dgw/linkedAAs` or `/aa-sgw/linkedAAs` when it changes. | Recommended | 6.2 |
+| 14 | Set the aa-iop-gw's configuration and provide its tokens, certificates and credentials before starting it. | Yes | 8 |
 
 ## 1. Terminology
 
@@ -44,7 +45,7 @@ To work with the aa-iop-gw, the aa-core needs the changes below. "Yes" means nee
 | Connected-AA | An AA directly connected to an FIU. It carries messages between the FIU and other AAs. |
 | Inter-AA | An AA directly connected to a FIP. It carries messages between the FIP and other AAs. |
 | Customer-AA / Origin-AA | The AA that holds the customer's consent (Customer-AA, towards FIUs) / that sends requests to a FIP (Origin-AA). |
-| linkedAAs | The AAs the AA is linked to: the only AAs the aa-iop-gw uses as routes (section 6). |
+| linkedAAs | The AAs the AA is linked to: the only AAs the aa-iop-gw uses as routes, and the only AA Targets it forwards to as a hop (section 6). |
 | AIG | AA Interoperability Graph, published by the Central Registry: which AAs can reach which participant. |
 | Direct APIs | The existing ReBIT APIs as of today (for example `/Consent`, `/FI/request`, `/FI/Notification`), which participants call on each other when they are directly connected. The IOP Gateway carries exactly the same payloads. |
 | ReBIT specifications | The AA ecosystem API specifications that define the Direct APIs. |
@@ -84,7 +85,7 @@ To work with the aa-iop-gw, the aa-core needs the changes below. "Yes" means nee
    with the AA's signing key.
 2. **Encrypts** the signed payload for the Target.
 3. **Builds the IOP request** around the encrypted payload (`ver`, `timestamp`, `txnid`,
-   `correlationId`, `Target`, `iopPayload`) and **signs it**. The request carries only `Target`;
+   `correlationId`, `Target`, `encryptedData`) and **signs it**. The request carries only `Target`;
    the route sets `Initiator` when it forwards the request. Its `txnid` is **not** the
    payload's: it identifies the transaction between the aa-iop-gw and the route, a new one for each
    route.
@@ -93,13 +94,14 @@ To work with the aa-iop-gw, the aa-core needs the changes below. "Yes" means nee
 **Receiving the response.** When the answer comes back, the aa-iop-gw:
 
 1. **Checks the signature of the Connected-AA / Inter-AA** on the answer.
-2. **Decrypts** the Target's encrypted reply.
+2. **Decrypts** the Target's encrypted reply (`encryptedData`, in success and error answers alike;
+   the HTTP status tells them apart).
 3. **Checks the Target's signature** on the reply.
 4. **Returns the Target's reply** to the aa-core: the Target's payload, the Target's status and
    the Target's signature (`x-jws-signature`).
 
 A Heartbeat has no encrypted payload: sending steps 1 and 2 are skipped, and the IOP request
-carries only the `Target`, without `iopPayload`. `/iop/Heartbeat` is only for a Target that is
+(always `POST /iop/Heartbeat`) carries only the `Target`, without `encryptedData`. `/iop/Heartbeat` is only for a Target that is
 not directly connected: a directly connected participant (for example the route itself) is
 checked with the Direct API `GET /Heartbeat`.
 
@@ -113,6 +115,7 @@ checked with the Direct API `GET /Heartbeat`.
 | `POST` | `/aa-sgw/Accounts/discover` | aa-core | aa-iop-gw | `FIP` | `/Accounts/discover` | Account discovery at a FIP (as Origin-AA) |
 | `POST` | `/aa-sgw/Accounts/link` | aa-core | aa-iop-gw | `FIP` | `/Accounts/link` | Account linking |
 | `POST` | `/aa-sgw/Accounts/link/verify` | aa-core | aa-iop-gw | `FIP` | `/Accounts/link/verify` | Account link verification |
+| `POST` | `/aa-sgw/Accounts/link/reverify` | aa-core | aa-iop-gw | `FIP` | `/Accounts/link/reverify` | Account link re-verification |
 | `POST` | `/aa-sgw/Accounts/delink` | aa-core | aa-iop-gw | `FIP` | `/Accounts/delink` | Account delinking |
 | `POST` | `/aa-sgw/Consent` | aa-core | aa-iop-gw | `FIP` | `/Consent` | Consent artefact to the FIP |
 | `POST` | `/aa-sgw/FI/request` | aa-core | aa-iop-gw | `FIP` | `/FI/request` | FI data request |
@@ -163,10 +166,10 @@ What the core receives depends on what comes back from the Connected-AA / Inter-
 This applies only when the Connected-AA / Inter-AA answers with an error (status `4xx` or `5xx`). Success
 answers (`2xx`, `3xx`) are opened and passed on as in section 3.6.
 
-| Payload from the Connected-AA / Inter-AA | `iopError` in the payload | `errorCode` in the payload | What the aa-iop-gw does | Status to the core | Body to the core | `IOP-Gw-Error` |
+| Payload from the Connected-AA / Inter-AA | `encryptedData` in the payload | `errorCode` in the payload | What the aa-iop-gw does | Status to the core | Body to the core | `IOP-Gw-Error` |
 |---|---|---|---|---|---|---|
 | Yes | Yes | Any | Answers the core | The Connected-AA / Inter-AA's status | The Target's error payload (decrypted), with the Target's signature | Not set |
-| Yes | No | `IopUpstreamError` | Answers the core | The Connected-AA / Inter-AA's status | Empty | Not set |
+| Yes | No | `IopDownstreamError` | Answers the core | The Connected-AA / Inter-AA's status | Empty | Not set |
 | Yes | No | Anything else | Tries another route (see below); if every route fails, answers the core | `503` | Generated: `errorCode` `AllRoutesUnavailable` | `true` |
 | No | No | None | Tries another route (see below); if every route fails, answers the core | `503` | Generated: `errorCode` `AllRoutesUnavailable` | `true` |
 
@@ -176,7 +179,7 @@ answers (`2xx`, `3xx`) are opened and passed on as in section 3.6.
   route at once.
 - When the Connected-AA / Inter-AA does not answer at all (no connection, or a timeout), it is handled like the
   last row.
-- `IopUpstreamError` without `iopError` means the Connected-AA / Inter-AA reached the Target, but the Target
+- `IopDownstreamError` without `encryptedData` means the Connected-AA / Inter-AA reached the Target, but the Target
   answered an error without a payload. Another route would reach the same Target, so the
   gateway does not try one.
 
@@ -265,8 +268,8 @@ IOP-Gw-Error: true
 ```
 
 **3. The Target returns an error without a body** — for example, `POST /aa-sgw/FI/request` and the Target
-(`fip-test-001`) answers `500` with no payload. The Inter-AA (`aa-test-004`) answers `IopUpstreamError`
-without `iopError`. The core receives the status with an **empty body**. This answer is final:
+(`fip-test-001`) answers `500` with no payload. The Inter-AA (`aa-test-004`) answers `IopDownstreamError`
+without `encryptedData`. The core receives the status with an **empty body**. This answer is final:
 the gateway does not retry it or try another route.
 
 ```http
@@ -321,13 +324,13 @@ refused with `400 InvalidRequest` before any route is chosen.
 |---|---|---|
 | No answer (no connection, or a timeout) | Yes, up to `Http-Retries` | Yes, up to `Route-Retries` |
 | Any error not from the Target, `502`/`503`/`504` included (for example `400 InvalidRoute`\*) | No | Yes, up to `Route-Retries` |
-| An error with `iopError`, or with `IopUpstreamError` | No | No (the answer goes to the core, section 3.7) |
+| An error with `encryptedData`, or with `IopDownstreamError` | No | No (the answer goes to the core, section 3.7) |
 | Success | No | No |
 
-"Not from the Target" means: no `iopError` in the payload, and `errorCode` is not
-`IopUpstreamError` (section 3.7).
+"Not from the Target" means: no `encryptedData` in the payload, and `errorCode` is not
+`IopDownstreamError` (section 3.7).
 
-\* `InvalidRoute` is the code the IOP Gateway uses when, as a hop, it cannot route to the Target. **It is not yet confirmed as a ReBIT IOP error code.**
+\* `InvalidRoute` is the code the IOP Gateway uses when, as a hop, it cannot route to the Target: the Target is unknown to the hop, or is not linked to the hop AA. Linked means: an FIU Target lists the hop AA as a Connected-AA in the AIG; a FIP Target lists the hop AA as an Inter-AA in the AIG; an AA Target is in the hop AA's linkedAAs. The hop then does not call the Target. If the hop cannot check this (its AIG is not loaded), it answers `503 InternalError`; both answers lead to the next route. **It is not yet confirmed as a ReBIT IOP error code.**
 
 ### 3.12 Retries
 
@@ -339,33 +342,33 @@ The aa-iop-gw retries a call from the aa-core as follows.
 | Retries the same route | `Http-Retries` header: default 2, capped by the gateway (by default at 3) |
 | … when | The Connected-AA / Inter-AA does not answer (no connection, or a timeout). An error answer from the Connected-AA / Inter-AA, `502`/`503`/`504` included, is never retried on the same route |
 | Tries another route | `Route-Retries` header: default 2, capped by the gateway (by default at 2). After the retries when the Connected-AA / Inter-AA does not answer; at once on any error from the Connected-AA / Inter-AA that is not from the Target (for example `503` or `400 InvalidRoute`) |
-| Never retries | Success; an answer with `iopError` (the Target's error); `IopUpstreamError` without `iopError` |
+| Never retries | Success; an answer with `encryptedData` (the Target's error); `IopDownstreamError` without `encryptedData` |
 | Wait between attempts | 200 ms, doubling, at most 2 s |
 | Most sends per call (defaults) | (1 + 2 routes) × (1 + 2 retries) = 9 |
 | When all attempts fail | The aa-core gets `503 AllRoutesUnavailable` with `IOP-Gw-Error: true` |
 
 **Received in response to an `/iop/*` API from the Connected-AA / Inter-AA**
 
-| StatusCode | ErrorCode | IopError | Inference | RetryHttp | RetryRoute |
+| StatusCode | ErrorCode | EncryptedData | Inference | RetryHttp | RetryRoute |
 |---|---|---|---|---|---|
 | — (no response) | — | — | The Connected-AA / Inter-AA could not be reached, or did not answer in time | Yes, up to `Http-Retries` | Yes, after the retries |
 | `2xx`, `3xx` | — | — | Success: the Target's answer. The aa-core gets the Target's payload, status and signature | No | No |
 | Any `4xx`/`5xx` | Any | Present | The Target answered with an error. The aa-core gets the Target's error payload, status and signature | No | No |
-| `4xx` | `IopUpstreamError` | Absent | The Target answered `4xx` without a payload. The aa-core gets the same status with an empty body | No | No |
-| `5xx` | `IopUpstreamError` | Absent | The Target failed (`5xx` without a payload), or the Connected-AA / Inter-AA could not reach it (`502`) or got no answer in time (`504`). Every route leads to the same Target. The aa-core gets the same status with an empty body | No | No |
-| `502`, `503`, `504` | Other than `IopUpstreamError`, or none | Absent | The Connected-AA / Inter-AA itself is unavailable | No | Yes, at once |
+| `4xx` | `IopDownstreamError` | Absent | The Target answered `4xx` without a payload. The aa-core gets the same status with an empty body | No | No |
+| `5xx` | `IopDownstreamError` | Absent | The Target failed (`5xx` without a payload), or the Connected-AA / Inter-AA could not reach it (`502`) or got no answer in time (`504`). Every route leads to the same Target. The aa-core gets the same status with an empty body | No | No |
+| `502`, `503`, `504` | Other than `IopDownstreamError`, or none | Absent | The Connected-AA / Inter-AA itself is unavailable | No | Yes, at once |
 | `400` | `InvalidRoute`\* | Absent | The Connected-AA / Inter-AA cannot route to the Target | No | Yes, at once |
-| Any other `4xx`/`5xx` | Other than `IopUpstreamError`, or none | Absent | The Connected-AA / Inter-AA refused the call, or failed | No | Yes, at once |
+| Any other `4xx`/`5xx` | Other than `IopDownstreamError`, or none | Absent | The Connected-AA / Inter-AA refused the call, or failed | No | Yes, at once |
 
 - **StatusCode:** the HTTP status code of the Connected-AA / Inter-AA's response.
 - **ErrorCode:** the `errorCode` set by the Connected-AA / Inter-AA.
-- **IopError:** the `iopError` field set by the Target and forwarded by the Connected-AA / Inter-AA.
+- **EncryptedData:** the `encryptedData` field: the Target's encrypted answer, forwarded by the Connected-AA / Inter-AA.
 - **RetryHttp:** whether the same route is retried. **RetryRoute:** whether a different route is tried.
 - When every route has failed, the aa-core gets `503 AllRoutesUnavailable` with `IOP-Gw-Error: true`.
 
 \* See the note in section 3.11.
 
-1. **Errors from beyond the Connected-AA / Inter-AA are final.** `IopUpstreamError` without `iopError` means the
+1. **Errors from beyond the Connected-AA / Inter-AA are final.** `IopDownstreamError` without `encryptedData` means the
    Target could not be reached, or answered an error without a payload. Every route leads to the
    same Target, so the aa-iop-gw neither retries nor tries another route.
 2. **Every resend carries the same payload and `correlationId`.** The payload's `txnid` stays the
@@ -411,6 +414,7 @@ For IOP calls addressed to the AA, the aa-iop-gw:
 | `POST` | `/aa-core/Consent/fetch` | aa-iop-gw | aa-core | `/Consent/fetch` | Consent fetch from an FIU |
 | `POST` | `/aa-core/FI/request` | aa-iop-gw | aa-core | `/FI/request` | FI request from an FIU |
 | `POST` | `/aa-core/FI/fetch` | aa-iop-gw | aa-core | `/FI/fetch` | FI fetch from an FIU |
+| `POST` | `/aa-core/User/discover` | aa-iop-gw | aa-core | `/User/discover` | User discovery from an FIU (the aa-core is the Customer-AA) |
 | `POST` | `/aa-core/Consent/Notification` | aa-iop-gw | aa-core | `/Consent/Notification` | Consent notification from an FIU, or from a FIP (the aa-core is the Origin-AA) |
 | `POST` | `/aa-core/FI/Notification` | aa-iop-gw | aa-core | `/FI/Notification` | FI notification from a FIP |
 | `POST` | `/aa-core/Account/link/Notification` | aa-iop-gw | aa-core | `/Account/link/Notification` | Account link notification from a FIP |
@@ -433,11 +437,12 @@ The role api-key header of the calling AA and `Content-Type` are **not** sent to
 - The body is **exactly the same payload** the Initiator would send in the matching Direct API call
   (column "Same payload as the Direct API" in section 4.3): the exact bytes the Initiator signed.
 - Example: `POST /aa-core/Consent` carries exactly the payload an FIU sends in the Direct API `/Consent` call to an AA.
+- Example: `POST /aa-core/User/discover` carries the same payload as the Direct API `/User/discover` call (a `CustDiscoveryRequest`), with `Initiator-Entity` set to the FIU. The aa-core answers with a `CustDiscoveryResponse`, as in the Direct API; the aa-iop-gw signs and encrypts it for the FIU.
 - **Duplicates.** The same message can arrive more than once, with the same `txnid` in the
   payload, because gateways retry and try other routes. The aa-core **must** de-duplicate on the
   payload's `txnid`: a repeated `txnid` must not be processed again (for example, return the
   earlier response).
-- A Heartbeat (`GET /aa-core/Heartbeat`) has no body and no `x-jws-signature`.
+- A Heartbeat (`GET /aa-core/Heartbeat`, called when the aa-iop-gw receives `POST /iop/Heartbeat`) has no body and no `x-jws-signature`.
 
 ### 4.6 Response
 
@@ -462,6 +467,26 @@ The role api-key header of the calling AA and `Content-Type` are **not** sent to
 | `502` | `InternalError` | The aa-core is unreachable, or its response is unreadable or larger than the gateway's limit |
 | `502` | `InternalError` | The response has no `Correlation-Id`, or a different value |
 | `500` | `InternalError` | The gateway cannot sign or encrypt the response for the Initiator |
+
+### 4.7 Messages the aa-iop-gw only forwards (hop)
+
+As a Connected-AA or Inter-AA, the aa-iop-gw also carries `/iop` messages between other
+participants: for example `POST /iop/Accounts/link/reverify` from an Origin-AA to a FIP, or
+`POST /iop/Heartbeat`. The aa-core is **not** called for these messages.
+
+`POST /iop/User/discover` from an FIU (with `client_api_key`) is one of these messages: the
+aa-iop-gw, as the FIU's Connected-AA, forwards it to the Customer-AA (the Target) with
+`x-conn_aa_api_key`. The Customer-AA must be in the AA's linkedAAs. When the aa-iop-gw is itself the
+Customer-AA (the call comes with `x-conn_aa_api_key`), it calls `POST /aa-core/User/discover`
+(section 4.3).
+
+| Step | What the aa-iop-gw does |
+|---|---|
+| Checks the route | The Target must be linked to the AA: an FIU Target lists the AA as a Connected-AA in the AIG; a FIP Target lists the AA as an Inter-AA in the AIG; an AA Target is in the AA's linkedAAs (section 6). Otherwise it answers `400 InvalidRoute`\* without calling the Target. If the AIG is not loaded, it answers `503 InternalError`. |
+| Forwards | Replaces `Target` with `Initiator` (the calling participant) in the envelope, with a new `txnid`, signs the envelope and sends it to the Target. `encryptedData` is passed on unchanged. |
+| Returns the Target's answer | Success: the Target's answer (with its `encryptedData`), with the `txnid` of the caller's request, signed by the aa-iop-gw. Error: the Target's status, with an envelope that carries `errorCode` `IopDownstreamError`, the Target's `encryptedData` (if any) and the Target's `errorSource` object (if any), copied unchanged, for example `"errorSource": {"type": "FIP", "id": "fip-test-001"}`. |
+
+\* See the note in section 3.11.
 
 ## 5. Key provisioning
 
@@ -643,8 +668,9 @@ HTTP/1.1 401 Unauthorized
 
 ## 6. Linked AAs (linkedAAs)
 
-The aa-iop-gw uses as routes only the AAs the AA is linked to. The list reaches the gateway in one
-of two ways, chosen in the gateway configuration:
+The aa-iop-gw uses as routes only the AAs the AA is linked to. As a hop, it also forwards messages
+only to AA Targets in this list; for any other AA Target it answers `400 InvalidRoute` (section 4.7).
+The list reaches the gateway in one of two ways, chosen in the gateway configuration:
 
 - **From the aa-core** (production): the aa-iop-gw pulls the list, and the aa-core can push it. Both
   may use HTTP or HTTPS.
@@ -962,7 +988,3 @@ cache:
   (headers, lengths, ids, status and error code; never the body), and
   `logging.statsIntervalSeconds` one record tagged `IOPGW_STATS` per interval with
   `|`-separated counts. Both can be fetched from the gateway's logs by their tag.
-
-## 9. To do
-
-- User discovery

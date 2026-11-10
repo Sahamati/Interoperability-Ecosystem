@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | AA application teams that build AA Interoperability into their existing AA application |
-| **Version** | Draft 1.7, 2026-11-10 |
+| **Version** | Draft 1.8, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
 
@@ -79,7 +79,9 @@ does not change.
 | Inner JWS | The Initiator's (or Target's) compact JWS over the Direct API payload, carried encrypted inside `encryptedData`. A hop cannot read it. |
 | Outer signature | The detached JWS in the `x-jws-signature` header, over the whole envelope, made by the participant that sends it on that leg. |
 | Role api-key | The header that carries the sender's api-key on an `/iop` call. Its name tells the receiver the leg (section 1.12.1). |
-| Access token | The AA's token from the Sahamati token service. It is the AA's role api-key on every `/iop` call it sends, and its bearer token for the Central Registry and the AIG. |
+| Access token | The AA's token from the Sahamati token service (`/entity/token/generate`). It is the AA's api-key on Direct API calls, and its bearer token for the Central Registry and the AIG. |
+| IopToken | The AA's IOP token from the Sahamati token service (`/entity/iopToken/generate`). It is the AA's role api-key on every `/iop` call it sends (section 1.6.5). |
+| User Hash List | The AA's list of hashed user handles and mobile numbers of the customers whose attested handles it holds, used to answer user discovery (section 1.18.3). |
 
 ### 1.3 Changes needed in the AA application
 
@@ -90,7 +92,7 @@ does not change.
 | 1 | Register as interop ready in the Central Registry, with the AA's `/iop` base URL, signature public keys and **encryption public keys**. | Yes | 1.5.1 |
 | 2 | Keep the list of linkedAAs (the AAs this AA may use as routes). | Yes | 1.5.2 |
 | 3 | Load and refresh the Central Registry entity lists (AA, FIU, FIP) and the AIG, and keep a cached copy. | Yes | 1.6 |
-| 4 | Get and refresh the AA's access token from the Sahamati token service. | Yes | 1.6.4 |
+| 4 | Get and refresh the AA's access token and IopToken from the Sahamati token service, and use the IopToken on every `/iop` call. | Yes | 1.6.4, 1.6.5 |
 | 5 | Decide per FIU or FIP: Direct APIs (directly connected) or IOP APIs (not directly connected). | Yes | 1.4 |
 | 6 | Create a `correlationId` (UUID) for each new flow, and keep it on every message of that flow. | Yes | 1.7.2 |
 | 7 | Build `/iop/*` requests: inner JWS, encryption for the Target, envelope, outer signature, role api-key `x-cust_aa_api_key` (to an FIU) or `x-orig_aa_api_key` (to a FIP). | Yes | 1.7 |
@@ -103,6 +105,7 @@ does not change.
 | 14 | Enforce the cryptographic profile and size limits. | Yes | 1.14 |
 | 15 | Capture audit records and stats, as required by the AA's regulatory or internal policy mandates. | Recommended | 1.15 |
 | 16 | Serve user discovery: the Direct API `/User/discover` for linked FIUs, and `/iop/User/discover` as Customer-AA and as Connected-AA. | Yes | 1.18 |
+| 17 | Keep the User Hash List and answer user discovery from it. | Yes | 1.18.3 |
 
 ### 1.4 When to use the IOP APIs
 
@@ -163,11 +166,12 @@ The AA application loads this data in the background and serves every lookup fro
 | The Connected-AAs of each FIU, and the Inter-AAs of each FIP | AIG `GET /v1/aig/fiu` and `GET /v1/aig/fip` | Every 6 hours | Keep the previous graphs; retry after 5 minutes |
 | linkedAAs | The AA's own list (section 1.5.2) | When it changes | Keep the current list |
 | Access token | Sahamati token service | Before it expires | Keep the current token until it expires; retry at most every 10 seconds |
+| IopToken | Sahamati token service | Before it expires | Keep the current token until it expires; retry at most every 10 seconds |
 
-Keep a cached copy of the Central Registry lists, the AIG and the access token, so that a restart
-can serve while a source is down. At start-up, the AA application uses the cached copy and does not
-fetch the Central Registry lists or the AIG; it fetches them at start-up only when there is no
-cached copy (for example, the first start). Never cache private keys (section 1.13).
+Keep a cached copy of the Central Registry lists, the AIG, the access token and the IopToken, so
+that a restart can serve while a source is down. At start-up, the AA application uses the cached
+copy and does not fetch the Central Registry lists or the AIG; it fetches them at start-up only when
+there is no cached copy (for example, the first start). Never cache private keys (section 1.13).
 
 #### 1.6.1 Central Registry entity lists
 
@@ -219,6 +223,26 @@ cached copy (for example, the first start). Never cache private keys (section 1.
   lives shorter than that.
 - Read the secret from secure storage each time, so that it can be rotated without a restart.
 - Never log the token or the secret.
+
+#### 1.6.5 IopToken
+
+The AA holds two tokens from the Sahamati token service, and uses each for its own calls:
+
+| Token | Get it with | Use it for |
+|---|---|---|
+| Access token (section 1.6.4) | `POST <token service base URL>/entity/token/generate` | Direct API calls to participants the AA is directly connected to; the bearer token for the Central Registry and the AIG |
+| IopToken | `POST <token service base URL>/entity/iopToken/generate` | The role api-key on every `/iop` call the AA sends |
+
+- The token service base URL is, for example, `https://token-generation-url/iam/v1`, so the IopToken
+  is generated with `POST https://token-generation-url/iam/v1/entity/iopToken/generate`.
+- The form fields (`id`, `secret`), the response, the refresh rules and the secrecy rules are those
+  of the access token (section 1.6.4). Each token is refreshed on its own.
+- Use the **IopToken**, not the access token, whenever the AA acts as Connected-AA, Customer-AA,
+  Origin-AA or Inter-AA: in `x-cust_aa_api_key` and `x-orig_aa_api_key` as Initiator (section
+  1.7.4), and in `x-conn_aa_api_key` and `x-inter_aa_api_key` as hop (section 1.12.4).
+- Use the access token on Direct API calls.
+- **Verification procedure:** *To be published.* (How an AA that receives a role api-key checks that
+  it is an IopToken.) Until then, received api-keys are checked as in sections 1.11.3 and 1.12.3.
 
 ### 1.7 Sending IOP requests (AA as Initiator)
 
@@ -288,7 +312,7 @@ For each request, the AA application:
 
 | Header | Mandatory | Value |
 |---|---|---|
-| `x-cust_aa_api_key` (to an FIU's Connected-AA) or `x-orig_aa_api_key` (to a FIP's Inter-AA) | Yes | The AA's access token (section 1.6.4). Send **no other** role api-key header. |
+| `x-cust_aa_api_key` (to an FIU's Connected-AA) or `x-orig_aa_api_key` (to a FIP's Inter-AA) | Yes | The AA's IopToken (section 1.6.5). Send **no other** role api-key header. |
 | `x-jws-signature` | Yes | The detached JWS over the envelope (step 5). |
 | `Content-Type` | Yes | `application/json` |
 
@@ -296,7 +320,7 @@ For each request, the AA application:
 
 ```http
 POST /iop/FI/request
-x-orig_aa_api_key: <the AA's access token>
+x-orig_aa_api_key: <the AA's IopToken>
 x-jws-signature: <detached JWS over the body>
 Content-Type: application/json
 
@@ -394,7 +418,7 @@ If no AA is eligible, the request cannot be sent.
 | The Target's error (`encryptedData` with a `4xx`/`5xx` status) | The Target's Direct API error payload, its status and its inner JWS. |
 | The Target's error without a payload (`IopDownstreamError` without `encryptedData`) | The status only. |
 | Every route failed | "All routes unavailable" (section 1.9.1). |
-| Not sent | The Target is not registered or not interop ready; no eligible route; reference data, keys or the access token not available; the payload has no `txnid`; signing or encryption failed. |
+| Not sent | The Target is not registered or not interop ready; no eligible route; reference data, keys or the IopToken not available; the payload has no `txnid`; signing or encryption failed. |
 | The reply cannot be trusted | The route's signature does not verify; `encryptedData` cannot be decrypted; the decrypted content is not a compact JWS; the Target's signature does not verify. The reply is **not used**, and the event is logged. |
 
 A reply that cannot be trusted is not retried automatically: the message may already have been
@@ -437,7 +461,7 @@ The same paths also serve the hop role, with other role api-keys (section 1.12.2
 
 | Header | Value |
 |---|---|
-| `x-conn_aa_api_key` or `x-inter_aa_api_key` | The calling Connected-AA's or Inter-AA's api-key: a token from the Sahamati token service |
+| `x-conn_aa_api_key` or `x-inter_aa_api_key` | The calling Connected-AA's or Inter-AA's api-key: its IopToken from the Sahamati token service (section 1.6.5) |
 | `x-jws-signature` | The caller's detached JWS over the envelope |
 
 #### 1.11.3 Checks, in this order
@@ -596,7 +620,7 @@ tries another route. It is not yet confirmed as a ReBIT IOP error code (section 
 
 2. **Sign** it (detached JWS in `x-jws-signature`) with one of the AA's usable signing keys.
 3. **Send** it with `POST <Target baseurl><path>`, with the outgoing role api-key of the leg
-   (section 1.12.1) carrying the AA's access token, `x-jws-signature` and
+   (section 1.12.1) carrying the AA's IopToken (section 1.6.5), `x-jws-signature` and
    `Content-Type: application/json`.
 4. **Check the Target's signature** on its response (`x-jws-signature`, over the exact response
    bytes). If it does not verify, answer the sender `502 IopDownstreamError`.
@@ -666,7 +690,7 @@ The sender treats every `IopDownstreamError` as final: another route would reach
 | `502` | `IopDownstreamError` | The Target is unreachable, or its response is unreadable, too large or wrongly signed |
 | `504` | `IopDownstreamError` | The Target did not answer in time |
 | `500` | `InternalError` | Unable to sign or build the envelope |
-| `503` | `InternalError` | Central Registry data, the AIG or issuer keys not loaded yet; access token unavailable |
+| `503` | `InternalError` | Central Registry data, the AIG or issuer keys not loaded yet; IopToken unavailable |
 
 ### 1.13 Keys
 
@@ -736,9 +760,9 @@ Initiator, Target and hop, as required by its regulatory or internal policy mand
 | Area | Requirement |
 |---|---|
 | Data protection | Request and response bodies are never logged. Logs carry only ids, paths, status, lengths and latency. As a hop, the AA never decrypts the content it carries. Test data uses synthetic ids and generated keys only. |
-| Secrets | The entity secret, access tokens and private keys are kept in secure storage, never in code, configuration files or version control, and never logged. |
+| Secrets | The entity secret, the access token, the IopToken and private keys are kept in secure storage, never in code, configuration files or version control, and never logged. |
 | Fail closed | Unknown paths, wrong roles, unregistered or not interop-ready participants, and anything outside the cryptographic profile are refused. |
-| Availability of reference data | Cached Central Registry lists, AIG and access token let the AA keep working while a source is down. |
+| Availability of reference data | Cached Central Registry lists, AIG, access token and IopToken let the AA keep working while a source is down. |
 | Performance | Targets to be agreed, for the hop role in particular. |
 
 ### 1.17 Production and testing
@@ -751,7 +775,7 @@ Production uses the live sources. Local alternatives are **for testing only**.
 | Connected-AAs of FIUs and Inter-AAs of FIPs | AIG API | A local graph |
 | The AA's signing and decryption keys | The AA's secure key storage | Key files |
 | Api-key checking of callers | Token issuer's JWKS | Fixed test api-keys |
-| The AA's role api-key | Sahamati token service | A fixed test api-key |
+| The AA's role api-key (IopToken) and access token | Sahamati token service | A fixed test api-key |
 
 ### 1.18 User discovery
 
@@ -788,7 +812,7 @@ At least one of `vuaHash` and `mobileHash` is present.
 | `ver`, `timestamp` | As in the other Direct APIs |
 | `txnid`, `correlationId` | Those of the request |
 | `status` | `User Found` when the AA holds a user that matches the hashes; `User Not Found` otherwise |
-| `customerDiscoveryResponse` | One entry per customer address found: `customerAddress`, `maskedMobile`, `vuaAttestation` |
+| `customerDiscoveryResponse` | One entry per customer address found: `customerAddress`, `maskedMobile`, `vuaAttestation` (section 1.18.3) |
 
 ```json
 {
@@ -821,6 +845,33 @@ For `vuaAttestation`, see section 1.23 (VUA attestation procedure and verificati
   refused with `403 InvalidSecurity` (section 1.25).
 - The request and the answer carry hashed and masked customer data: they are never logged
   (section 1.16).
+
+#### 1.18.3 User Hash List
+
+The AA keeps a **User Hash List**: the hash of the user handle (VUA) and the hash of the mobile
+number of every customer whose attested handle is held by the AA. The hashes are made as in the
+request (section 1.18.1).
+
+| Entry | Value |
+|---|---|
+| VUA hash | SHA-256 of the canonicalised VUA, base64url-encoded |
+| Mobile hash | SHA-256 of the customer's mobile number in E.164 format, base64url-encoded |
+| VUA | The customer address (user handle) |
+| `linkRefNumber` | The link reference number of the attested handle |
+| Attestation | The VUA attestation (section 1.23) |
+
+On a user discovery request (the Direct API `/User/discover`, or `/iop/User/discover` as
+Customer-AA), the AA:
+
+1. Looks up the request's `customer.vuaHash` and `customer.mobileHash` in the User Hash List.
+   When the request carries both, a match on either one is enough.
+2. If found, answers `User Found`, with one entry in `customerDiscoveryResponse` per handle found:
+   the VUA (`customerAddress`), `maskedMobile` and the attestation (`vuaAttestation`).
+3. If not found, answers `User Not Found`, with an empty `customerDiscoveryResponse`.
+
+Keep the list current: add an entry when a customer's attested handle is held by the AA. The list
+holds hashed data and links to customer records: keep it in secure storage, and never log it
+(section 1.16).
 
 ### 1.19 Uploading encryption public keys
 
@@ -869,6 +920,8 @@ Each item must be covered by automated tests with synthetic participants.
 | AC-15 | Reference data: lookups make no calls to the Central Registry or the AIG; a failed refresh keeps the previous data; a cached copy is served after a restart with the source down. |
 | AC-16 | User discovery: as Customer-AA, `/iop/User/discover` with `x-conn_aa_api_key` and `Initiator{FIU}` is answered with a `CustDiscoveryResponse` that decrypts and verifies at the FIU. As Connected-AA, `/iop/User/discover` with `client_api_key` from an FIU is forwarded with `x-conn_aa_api_key` to a Target AA in linkedAAs; a Target AA not in linkedAAs gets `400 InvalidRoute` and is not called. `x-orig_aa_api_key` on this path is refused with `403 InvalidSecurity`. The Direct API `/User/discover` answers a linked FIU with a signed `CustDiscoveryResponse`. |
 | AC-17 | Central Registry key windows: a key is used only between its `validFrom` and `validTo`, both included; `validFrom` and `validTo` are RFC 3339 timestamps, and a date alone is skipped; a key whose `validTo` has passed is used neither to verify nor to encrypt; a key with a future `validFrom` comes into use at its `validFrom` without a refresh; a key with `validTo` before `validFrom` is skipped. |
+| AC-18 | IopToken: every `/iop` call the AA sends, as Initiator and as hop, carries the IopToken from `/entity/iopToken/generate` as its role api-key; Direct API calls carry the access token; the Central Registry and the AIG are called with the access token. |
+| AC-19 | User Hash List: a request whose `vuaHash` or `mobileHash` is in the list is answered `User Found` with the VUA and attestation, and a match on one hash is enough when both are sent; a request with neither in the list is answered `User Not Found`. |
 
 ### 1.25 Items to be confirmed
 
@@ -880,3 +933,4 @@ Each item must be covered by automated tests with synthetic participants.
 | User discovery APIs (Direct API `/User/discover`, `/iop/User/discover`) and their payloads (`CustDiscoveryRequest`, `CustDiscoveryResponse`) | Proposed by Sahamati in the AA_Interop_1_0_0 "Proposed-1" draft; subject to ReBIT approval |
 | The account APIs: `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/link/reverify`, `/iop/Accounts/delink` and `/iop/Account/link/Notification` (plural and singular as in the Direct APIs) | Subject to the final ReBIT specification |
 | `ver` of the Heartbeat envelope, which has no payload to take it from | `1.0.0` used; subject to the final ReBIT specification |
+| IopToken verification procedure (how a received role api-key is checked to be an IopToken) | To be published |

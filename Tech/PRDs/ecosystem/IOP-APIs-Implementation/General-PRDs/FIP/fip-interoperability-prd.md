@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIP application teams that build AA Interoperability into their existing FIP application |
-| **Version** | Draft 1.7, 2026-11-10 |
+| **Version** | Draft 1.8, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
 
@@ -68,7 +68,8 @@ logic does not change.
 | Envelope | The JSON body of an `/iop/*` request or response: `ver`, `timestamp`, `txnid`, `correlationId`, `Target` or `Initiator`, and `encryptedData` (none on a heartbeat). `encryptedData` carries the request, and on a reply the response or the error alike: the HTTP status tells them apart. The Initiator sets `Target` and sends it to the hop; the hop replaces it with `Initiator` when it forwards to the Target. The receiver reads only the field its leg needs (`Target` at the hop, `Initiator` at the Target); if the other one is also present, it is ignored. |
 | Inner JWS | The Initiator's (or Target's) compact JWS over the Direct API payload, carried encrypted inside `encryptedData`. |
 | Outer signature | The detached JWS in the `x-jws-signature` header, over the whole envelope, made by the participant that sends it on that leg. |
-| Access token | The FIP's token from the Sahamati token service. It is the FIP's role api-key towards Inter-AAs and its bearer token for the Central Registry and the AIG. |
+| Access token | The FIP's token from the Sahamati token service (`/entity/token/generate`). It is the FIP's api-key on Direct API calls and its bearer token for the Central Registry and the AIG. |
+| IopToken | The FIP's IOP token from the Sahamati token service (`/entity/iopToken/generate`). It is the FIP's role api-key on every `/iop` call it sends to Inter-AAs (section 1.6.5). |
 
 ### 1.3 Changes needed in the FIP application
 
@@ -79,7 +80,7 @@ logic does not change.
 | 1 | Register as interop ready in the Central Registry, with the FIP's `/iop` base URL, signature public keys and **encryption public keys**. | Yes | 1.5.1 |
 | 2 | Keep the list of linkedAAs (the Inter-AAs the FIP may use). | Yes | 1.5.2 |
 | 3 | Load and refresh the Central Registry AA list and the AIG, and keep a cached copy. | Yes | 1.6 |
-| 4 | Get and refresh the FIP's access token from the Sahamati token service. | Yes | 1.6.4 |
+| 4 | Get and refresh the FIP's access token and IopToken from the Sahamati token service, and use the IopToken on every `/iop` call. | Yes | 1.6.4, 1.6.5 |
 | 5 | Serve the `/iop/*` request APIs (account discovery and linking, consent, FI, heartbeat) for Inter-AAs, with all security checks. | Yes | 1.7 |
 | 6 | Serve account link re-verification: the Direct API `/Accounts/link/reverify` for directly connected AAs, and `/iop/Accounts/link/reverify` for other AAs. | Yes | 1.7.7 |
 | 7 | Answer requests with a signed, encrypted reply for the Origin-AA. | Yes | 1.7.5 |
@@ -141,11 +142,13 @@ The FIP application loads this data in the background and serves every lookup fr
 | Which AAs are linked to which AAs | AIG `GET /v1/aig/aa` | Every 6 hours | Keep the previous graph; retry after 5 minutes |
 | linkedAAs | The FIP's own list (section 1.5.2) | When it changes | Keep the current list |
 | Access token | Sahamati token service | Before it expires | Keep the current token until it expires; retry at most every 10 seconds |
+| IopToken | Sahamati token service | Before it expires | Keep the current token until it expires; retry at most every 10 seconds |
 
-Keep a cached copy of the Central Registry AA list, the AIG and the access token, so that a restart
-can serve while a source is down. At start-up, the FIP application uses the cached copy and does
-not fetch the Central Registry AA list or the AIG; it fetches them at start-up only when there is no
-cached copy (for example, the first start). Never cache private keys (section 1.12).
+Keep a cached copy of the Central Registry AA list, the AIG, the access token and the IopToken, so
+that a restart can serve while a source is down. At start-up, the FIP application uses the cached
+copy and does not fetch the Central Registry AA list or the AIG; it fetches them at start-up only
+when there is no cached copy (for example, the first start). Never cache private keys (section
+1.12).
 
 #### 1.6.1 Central Registry AA list
 
@@ -195,6 +198,26 @@ cached copy (for example, the first start). Never cache private keys (section 1.
 - Read the secret from secure storage each time, so that it can be rotated without a restart.
 - Never log the token or the secret.
 
+#### 1.6.5 IopToken
+
+The FIP holds two tokens from the Sahamati token service, and uses each for its own calls:
+
+| Token | Get it with | Use it for |
+|---|---|---|
+| Access token (section 1.6.4) | `POST <token service base URL>/entity/token/generate` | Direct API calls to the AAs the FIP is directly connected to; the bearer token for the Central Registry and the AIG |
+| IopToken | `POST <token service base URL>/entity/iopToken/generate` | The role api-key `fip_api_key` on every `/iop` call the FIP sends |
+
+- The token service base URL is, for example, `https://token-generation-url/iam/v1`, so the IopToken
+  is generated with `POST https://token-generation-url/iam/v1/entity/iopToken/generate`.
+- The form fields (`id`, `secret`), the response, the refresh rules and the secrecy rules are those
+  of the access token (section 1.6.4). Each token is refreshed on its own.
+- Use the **IopToken**, not the access token, as the role api-key `fip_api_key` on every `/iop` call
+  to an Inter-AA (section 1.8.4).
+- **Receiving.** The api-key `x-inter_aa_api_key` that the Inter-AA sends on an `/iop` call to the
+  FIP is the Inter-AA's IopToken. The FIP must verify that it is a hop token (an IopToken).
+  **Verification procedure:** *To be published.* Until then, the api-key is checked as in section
+  1.7.3.
+
 ### 1.7 Receiving IOP requests (FIP as Target)
 
 #### 1.7.1 APIs the FIP must serve
@@ -221,7 +244,7 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`.
 
 | Header | Value |
 |---|---|
-| `x-inter_aa_api_key` | The Inter-AA's api-key: a token from the Sahamati token service |
+| `x-inter_aa_api_key` | The Inter-AA's api-key: its IopToken from the Sahamati token service (section 1.6.5) |
 | `x-jws-signature` | The Inter-AA's detached JWS over the envelope |
 
 #### 1.7.3 Checks, in this order
@@ -369,7 +392,7 @@ For each notification, the FIP application:
 
 | Header | Mandatory | Value |
 |---|---|---|
-| `fip_api_key` | Yes | The FIP's access token (section 1.6.4). It is the FIP's role api-key towards an Inter-AA. Send **no other** role api-key header. |
+| `fip_api_key` | Yes | The FIP's IopToken (section 1.6.5). It is the FIP's role api-key towards an Inter-AA. Send **no other** role api-key header. |
 | `x-jws-signature` | Yes | The detached JWS over the envelope (step 5). |
 | `Content-Type` | Yes | `application/json` |
 
@@ -377,7 +400,7 @@ For each notification, the FIP application:
 
 ```http
 POST /iop/FI/Notification
-fip_api_key: <the FIP's access token>
+fip_api_key: <the FIP's IopToken>
 x-jws-signature: <detached JWS over the body>
 Content-Type: application/json
 
@@ -481,7 +504,7 @@ If no AA is eligible, the request cannot be sent.
 | The Origin-AA's error (`encryptedData` with a `4xx`/`5xx` status) | The Origin-AA's Direct API error payload, its status and its inner JWS. |
 | The Origin-AA's error without a payload (`IopDownstreamError` without `encryptedData`) | The status only. |
 | Every route failed | "All routes unavailable" (section 1.10.1). |
-| Not sent | The Origin-AA is not registered or not interop ready; no eligible Inter-AA; reference data, keys or the access token not available; the payload has no `txnid`; signing or encryption failed. |
+| Not sent | The Origin-AA is not registered or not interop ready; no eligible Inter-AA; reference data, keys or the IopToken not available; the payload has no `txnid`; signing or encryption failed. |
 | The reply cannot be trusted | The Inter-AA's signature does not verify; `encryptedData` cannot be decrypted; the decrypted content is not a compact JWS; the Origin-AA's signature does not verify. The reply is **not used**, and the event is logged. |
 
 A reply that cannot be trusted is not retried automatically: the message may already have been
@@ -554,9 +577,9 @@ required by its regulatory or internal policy mandates.
 | Area | Requirement |
 |---|---|
 | Data protection | Request and response bodies are never logged. Logs carry only ids, paths, status, lengths and latency. Test data uses synthetic ids and generated keys only. |
-| Secrets | The entity secret, access tokens and private keys are kept in secure storage, never in code, configuration files or version control, and never logged. |
+| Secrets | The entity secret, the access token, the IopToken and private keys are kept in secure storage, never in code, configuration files or version control, and never logged. |
 | Fail closed | Unknown paths, wrong roles, unregistered or not interop-ready participants, and anything outside the cryptographic profile are refused. |
-| Availability of reference data | Cached Central Registry AA list, AIG and access token let the FIP keep working while a source is down. |
+| Availability of reference data | Cached Central Registry AA list, AIG, access token and IopToken let the FIP keep working while a source is down. |
 | Performance | Targets to be agreed. |
 
 ### 1.16 Production and testing
@@ -569,7 +592,7 @@ Production uses the live sources. Local alternatives are **for testing only**.
 | Which AAs are linked to which | AIG API | A local graph |
 | The FIP's signing and decryption keys | The FIP's secure key storage | Key files |
 | Api-key checking of Inter-AAs | Token issuer's JWKS | Fixed test api-keys |
-| The FIP's role api-key | Sahamati token service | A fixed test api-key |
+| The FIP's role api-key (IopToken) and access token | Sahamati token service | A fixed test api-key |
 
 ### 1.17 Uploading encryption public keys
 
@@ -612,6 +635,7 @@ Each item must be covered by automated tests with synthetic participants.
 | AC-14 | Reference data: lookups make no calls to the Central Registry or the AIG; a failed refresh keeps the previous data; a cached copy is served after a restart with the source down. |
 | AC-15 | Central Registry key windows: a key is used only between its `validFrom` and `validTo`, both included; `validFrom` and `validTo` are RFC 3339 timestamps, and a date alone is skipped; a key whose `validTo` has passed is used neither to verify nor to encrypt; a key with a future `validFrom` comes into use at its `validFrom` without a refresh; a key with `validTo` before `validFrom` is skipped. |
 | AC-16 | Account link re-verification: the Direct API `/Accounts/link/reverify` from a directly connected AA, and `/iop/Accounts/link/reverify` from an Origin-AA through an Inter-AA, are both answered with the payload defined in the FIP ReBIT API specification. The `/iop` reply decrypts and verifies at the Origin-AA. |
+| AC-17 | IopToken: every `/iop` call the FIP sends carries the IopToken from `/entity/iopToken/generate` as `fip_api_key`; Direct API calls carry the access token; the Central Registry and the AIG are called with the access token. The FIP verifies that `x-inter_aa_api_key` received on `/iop/*` is an IopToken, once the verification procedure is published. |
 
 ### 1.22 Items to be confirmed
 
@@ -620,3 +644,4 @@ Each item must be covered by automated tests with synthetic participants.
 | Role api-key header names (`fip_api_key`, `x-inter_aa_api_key`) and `Initiator{type: AA}` on the Inter-AA → FIP leg | Subject to the final ReBIT specification for role api-key names |
 | The account APIs: `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/link/reverify`, `/iop/Accounts/delink` and `/iop/Account/link/Notification` (plural and singular as in the Direct APIs) | Subject to the final ReBIT specification |
 | `ver` of the Heartbeat envelope, which has no payload to take it from | `1.0.0` used; subject to the final ReBIT specification |
+| IopToken verification procedure (how a received role api-key is checked to be an IopToken, a hop token) | To be published |

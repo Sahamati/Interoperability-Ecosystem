@@ -1,0 +1,30 @@
+{{- if .Values.ingress.enabled }}
+# Exposes only the public /iop listener; never the internal APIs.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "iop-gw.fullname" . }}
+  labels: {{- include "iop-gw.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - http:
+        paths:
+          - path: /iop
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "iop-gw.fullname" . }}
+                port: {name: iop}
+      {{- with .Values.ingress.host }}
+      host: {{ . }}
+      {{- end }}
+{{- end }}

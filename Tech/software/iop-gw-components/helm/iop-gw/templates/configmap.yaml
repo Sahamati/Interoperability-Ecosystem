@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "iop-gw.fullname" . }}-config
+  labels: {{- include "iop-gw.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+{{ include "iop-gw.config" . | indent 4 }}

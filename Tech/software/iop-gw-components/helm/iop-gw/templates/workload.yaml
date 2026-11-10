@@ -1,0 +1,99 @@
+{{- $persistent := .Values.cache.persistent -}}
+{{- if not (include "iop-gw.envSecret" .) }}{{ fail "set secretEnv.existingSecret (or createSecrets.enabled for testing)" }}{{ end -}}
+{{- if not (include "iop-gw.filesSecret" .) }}{{ fail "set files.existingSecret (or createSecrets.enabled for testing)" }}{{ end -}}
+apiVersion: apps/v1
+kind: {{ if $persistent }}StatefulSet{{ else }}Deployment{{ end }}
+metadata:
+  name: {{ include "iop-gw.fullname" . }}
+  labels: {{- include "iop-gw.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- if $persistent }}
+  serviceName: {{ include "iop-gw.fullname" . }}-internal
+  {{- end }}
+  selector:
+    matchLabels: {{- include "iop-gw.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "iop-gw.selector" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "iop-gw.config" . | sha256sum }}
+        {{- with .Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{ end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      automountServiceAccountToken: false
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: iop-gw
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["/etc/iop-gw/config.yaml"]
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ include "iop-gw.javaToolOptions" . | quote }}
+          envFrom:
+            - secretRef: {name: {{ include "iop-gw.envSecret" . }}}
+          ports:
+            - {name: iop, containerPort: {{ .Values.ports.iop }}}
+            - {name: gwapi-https, containerPort: {{ .Values.ports.gwApiHttps }}}
+            {{- if .Values.ports.gwApiHttp }}
+            - {name: gwapi-http, containerPort: {{ .Values.ports.gwApiHttp }}}
+            {{- end }}
+          startupProbe:
+            httpGet: {path: /healthz, port: iop}
+            periodSeconds: 5
+            failureThreshold: 36       # up to 3 minutes for the first token, CR and AIG loads
+          readinessProbe:
+            httpGet: {path: /healthz, port: iop}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: iop}
+            periodSeconds: 20
+            failureThreshold: 3
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config, mountPath: /etc/iop-gw/config.yaml, subPath: config.yaml, readOnly: true}
+            - {name: secrets, mountPath: /etc/iop-gw/secrets, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+            {{- if .Values.truststore.existingSecret }}
+            - {name: truststore, mountPath: /etc/iop-gw/truststore, readOnly: true}
+            {{- end }}
+            {{- if $persistent }}
+            - {name: cache, mountPath: /var/lib/iop-gw/cache}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap: {name: {{ include "iop-gw.fullname" . }}-config}
+        - name: secrets
+          secret: {secretName: {{ include "iop-gw.filesSecret" . }}, defaultMode: 0440}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}
+        {{- if .Values.truststore.existingSecret }}
+        - name: truststore
+          secret:
+            secretName: {{ .Values.truststore.existingSecret }}
+            defaultMode: 0440
+            items: [{key: {{ .Values.truststore.key }}, path: truststore.p12}]
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if $persistent }}
+  volumeClaimTemplates:
+    - metadata: {name: cache}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.cache.storageClassName }}
+        storageClassName: {{ .Values.cache.storageClassName }}
+        {{- end }}
+        resources: {requests: {storage: {{ .Values.cache.size }}}}
+  {{- end }}

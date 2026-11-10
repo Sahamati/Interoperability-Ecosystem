@@ -1,0 +1,29 @@
+# The public /iop listener: other entities' gateways call it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "iop-gw.fullname" . }}
+  labels: {{- include "iop-gw.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  selector: {{- include "iop-gw.selector" . | nindent 4 }}
+  ports:
+    - {name: iop, port: {{ .Values.service.port }}, targetPort: iop}
+---
+# The internal APIs: for this entity's core only. Keep it inside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "iop-gw.fullname" . }}-internal
+  labels: {{- include "iop-gw.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.internalService.type }}
+  selector: {{- include "iop-gw.selector" . | nindent 4 }}
+  ports:
+    - {name: gwapi-https, port: {{ .Values.internalService.httpsPort }}, targetPort: gwapi-https}
+    {{- if .Values.ports.gwApiHttp }}
+    - {name: gwapi-http, port: {{ .Values.internalService.httpPort }}, targetPort: gwapi-http}
+    {{- end }}

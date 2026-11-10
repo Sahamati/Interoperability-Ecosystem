@@ -1,0 +1,121 @@
+# IOP Gateway Helm chart. Defaults are small: one replica, no persistent cache.
+# Everything entity-specific is a placeholder: set it in your own values file.
+
+image:
+  repository: sahamatidevsecops/iop-gw     # where the iop-gw image is published
+  tag: "0.0.0.0"                            # defaults to the chart's appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+replicaCount: 1
+
+# The gateway's configuration file, rendered into a ConfigMap and mounted at
+# /etc/iop-gw/config.yaml. Secrets never go here: refer to them as ${NAME}
+# (environment variables from secretEnv) and to files under /etc/iop-gw/secrets
+# (from files). The listeners must match ports below.
+config:
+  mode: AA                                   # AA, FIU or FIP
+  logging: {level: INFO, audit: true, statsIntervalSeconds: 60}
+  listenAddr: "0.0.0.0:8080"                 # public /iop listener
+  self:
+    id: REPLACE-ME-entity-id
+    signingKey: {source: file, kid: REPLACE-ME-sig-kid, file: /etc/iop-gw/secrets/signing.pem}
+    decryptionKeys: {source: file, keys: [{kid: REPLACE-ME-enc-kid, file: /etc/iop-gw/secrets/decryption.pem}]}
+  core: {baseUrl: "http://REPLACE-ME-core:8090", timeoutSeconds: 30}
+  tokenService:
+    baseUrl: "https://REPLACE-ME-token-service"
+    credentialsFile: /etc/iop-gw/secrets/credentials.json
+  apiKey:
+    mode: jwt
+    issuerKeysUrl: "https://REPLACE-ME-issuer/jwks"
+  jws: {algorithm: RS256}
+  cr: {source: api, baseUrl: "https://REPLACE-ME-central-registry"}
+  aigSource: api
+  aigBaseUrl: "https://REPLACE-ME-aig"
+  gwApi:
+    listenAddr: "0.0.0.0:8443"               # internal APIs, HTTPS (also key push)
+    httpListenAddr: "0.0.0.0:8081"           # internal APIs, plain HTTP (optional)
+    tls: {certFile: /etc/iop-gw/secrets/gw-tls.crt, keyFile: /etc/iop-gw/secrets/gw-tls.key}
+    token: "${IOPGW_API_TOKEN}"
+  linkedAAs: {source: config, aas: [REPLACE-ME-aa-id]}
+  forwarding: {timeoutSeconds: 30}
+
+# Container ports; keep them in step with config listenAddr / gwApi.
+ports:
+  iop: 8080          # public /iop
+  gwApiHttps: 8443   # internal APIs over HTTPS
+  gwApiHttp: 8081    # internal APIs over plain HTTP; set to 0 if not configured
+
+# Environment variables holding the ${NAME} secrets of the configuration,
+# taken from an existing Secret (created by you, or by Vault / a cloud secret
+# store). The keys of the Secret become the variable names.
+secretEnv:
+  existingSecret: ""           # e.g. iop-gw-env, with key IOPGW_API_TOKEN
+# Files the configuration refers to under /etc/iop-gw/secrets (private keys,
+# the token-service credentials file, the internal API TLS certificate), from
+# an existing Secret: each key becomes a file.
+files:
+  existingSecret: ""           # e.g. iop-gw-files, with keys signing.pem, decryption.pem, credentials.json, gw-tls.crt, gw-tls.key
+# Testing only: let the chart create the two Secrets from these values instead.
+# Never use this with real keys or secrets (they would sit in your values file).
+createSecrets:
+  enabled: false
+  env: {}                      # NAME: value
+  files: {}                    # filename: content
+
+# Trust for a TLS certificate the default trust store does not have (e.g. a
+# private CA, or iop-gw-mocks in a test cluster): a PKCS12 truststore from a
+# Secret key. Leave empty for the Sahamati services (publicly trusted).
+truststore:
+  existingSecret: ""
+  key: truststore.p12
+  password: changeit
+
+# Extra JVM options, added to the image's (memory follows the container limit,
+# exit on out-of-memory, no heap dumps).
+javaOpts: ""
+
+# Persistent cache. Off by default (small): data is held in memory and fetched
+# again on restart. On: a StatefulSet with one volume per replica (the cache
+# cannot be shared between processes).
+cache:
+  persistent: false
+  size: 1Gi
+  storageClassName: ""
+
+# The public /iop listener: reached by other entities' gateways.
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+# The internal APIs: for this entity's core only, inside the cluster.
+internalService:
+  type: ClusterIP
+  httpsPort: 8443
+  httpPort: 8081
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""                     # e.g. iop.example.org
+  tls: []                      # [{secretName: iop-tls, hosts: [iop.example.org]}]
+
+resources:
+  requests: {cpu: 250m, memory: 512Mi}
+  limits: {memory: 1Gi}
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile: {type: RuntimeDefault}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: {drop: [ALL]}

@@ -1,0 +1,12 @@
+IOP Gateway {{ .Values.config.self.id }} ({{ .Values.config.mode }} mode) installed as {{ include "iop-gw.fullname" . }}.
+
+  Public /iop listener (for other entities' gateways): service {{ include "iop-gw.fullname" . }}, port {{ .Values.service.port }}
+  Internal APIs (for this entity's core only):         service {{ include "iop-gw.fullname" . }}-internal, port {{ .Values.internalService.httpsPort }} (HTTPS){{ if .Values.ports.gwApiHttp }}, {{ .Values.internalService.httpPort }} (HTTP){{ end }}
+  Cache: {{ if .Values.cache.persistent }}persistent ({{ .Values.cache.size }} per replica){{ else }}in memory only (fetched again on restart){{ end }}
+
+Check it is ready:  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+Its logs (JSON):    kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }} --tail=50
+{{- if .Values.createSecrets.enabled }}
+
+WARNING: createSecrets is on. It is for testing only: use existing Secrets for real keys and secrets.
+{{- end }}

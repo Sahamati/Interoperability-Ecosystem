@@ -1,0 +1,6 @@
+apiVersion: v2
+name: iop-gw
+description: AA Interoperability (IOP) Gateway, run by an AA, FIU or FIP in front of its core
+type: application
+version: 0.1.0
+appVersion: "0.0.0.0"

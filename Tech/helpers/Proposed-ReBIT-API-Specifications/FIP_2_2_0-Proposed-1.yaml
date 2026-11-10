@@ -661,12 +661,12 @@ paths:
         - name: body
           in: body
           schema:
-            $ref: '#/definitions/LinkReverifyTokenRequest'
+            $ref: '#/definitions/LinkReverifyRequest'
       responses:
         '200':
           description: OK
           schema:
-            $ref: '#/definitions/LinkDelinkTokenResponse'
+            $ref: '#/definitions/LinkReverifyResponse'
           headers:
             x-jws-signature:
                 type: string                
@@ -1677,50 +1677,6 @@ definitions:
         example: 999999
         xml:
           attribute: true
-  LinkReverifyTokenRequest:
-    description: >-
-      Information of the user handle and link reference number to be verified
-    type: object
-    required:
-      - ver
-      - timestamp
-      - txnid
-      - refNumber
-      - token
-    properties:
-      ver:
-        type: string
-        example: '2.0.0'
-        description: API version
-        xml:
-          attribute: true
-      timestamp:
-        type: string
-        description: Creation timestamp of the message.
-        format: date-time
-        example: '2023-06-26T10:27:17.699+0000'
-        xml:
-          attribute: true
-      txnid:
-        type: string
-        description: >-
-          Unique transaction identifier used for providing an end to end
-          traceability.
-        example: 410c2d2e-4a1e-11e8-960e-0277a9fbfedc
-        xml:
-          attribute: true
-      customerAddress:
-        type: string
-        description: Identifier of the Customer generated during the registration with AA.
-        example: customer_address@aa_identifier
-        xml:
-          attribute: true
-      linkRefNumber:
-        type: string
-        description: Reference number assigned by FIP as part of Account Linking Process.
-        example: xxxxxxxxxxxxx
-        xml:
-          attribute: true
   LinkDelinkTokenResponse:
     description: >-
       A response of confirmation for account link with a link reference number
@@ -1780,6 +1736,123 @@ definitions:
               type: string
               description: Unique FIP Account Reference Number which is linked with the masked account number.
               example: XXXXXXXXXXXX
+              xml:
+                attribute: true
+            status:
+              type: string
+              description: Status of Account Linking
+              example: LINKED
+              enum:
+                - LINKED
+                - DELINKED
+              xml:
+                attribute: true
+  LinkReverifyRequest:
+    description: >-
+      Information of the user handle and link reference number to be verified
+    type: object
+    required:
+      - ver
+      - timestamp
+      - txnid
+      - refNumber
+      - token
+    properties:
+      ver:
+        type: string
+        example: '2.0.0'
+        description: API version
+        xml:
+          attribute: true
+      timestamp:
+        type: string
+        description: Creation timestamp of the message.
+        format: date-time
+        example: '2023-06-26T10:27:17.699+0000'
+        xml:
+          attribute: true
+      txnid:
+        type: string
+        description: >-
+          Unique transaction identifier used for providing an end to end
+          traceability.
+        example: 410c2d2e-4a1e-11e8-960e-0277a9fbfedc
+        xml:
+          attribute: true
+      customerAddress:
+        type: string
+        description: Identifier of the Customer generated during the registration with AA.
+        example: customer_address@aa_identifier
+        xml:
+          attribute: true
+      linkRefNumber:
+        type: string
+        description: Reference number assigned by FIP as part of Account Linking Process.
+        example: xxxxxxxxxxxxx
+        xml:
+          attribute: true
+  LinkReverifyResponse:
+    description: >-
+      A response of confirmation for account reverify with a link reference number
+      and user handle for vua attestation
+    type: object
+    required:
+      - ver
+      - timestamp
+      - txnid
+      - status
+      - AccLinkReverifyDetails
+    properties:
+      ver:
+        type: string
+        example: '2.0.0'
+        description: API version
+        xml:
+          attribute: true
+      timestamp:
+        type: string
+        description: Creation timestamp of the message.
+        format: date-time
+        example: '2023-06-26T10:27:17.699+0000'
+        xml:
+          attribute: true
+      txnid:
+        type: string
+        description: >-
+          Unique transaction identifier used for providing an end to end
+          traceability.
+        example: 410c2d2e-4a1e-11e8-960e-0277a9fbfedc
+        xml:
+          attribute: true
+      status:
+        type: string
+        description: Status of the requested link parameters.
+        example: FOUND
+        enum:
+          - FOUND
+          - NOT_FOUND
+        xml:
+          attribute: true          
+      AccLinkReverifyDetails:
+        type: array
+        description: Linked account details, if found
+        items:
+          type: object
+          required:
+            - customerAddress
+            - linkRefNumber
+            - status
+          properties:
+            customerAddress:
+              type: string
+              description: Identifier of the Customer generated during the registration with AA.
+              example: customer_address@aa_identifier
+              xml:
+                attribute: true
+            linkRefNumber:
+              type: string
+              description: Reference number assigned by FIP as part of Account Linking Process.
+              example: xxxxxxxxxxxxx
               xml:
                 attribute: true
             status:

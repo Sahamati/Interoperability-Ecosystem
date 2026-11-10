@@ -22,7 +22,7 @@ consumes:
 produces:
 - application/json
 security:
-- conn_aa_api_key: []
+- x-conn_aa_api_key: []
 paths:
   /iop/Consent/Notification:
     post:
@@ -45,7 +45,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPConsentNotificationRequest"
       security:
-      - conn_aa_api_key: []
+      - x-conn_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -140,7 +140,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPFINotificationRequest"
       security:
-        - conn_aa_api_key: []
+        - x-conn_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -215,10 +215,10 @@ paths:
           schema:
             $ref: "#/definitions/IOPServiceUnavailable"
 securityDefinitions:
-  conn_aa_api_key:
-    description: conn_aa_api_key is provided by the connected-AA to FIU
+  x-conn_aa_api_key:
+    description: x-conn_aa_api_key is provided by the connected-AA to FIU
     type: apiKey
-    name: conn_aa_api_key
+    name: x-conn_aa_api_key
     in: header
 definitions:
   CorrelationId:
@@ -251,7 +251,7 @@ definitions:
     description: Optionally set by the entity generating the error in response. A hop forwards it back to its immediate caller.
     xml:
       attribute: true
-  EncryptedData:
+  EncryptedPayload:
     type: string
     xml:
       attribute: true
@@ -389,7 +389,7 @@ definitions:
     - txnid
     - ver
     - correlationId
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -414,8 +414,8 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
   IOPConsentNotificationRequest:
     type: object
     required:
@@ -423,7 +423,7 @@ definitions:
     - txnid
     - ver
     - correlationId
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -448,7 +448,7 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentNotificationPayload"
   IOPFINotificationRequest:
     type: object
@@ -457,7 +457,7 @@ definitions:
     - txnid
     - ver
     - correlationId
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -482,12 +482,12 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFINotificationPayload"
   IOPResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - ver
@@ -513,12 +513,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
   IOPConsentNotificationResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - ver
@@ -544,12 +544,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopNotificationResponsePayload"
   IOPFINotificationResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - ver
@@ -575,7 +575,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopNotificationResponsePayload"
   ErrorResponse:
     type: object
@@ -621,10 +621,10 @@ definitions:
   IOPErrorResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     properties:
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
     description: Generic Error Response. Specific Error Responses extend from this.
   IOPBadRequest:
     properties:

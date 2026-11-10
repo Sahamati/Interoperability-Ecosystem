@@ -33,7 +33,7 @@ consumes:
 produces:
 - application/json
 security:
-- inter_aa_api_key: []
+- x-inter_aa_api_key: []
 paths:
   /iop/Accounts/discover:
     post:
@@ -57,7 +57,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPAccountDiscoverRequest"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -152,7 +152,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPAccountLinkRequest"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -248,7 +248,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPAccountLinkVerifyRequest"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -344,7 +344,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPRequest"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -439,7 +439,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPAccountDelinkRequest"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -534,7 +534,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPConsentRequest"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -630,7 +630,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPFIRequest"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -733,7 +733,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPFiFetchRequest"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -836,7 +836,7 @@ paths:
         schema:
           $ref: "#/definitions/IOPConsentNotificationRequest"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -933,7 +933,7 @@ paths:
           - $ref: "#/definitions/IOPBaseRequest"
           - $ref: "#/definitions/InitiatorAA"
       security:
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -992,10 +992,10 @@ paths:
           schema:
             $ref: "#/definitions/IOPServiceUnavailable"
 securityDefinitions:
-  inter_aa_api_key:
-    description: inter_aa_api_key is provided by the inter-AA to the FIP
+  x-inter_aa_api_key:
+    description: x-inter_aa_api_key is provided by the inter-AA to the FIP
     type: apiKey
-    name: inter_aa_api_key
+    name: x-inter_aa_api_key
     in: header
 definitions:
   CorrelationId:
@@ -1043,7 +1043,7 @@ definitions:
     description: Optionally set by the entity generating the error in response. A hop forwards it back to its immediate caller.
     xml:
       attribute: true
-  EncryptedData:
+  EncryptedPayload:
     type: string
     xml:
       attribute: true
@@ -1635,7 +1635,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -1660,8 +1660,8 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
         
 
   IOPAccountDiscoverRequest:
@@ -1671,7 +1671,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -1696,7 +1696,7 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccountDiscoverPayload"      
   IOPAccountLinkRequest:
     type: object
@@ -1705,7 +1705,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -1730,7 +1730,7 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccountLinkRequestPayload"      
   IOPAccountLinkVerifyRequest:
     type: object
@@ -1739,7 +1739,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -1764,7 +1764,7 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccountLinkVerifyPayload"      
   IOPAccountDelinkRequest:
     type: object
@@ -1773,7 +1773,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -1798,7 +1798,7 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccountDelinkRequestPayload"     
   IOPConsentNotificationRequest:
     type: object
@@ -1807,7 +1807,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -1832,7 +1832,7 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentNotificationRequestPayload"      
     
   IOPFiFetchRequest:
@@ -1842,7 +1842,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -1867,7 +1867,7 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFiFetchRequestPayload"
      
 
@@ -1902,7 +1902,7 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFIPayload"    
   IOPConsentRequest:
     type: object
@@ -1911,7 +1911,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     - Initiator
     properties:
       ver:
@@ -1936,12 +1936,12 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       Initiator:
         $ref: "#/definitions/Initiator"  
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentPayload"
   IOPResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -1967,13 +1967,13 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
 
   IOPAccountDiscoverResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -1999,12 +1999,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccountDiscoverResponsePayload"
   IOPAccountLinkResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -2030,12 +2030,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccountLinkResponsePayload"
   IOPAccountLinkVerifyResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -2061,12 +2061,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccountLinkedVerifyResponsePayload"      
   IOPAccountDelinkResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -2092,12 +2092,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccountDelinkResposePayload"  
   IOPConsentResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -2123,12 +2123,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopNotificationResponsePayload"  
   IOPFiFetchResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -2154,12 +2154,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFiFetchResponsePayload"  
   IOPFIResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -2185,12 +2185,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFipFIPayload"
   IOPConsentNotificationResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -2216,7 +2216,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentNotificationPayload"
          
     
@@ -2264,10 +2264,10 @@ definitions:
   IOPErrorResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     properties:
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
     description: Generic Error Response. Specific Error Responses extend from this.
   IOPBadRequest:
     properties:
@@ -2437,8 +2437,8 @@ definitions:
         type: string
         example: Error code specific error message
         description: Error message with additional details. Ensure no sensitive information is included in the error message.
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
     description: Access is forbidden.
   IOPNotFoundFIRequest:
     properties:
@@ -2510,8 +2510,8 @@ definitions:
       errorMsg:
         type: string
         example: Error code specific error message
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
     description: Forbidden Request during FI Fetch
   IOPNotFoundFIFetch:
     properties:

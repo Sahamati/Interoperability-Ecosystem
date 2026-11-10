@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIP core application teams (AA ecosystem participants) |
-| **Version** | Draft 3.0, 2026-11-09 |
+| **Version** | Draft 3.1, 2026-11-10 |
 | **Covers** | How the fip-core sends and receives messages through the fip-iop-gw, when to call it, how the fip-core gives it keys and its list of linked AAs, and how the fip-iop-gw is configured |
 
 All identifiers in examples are illustrative.
@@ -18,15 +18,16 @@ To work with the fip-iop-gw, the fip-core needs the changes below. "Yes" means n
 | 2 | Send `Target-Entity` and `Correlation-Id` on every call, and `Authorization` with the internal API token. Optionally send `Preferred-Hop`, `Http-Retries`, `Route-Retries` and the fip-core's own `x-jws-signature`. | Yes | 3.4 |
 | 3 | Create a non-empty correlation id for each new flow, and keep it on every message of that flow. | Yes | 2 |
 | 4 | Handle the responses: the Target's payload and signature; Target errors (with a payload, or a status with an empty body); errors from the fip-iop-gw (`IOP-Gw-Error: true`, for example `503 AllRoutesUnavailable`). | Yes | 3.6 – 3.10 |
-| 5 | Expose the `/fip-core/*` APIs (including `POST /fip-core/Accounts/link/reverify`) to receive messages from participants that are not directly connected. The payloads are those of the Direct APIs. | Yes | 4.3 – 4.5 |
-| 6 | Return `Correlation-Id` unchanged on every `/fip-core/*` response. | Yes | 4.6 |
-| 7 | Check `Authorization` on every `/fip-core/*` call (the token the fip-iop-gw sends to the fip-core). | Recommended | 4.4, 7 |
-| 8 | De-duplicate incoming messages on `txnid`: retries can deliver a message twice, and the fip-core must not process it twice. | Yes | 4.5 |
-| 9 | Serve the key endpoints `GET /fip-core/keys/signing` and `GET /fip-core/keys/decryption` over HTTPS, checking the key-fetch token. | Yes | 5.1 |
-| 10 | Push new key sets to `/fip-sgw/keys/*` when keys rotate. | Recommended | 5.2 |
-| 11 | Serve `GET /fip-core/linkedAAs` with the AAs the FIP is linked to. | Yes | 6.1 |
-| 12 | Push the list to `/fip-sgw/linkedAAs` when it changes. | Recommended | 6.2 |
-| 13 | Set the fip-iop-gw's configuration and provide its tokens, certificates and credentials before starting it. | Yes | 8 |
+| 5 | Implement the Direct API `POST /Accounts/link/reverify`, used by directly connected AAs. | Yes | 4.7 |
+| 6 | Expose the `/fip-core/*` APIs (including `POST /fip-core/Accounts/link/reverify`) to receive messages from participants that are not directly connected. The payloads are those of the Direct APIs. | Yes | 4.3 – 4.5, 4.7 |
+| 7 | Return `Correlation-Id` unchanged on every `/fip-core/*` response. | Yes | 4.6 |
+| 8 | Check `Authorization` on every `/fip-core/*` call (the token the fip-iop-gw sends to the fip-core). | Recommended | 4.4, 7 |
+| 9 | De-duplicate incoming messages on `txnid`: retries can deliver a message twice, and the fip-core must not process it twice. | Yes | 4.5 |
+| 10 | Serve the key endpoints `GET /fip-core/keys/signing` and `GET /fip-core/keys/decryption` over HTTPS, checking the key-fetch token. | Yes | 5.1 |
+| 11 | Push new key sets to `/fip-sgw/keys/*` when keys rotate. | Recommended | 5.2 |
+| 12 | Serve `GET /fip-core/linkedAAs` with the AAs the FIP is linked to. | Yes | 6.1 |
+| 13 | Push the list to `/fip-sgw/linkedAAs` when it changes. | Recommended | 6.2 |
+| 14 | Set the fip-iop-gw's configuration and provide its tokens, certificates and credentials before starting it. | Yes | 8 |
 
 ## 1. Terminology
 
@@ -453,6 +454,27 @@ The role api-key header of the calling AA and `Content-Type` are **not** sent to
 | `502` | `InternalError` | The fip-core is unreachable, or its response is unreadable or larger than the gateway's limit |
 | `502` | `InternalError` | The response has no `Correlation-Id`, or a different value |
 | `500` | `InternalError` | The gateway cannot sign or encrypt the response for the Initiator |
+
+### 4.7 Account link re-verification
+
+AAs re-verify the `linkRefNumber` for a given `customerAddress`, so that they can attest user
+handles that already exist. The request and response payloads are defined in the FIP ReBIT API
+specification.
+
+| API | Implemented by | Called by | When |
+|---|---|---|---|
+| `POST /Accounts/link/reverify` (Direct API) | fip-core | An AA directly connected to the FIP | Always needed |
+| `POST /fip-core/Accounts/link/reverify` | fip-core | fip-iop-gw | Needed when the fip-core works with the fip-iop-gw |
+| `POST /iop/Accounts/link/reverify` | fip-iop-gw | An Inter-AA, on behalf of the Origin-AA | Served by the fip-iop-gw; the fip-core does not implement it |
+
+How a re-verification reaches the fip-core through the fip-iop-gw:
+
+| Step | Who | What |
+|---|---|---|
+| 1 | Origin-AA, through an Inter-AA | Sends `POST /iop/Accounts/link/reverify` to the fip-iop-gw, with the request encrypted in `encryptedData`. |
+| 2 | fip-iop-gw | Checks the request, decrypts it, and calls `POST /fip-core/Accounts/link/reverify` with the decrypted payload: the same payload as the Direct API. |
+| 3 | fip-core | Processes it and answers with the same payload as the Direct API response (section 4.6). |
+| 4 | fip-iop-gw | Signs and encrypts the reply for the Origin-AA, and returns it through the Inter-AA. |
 
 ## 5. Key provisioning
 

@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIU application teams that build AA Interoperability into their existing FIU application |
-| **Version** | Draft 1.3, 2026-11-10 |
+| **Version** | Draft 1.6, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
 
@@ -131,6 +131,10 @@ The FIU's entry in the Central Registry must have:
 | Signature public keys (`keys.signature`) | Connected-AAs and Customer-AAs verify the FIU's signatures. Publish the public key of **every** signing key the FIU may use (section 1.12). |
 | Encryption public keys (`keys.encryption`) | Customer-AAs encrypt replies and notifications for the FIU. |
 
+Each key in `keys.signature` and `keys.encryption` is published with a validity window, as
+`{"key": <JWK>, "start", "end"}`. Other participants use a key only between its `start` and `end`,
+so the window must cover the whole time the key is in use (section 1.12.2).
+
 #### 1.5.2 linkedAAs
 
 The FIU keeps the list of AAs it is linked to. A Connected-AA is used only if it is in this list.
@@ -167,6 +171,13 @@ cached copy (for example, the first start). Never cache private keys (section 1.
   `id`, `baseurl`, `interop`, `keys.signature` (or `certificate` when that list is empty) and
   `keys.encryption`.
 - Use only RSA keys of at least 2048 bits with a `kid`. Skip other keys.
+- Each item of `keys.signature` and `keys.encryption` is `{"key": <JWK>, "start", "end"}`. `start`
+  and `end` are RFC 3339 timestamps with a time zone, for example `2026-11-01T00:00:00Z` or
+  `2026-11-01T05:30:00+05:30`; empty means no limit. Use a key, to verify a signature or to encrypt,
+  only while the current time is between its `start` and `end`, both included. Check this every time
+  a key is used, not only when the lists load, so that a key comes into use and goes out of use on
+  time. Skip a key whose `start` or `end` is not an RFC 3339 timestamp (a date alone included), or
+  whose `end` is before its `start`. `certificate` has no `start` or `end`.
 - `interop` absent or not `true` means **not interop ready**.
 - The FIU application uses the new list only if it is fetched and read successfully; otherwise it
   keeps the list it already has and tries again after 5 minutes.
@@ -186,8 +197,8 @@ cached copy (for example, the first start). Never cache private keys (section 1.
 |---|---|
 | Is the Customer-AA interop ready? | Central Registry `interop` |
 | Which Connected-AAs can reach the Customer-AA? | AIG, linkedAAs, Central Registry `interop` and `baseurl` |
-| Encrypt for the Customer-AA | Customer-AA's `keys.encryption` (one chosen at random per message) |
-| Verify the Connected-AA's and the Customer-AA's signatures | Their `keys.signature`, matched by `kid` |
+| Encrypt for the Customer-AA | Customer-AA's `keys.encryption` within their `start` and `end` (one chosen at random per message) |
+| Verify the Connected-AA's and the Customer-AA's signatures | Their `keys.signature` within their `start` and `end`, matched by `kid` |
 
 #### 1.6.4 Access token
 
@@ -206,7 +217,7 @@ cached copy (for example, the first start). Never cache private keys (section 1.
 The FIU sends these to a Connected-AA, at `POST <Connected-AA baseurl>/iop/<api>`. The `Target` is
 always the Customer-AA (`type` `AA`).
 
-| IOP API | Same payload as the Direct API | Use |
+| IOP API | Encrypted payload of the Direct API | Use |
 |---|---|---|
 | `POST /iop/Consent` | `/Consent` | Consent request to the Customer-AA |
 | `POST /iop/Consent/handle` | `/Consent/handle` | Consent handle status |
@@ -381,7 +392,7 @@ processed by the Customer-AA. The flow decides what to do next, for example a st
 The FIU serves these at `<FIU baseurl>/iop/<api>`. The caller is always a Connected-AA; the
 `Initiator` is the Customer-AA.
 
-| IOP API | Method | Same payload as the Direct API | Called for |
+| IOP API | Method | Encrypted payload of the Direct API | Called for |
 |---|---|---|---|
 | `/iop/Consent/Notification` | `POST` | `/Consent/Notification` | Consent status notification from the Customer-AA |
 | `/iop/FI/Notification` | `POST` | `/FI/Notification` | FI status notification from the Customer-AA |
@@ -393,7 +404,7 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`. The
 
 | Header | Value |
 |---|---|
-| `conn_aa_api_key` | The Connected-AA's api-key: a token from the Sahamati token service |
+| `x-conn_aa_api_key` | The Connected-AA's api-key: a token from the Sahamati token service |
 | `x-jws-signature` | The Connected-AA's detached JWS over the envelope |
 
 #### 1.11.3 Checks, in this order
@@ -402,7 +413,7 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`. The
 |---|---|---|
 | 1 | The path is one of section 1.11.1, with `POST` | `404 InvalidURI` / `405 InvalidRequest` |
 | 2 | The body is within the size limit (2 MiB by default) | `413 InvalidRequest` |
-| 3 | Exactly one role api-key header is present, and it is `conn_aa_api_key` | None or more than one: `401 InvalidSecurity`. Another key: `403 InvalidSecurity` |
+| 3 | Exactly one role api-key header is present, and it is `x-conn_aa_api_key` | None or more than one: `401 InvalidSecurity`. Another key: `403 InvalidSecurity` |
 | 4 | The api-key is a valid token: signature (RS256) with the issuer's public keys (from its JWKS URL) | `401 InvalidSecurity` |
 | 5 | The sender is an AA registered in the Central Registry | `401 InvalidSecurity` / `403 InvalidSecurity` |
 | 6 | `x-jws-signature` is present and verifies over the exact received bytes with the sender's signature keys, matched by `kid` | `401 InvalidSecurity` (missing) / `401 SignatureDoesNotMatch` |
@@ -468,7 +479,7 @@ signed with `x-jws-signature`:
 | `400` | `InvalidRequest` | Body not a valid envelope (no `txnid`, no or non-UUID `correlationId`, `Initiator` missing); Initiator not an AA or not registered; `encryptedData` not a compact JWE, not decryptable, or without a compact JWS inside |
 | `401` | `InvalidSecurity` | No role api-key header or more than one; invalid api-key; sender not registered; `x-jws-signature` missing |
 | `401` | `SignatureDoesNotMatch` | `x-jws-signature` or the Initiator's inner signature does not verify |
-| `403` | `InvalidSecurity` | A role api-key other than `conn_aa_api_key`, or the sender is not an AA |
+| `403` | `InvalidSecurity` | A role api-key other than `x-conn_aa_api_key`, or the sender is not an AA |
 | `404` | `InvalidURI` | Unknown `/iop` path |
 | `405` | `InvalidRequest` | Wrong HTTP method |
 | `413` | `InvalidRequest` | Body too large |
@@ -505,6 +516,12 @@ without one, the FIU cannot sign (and so cannot send or answer anything) or cann
 |---|---|
 | Signing | 1. Publish the new public key in the Central Registry. 2. Wait for participants to pick it up (their refresh interval, 6 hours by default). 3. Add the new private key to the set. 4. Set `expiry` (or `active: false`) on the old key. |
 | Decryption | 1. Add the new private key to the set first. 2. Publish the new public encryption key in the Central Registry. 3. Keep the old private key until participants have switched (at least their refresh interval). 4. Then set its `expiry` (or `active: false`). |
+
+Set the `start` and `end` of the published public keys to match the private keys. A public signing
+key's window must cover every time its private key may sign. A public encryption key's `end` must
+come before its private decryption key is removed. A new public key can be published ahead of time
+with a future `start`: participants begin to use it at its `start`, without waiting for their next
+refresh.
 
 #### 1.12.3 Protection
 
@@ -704,19 +721,20 @@ Each item must be covered by automated tests with synthetic participants.
 | AC-6 | Replies with a wrong Connected-AA signature, a payload that cannot be decrypted, or a wrong Customer-AA signature are not used. |
 | AC-7 | Heartbeat: sent as a `POST` with `Target` and no `encryptedData`; the reply is decrypted and verified. |
 | AC-8 | Notifications: `/iop/Consent/Notification` and `/iop/FI/Notification` from a Connected-AA are processed, and the reply decrypts and verifies at the Customer-AA. |
-| AC-9 | Notification rejections: tampered body, missing signature, unknown or invalid api-key, a role key other than `conn_aa_api_key`, two role keys, sender not an AA, `Initiator` missing from the envelope, missing or non-UUID `correlationId`, unknown path, wrong method, oversized body. |
+| AC-9 | Notification rejections: tampered body, missing signature, unknown or invalid api-key, a role key other than `x-conn_aa_api_key`, two role keys, sender not an AA, `Initiator` missing from the envelope, missing or non-UUID `correlationId`, unknown path, wrong method, oversized body. |
 | AC-10 | A spoofed Initiator (inner JWS not from the Initiator) is refused with `401 SignatureDoesNotMatch` and the notification is not processed. |
 | AC-11 | A repeated payload `txnid` (or, where the FIU uses it, a repeated combination of payload `timestamp` and `txnid`) is not processed again and gets the earlier response, even when the envelope `txnid` differs. |
 | AC-12 | Keys: signatures use only usable keys, at random; keys join at `applied` and drop at `expiry`; decryption tries keys by `kid`; key material never appears in logs or errors. |
 | AC-13 | Cryptographic profile: RS256 and PS256 round trips work; `alg: none`, HMAC, `b64: false`, `crit`, `zip` and a `kid` mismatch are refused. |
 | AC-14 | Reference data: lookups make no calls to the Central Registry or the AIG; a failed refresh keeps the previous data; a cached copy is served after a restart with the source down. |
 | AC-15 | User discovery: each linked AA gets the Direct API `/User/discover` with `client_api_key` and `x-jws-signature`; each other interop-ready AA gets `/iop/User/discover` through a Connected-AA; AAs that are not interop ready are not asked. The requests go in parallel, each with its own `txnid` and the same `correlationId`. The `customerDiscoveryResponse` entries of the `User Found` answers received within the wait time are merged; a Direct API answer that is not `200` or whose signature does not verify is not used; no successful answer gives "all routes unavailable". |
+| AC-16 | Central Registry key windows: a key is used only between its `start` and `end`, both included; `start` and `end` are RFC 3339 timestamps, and a date alone is skipped; a key whose `end` has passed is used neither to verify nor to encrypt; a key with a future `start` comes into use at its `start` without a refresh; a key with `end` before `start` is skipped. |
 
 ### 1.24 Items to be confirmed
 
 | Item | Status |
 |---|---|
-| Role api-key header names (`client_api_key`, `conn_aa_api_key`) and `Initiator{type: AA}` on the Connected-AA → FIU leg | Subject to the final ReBIT specification for role api-key names |
+| Role api-key header names (`client_api_key`, `x-conn_aa_api_key`) and `Initiator{type: AA}` on the Connected-AA → FIU leg | Subject to the final ReBIT specification for role api-key names |
 | User discovery APIs (Direct API `/User/discover`, `/iop/User/discover`) and their payloads (`CustDiscoveryRequest`, `CustDiscoveryResponse`) | Proposed by Sahamati in the AA_Interop_1_0_0 "Proposed-1" draft; subject to ReBIT approval |
 | `ver` of the Heartbeat envelope, which has no payload to take it from | `1.0.0` used; subject to the final ReBIT specification |
 

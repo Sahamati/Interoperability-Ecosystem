@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIP application teams that build AA Interoperability into their existing FIP application |
-| **Version** | Draft 1.2, 2026-11-10 |
+| **Version** | Draft 1.6, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
 
@@ -81,16 +81,17 @@ logic does not change.
 | 3 | Load and refresh the Central Registry AA list and the AIG, and keep a cached copy. | Yes | 1.6 |
 | 4 | Get and refresh the FIP's access token from the Sahamati token service. | Yes | 1.6.4 |
 | 5 | Serve the `/iop/*` request APIs (account discovery and linking, consent, FI, heartbeat) for Inter-AAs, with all security checks. | Yes | 1.7 |
-| 6 | Answer requests with a signed, encrypted reply for the Origin-AA. | Yes | 1.7.5 |
-| 7 | De-duplicate incoming messages on the payload's `txnid`. | Yes | 1.7.4 |
-| 8 | Decide per AA: Direct APIs (AA directly connected) or IOP APIs (not directly connected), for the notifications the FIP sends. | Yes | 1.4 |
-| 9 | Keep the `correlationId` of the flow on every notification. | Yes | 1.8.2 |
-| 10 | Build `/iop/*` notifications: inner JWS, encryption for the Origin-AA, envelope, outer signature, role api-key `fip_api_key`. | Yes | 1.8 |
-| 11 | Choose an Inter-AA from the AIG and linkedAAs; retry and fail over to another Inter-AA. | Yes | 1.9, 1.10 |
-| 12 | Read replies: check the Inter-AA's signature, decrypt, check the Origin-AA's signature, and handle every error case. | Yes | 1.8.6, 1.11 |
-| 13 | Manage signing and decryption key sets with validity dates, and rotate them in the right order. | Yes | 1.12 |
-| 14 | Enforce the cryptographic profile and size limits. | Yes | 1.13 |
-| 15 | Capture audit records and stats, as required by the FIP's regulatory or internal policy mandates. | Recommended | 1.14 |
+| 6 | Serve account link re-verification: the Direct API `/Accounts/link/reverify` for directly connected AAs, and `/iop/Accounts/link/reverify` for other AAs. | Yes | 1.7.7 |
+| 7 | Answer requests with a signed, encrypted reply for the Origin-AA. | Yes | 1.7.5 |
+| 8 | De-duplicate incoming messages on the payload's `txnid`. | Yes | 1.7.4 |
+| 9 | Decide per AA: Direct APIs (AA directly connected) or IOP APIs (not directly connected), for the notifications the FIP sends. | Yes | 1.4 |
+| 10 | Keep the `correlationId` of the flow on every notification. | Yes | 1.8.2 |
+| 11 | Build `/iop/*` notifications: inner JWS, encryption for the Origin-AA, envelope, outer signature, role api-key `fip_api_key`. | Yes | 1.8 |
+| 12 | Choose an Inter-AA from the AIG and linkedAAs; retry and fail over to another Inter-AA. | Yes | 1.9, 1.10 |
+| 13 | Read replies: check the Inter-AA's signature, decrypt, check the Origin-AA's signature, and handle every error case. | Yes | 1.8.6, 1.11 |
+| 14 | Manage signing and decryption key sets with validity dates, and rotate them in the right order. | Yes | 1.12 |
+| 15 | Enforce the cryptographic profile and size limits. | Yes | 1.13 |
+| 16 | Capture audit records and stats, as required by the FIP's regulatory or internal policy mandates. | Recommended | 1.14 |
 
 ### 1.4 When to use the IOP APIs
 
@@ -113,6 +114,10 @@ The FIP's entry in the Central Registry must have:
 | `baseurl` | Inter-AAs send `/iop/*` requests to `<baseurl>/iop/<api>`. |
 | Signature public keys (`keys.signature`) | Inter-AAs and Origin-AAs verify the FIP's signatures. Publish the public key of **every** signing key the FIP may use (section 1.12). |
 | Encryption public keys (`keys.encryption`) | Origin-AAs encrypt requests and replies for the FIP. |
+
+Each key in `keys.signature` and `keys.encryption` is published with a validity window, as
+`{"key": <JWK>, "start", "end"}`. Other participants use a key only between its `start` and `end`,
+so the window must cover the whole time the key is in use (section 1.12.2).
 
 #### 1.5.2 linkedAAs
 
@@ -150,6 +155,13 @@ cached copy (for example, the first start). Never cache private keys (section 1.
   `id`, `baseurl`, `interop`, `keys.signature` (or `certificate` when that list is empty) and
   `keys.encryption`.
 - Use only RSA keys of at least 2048 bits with a `kid`. Skip other keys.
+- Each item of `keys.signature` and `keys.encryption` is `{"key": <JWK>, "start", "end"}`. `start`
+  and `end` are RFC 3339 timestamps with a time zone, for example `2026-11-01T00:00:00Z` or
+  `2026-11-01T05:30:00+05:30`; empty means no limit. Use a key, to verify a signature or to encrypt,
+  only while the current time is between its `start` and `end`, both included. Check this every time
+  a key is used, not only when the lists load, so that a key comes into use and goes out of use on
+  time. Skip a key whose `start` or `end` is not an RFC 3339 timestamp (a date alone included), or
+  whose `end` is before its `start`. `certificate` has no `start` or `end`.
 - `interop` absent or not `true` means **not interop ready**.
 - The FIP application uses the new list only if it is fetched and read successfully; otherwise it
   keeps the list it already has and tries again after 5 minutes.
@@ -169,8 +181,8 @@ cached copy (for example, the first start). Never cache private keys (section 1.
 |---|---|
 | Is the Origin-AA interop ready? | Central Registry `interop` |
 | Which Inter-AAs can reach the Origin-AA? | AIG, linkedAAs, Central Registry `interop` and `baseurl` |
-| Encrypt for the Origin-AA | Origin-AA's `keys.encryption` (one chosen at random per message) |
-| Verify the Inter-AA's and the Origin-AA's signatures | Their `keys.signature`, matched by `kid` |
+| Encrypt for the Origin-AA | Origin-AA's `keys.encryption` within their `start` and `end` (one chosen at random per message) |
+| Verify the Inter-AA's and the Origin-AA's signatures | Their `keys.signature` within their `start` and `end`, matched by `kid` |
 
 #### 1.6.4 Access token
 
@@ -189,7 +201,7 @@ cached copy (for example, the first start). Never cache private keys (section 1.
 The FIP serves these at `<FIP baseurl>/iop/<api>`. The caller is always an Inter-AA; the
 `Initiator` is the Origin-AA.
 
-| IOP API | Method | Same payload as the Direct API | Called for |
+| IOP API | Method | Encrypted payload of the Direct API | Called for |
 |---|---|---|---|
 | `/iop/Accounts/discover` | `POST` | `/Accounts/discover` | Account discovery |
 | `/iop/Accounts/link` | `POST` | `/Accounts/link` | Account linking |
@@ -208,7 +220,7 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`.
 
 | Header | Value |
 |---|---|
-| `inter_aa_api_key` | The Inter-AA's api-key: a token from the Sahamati token service |
+| `x-inter_aa_api_key` | The Inter-AA's api-key: a token from the Sahamati token service |
 | `x-jws-signature` | The Inter-AA's detached JWS over the envelope |
 
 #### 1.7.3 Checks, in this order
@@ -217,7 +229,7 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`.
 |---|---|---|
 | 1 | The path is one of section 1.7.1, with `POST` | `404 InvalidURI` / `405 InvalidRequest` |
 | 2 | The body is within the size limit (2 MiB by default) | `413 InvalidRequest` |
-| 3 | Exactly one role api-key header is present, and it is `inter_aa_api_key` | None or more than one: `401 InvalidSecurity`. Another key: `403 InvalidSecurity` |
+| 3 | Exactly one role api-key header is present, and it is `x-inter_aa_api_key` | None or more than one: `401 InvalidSecurity`. Another key: `403 InvalidSecurity` |
 | 4 | The api-key is a valid token: signature (RS256) with the issuer's public keys (from its JWKS URL) | `401 InvalidSecurity` |
 | 5 | The sender is an AA registered in the Central Registry | `401 InvalidSecurity` / `403 InvalidSecurity` |
 | 6 | `x-jws-signature` is present and verifies over the exact received bytes with the sender's signature keys, matched by `kid` | `401 InvalidSecurity` (missing) / `401 SignatureDoesNotMatch` |
@@ -282,12 +294,27 @@ signed with `x-jws-signature`:
 | `400` | `InvalidRequest` | Body not a valid envelope (no `txnid`, no or non-UUID `correlationId`, `Initiator` missing); Initiator not an AA or not registered; `encryptedData` not a compact JWE, not decryptable, or without a compact JWS inside; `encryptedData` on a heartbeat |
 | `401` | `InvalidSecurity` | No role api-key header or more than one; invalid api-key; sender not registered; `x-jws-signature` missing |
 | `401` | `SignatureDoesNotMatch` | `x-jws-signature` or the Initiator's inner signature does not verify |
-| `403` | `InvalidSecurity` | A role api-key other than `inter_aa_api_key`, or the sender is not an AA |
+| `403` | `InvalidSecurity` | A role api-key other than `x-inter_aa_api_key`, or the sender is not an AA |
 | `404` | `InvalidURI` | Unknown `/iop` path |
 | `405` | `InvalidRequest` | Wrong HTTP method |
 | `413` | `InvalidRequest` | Body too large |
 | `500` | `InternalError` | No encryption key for the Initiator; unable to sign or encrypt the reply |
 | `503` | `InternalError` | Central Registry data, decryption keys or issuer keys not loaded yet |
+
+#### 1.7.7 Account link re-verification
+
+A FIP must serve two APIs for account link re-verification:
+
+| API | Method | Caller | Used when |
+|---|---|---|---|
+| `/Accounts/link/reverify` (Direct API) | `POST` | An AA directly connected to the FIP | The AA is directly connected to the FIP. |
+| `/iop/Accounts/link/reverify` | `POST` | An Inter-AA, on behalf of the Origin-AA | The AA is not directly connected to the FIP. The request carries the encrypted payload of the Direct API, and is handled as in sections 1.7.1 to 1.7.6. |
+
+AAs use these APIs to re-verify the `linkRefNumber` for a given `customerAddress`. This lets an AA
+attest user handles that already exist.
+
+The request and response payloads are defined in the FIP ReBIT API specification. This document
+does not repeat them.
 
 ### 1.8 Sending IOP notifications (FIP as Initiator)
 
@@ -296,7 +323,7 @@ signed with `x-jws-signature`:
 The FIP sends these to an Inter-AA, at `POST <Inter-AA baseurl>/iop/<api>`. The `Target` is always
 the Origin-AA (`type` `AA`).
 
-| IOP API | Same payload as the Direct API | Use |
+| IOP API | Encrypted payload of the Direct API | Use |
 |---|---|---|
 | `POST /iop/Consent/Notification` | `/Consent/Notification` | Consent status notification to the Origin-AA |
 | `POST /iop/FI/Notification` | `/FI/Notification` | FI status notification to the Origin-AA |
@@ -490,6 +517,12 @@ without one, the FIP cannot sign (and so cannot send or answer anything) or cann
 | Signing | 1. Publish the new public key in the Central Registry. 2. Wait for participants to pick it up (their refresh interval, 6 hours by default). 3. Add the new private key to the set. 4. Set `expiry` (or `active: false`) on the old key. |
 | Decryption | 1. Add the new private key to the set first. 2. Publish the new public encryption key in the Central Registry. 3. Keep the old private key until participants have switched (at least their refresh interval). 4. Then set its `expiry` (or `active: false`). |
 
+Set the `start` and `end` of the published public keys to match the private keys. A public signing
+key's window must cover every time its private key may sign. A public encryption key's `end` must
+come before its private decryption key is removed. A new public key can be published ahead of time
+with a future `start`: participants begin to use it at its `start`, without waiting for their next
+refresh.
+
 #### 1.12.3 Protection
 
 - Keep private keys in secure storage, as the FIP's key-management policy requires.
@@ -564,7 +597,7 @@ Each item must be covered by automated tests with synthetic participants.
 |---|---|
 | AC-1 | End to end: Origin-AA → Inter-AA → FIP for each API in section 1.7.1. The FIP's logic gets the Origin-AA's payload, and the Origin-AA gets the FIP's reply, decrypted and verified. |
 | AC-2 | A FIP error reaches the Origin-AA as `encryptedData` (encrypted for the Origin-AA), with its status. |
-| AC-3 | Request rejections: tampered body, missing signature, unknown or invalid api-key, a role key other than `inter_aa_api_key`, two role keys, sender not an AA, `Initiator` missing from the envelope, missing or non-UUID `correlationId`, `encryptedData` on a heartbeat, unknown path, wrong method, oversized body. |
+| AC-3 | Request rejections: tampered body, missing signature, unknown or invalid api-key, a role key other than `x-inter_aa_api_key`, two role keys, sender not an AA, `Initiator` missing from the envelope, missing or non-UUID `correlationId`, `encryptedData` on a heartbeat, unknown path, wrong method, oversized body. |
 | AC-4 | A spoofed Initiator (inner JWS not from the Initiator) is refused with `401 SignatureDoesNotMatch` and the request is not processed. |
 | AC-5 | A repeated payload `txnid` (or, where the FIP uses it, a repeated combination of payload `timestamp` and `txnid`) is not processed again and gets the earlier response, even when the envelope `txnid` differs. |
 | AC-6 | Heartbeat received: answered with an encrypted, signed status for the Origin-AA. |
@@ -576,11 +609,13 @@ Each item must be covered by automated tests with synthetic participants.
 | AC-12 | Keys: signatures use only usable keys, at random; keys join at `applied` and drop at `expiry`; decryption tries keys by `kid`; key material never appears in logs or errors. |
 | AC-13 | Cryptographic profile: RS256 and PS256 round trips work; `alg: none`, HMAC, `b64: false`, `crit`, `zip` and a `kid` mismatch are refused. |
 | AC-14 | Reference data: lookups make no calls to the Central Registry or the AIG; a failed refresh keeps the previous data; a cached copy is served after a restart with the source down. |
+| AC-15 | Central Registry key windows: a key is used only between its `start` and `end`, both included; `start` and `end` are RFC 3339 timestamps, and a date alone is skipped; a key whose `end` has passed is used neither to verify nor to encrypt; a key with a future `start` comes into use at its `start` without a refresh; a key with `end` before `start` is skipped. |
+| AC-16 | Account link re-verification: the Direct API `/Accounts/link/reverify` from a directly connected AA, and `/iop/Accounts/link/reverify` from an Origin-AA through an Inter-AA, are both answered with the payload defined in the FIP ReBIT API specification. The `/iop` reply decrypts and verifies at the Origin-AA. |
 
 ### 1.22 Items to be confirmed
 
 | Item | Status |
 |---|---|
-| Role api-key header names (`fip_api_key`, `inter_aa_api_key`) and `Initiator{type: AA}` on the Inter-AA → FIP leg | Subject to the final ReBIT specification for role api-key names |
+| Role api-key header names (`fip_api_key`, `x-inter_aa_api_key`) and `Initiator{type: AA}` on the Inter-AA → FIP leg | Subject to the final ReBIT specification for role api-key names |
 | The account APIs: `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/link/reverify`, `/iop/Accounts/delink` and `/iop/Account/link/Notification` (plural and singular as in the Direct APIs) | Subject to the final ReBIT specification |
 | `ver` of the Heartbeat envelope, which has no payload to take it from | `1.0.0` used; subject to the final ReBIT specification |

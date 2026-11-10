@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | AA application teams that build AA Interoperability into their existing AA application |
-| **Version** | Draft 1.3, 2026-11-10 |
+| **Version** | Draft 1.6, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
 
@@ -93,7 +93,7 @@ does not change.
 | 4 | Get and refresh the AA's access token from the Sahamati token service. | Yes | 1.6.4 |
 | 5 | Decide per FIU or FIP: Direct APIs (directly connected) or IOP APIs (not directly connected). | Yes | 1.4 |
 | 6 | Create a `correlationId` (UUID) for each new flow, and keep it on every message of that flow. | Yes | 1.7.2 |
-| 7 | Build `/iop/*` requests: inner JWS, encryption for the Target, envelope, outer signature, role api-key `cust_aa_api_key` (to an FIU) or `orig_aa_api_key` (to a FIP). | Yes | 1.7 |
+| 7 | Build `/iop/*` requests: inner JWS, encryption for the Target, envelope, outer signature, role api-key `x-cust_aa_api_key` (to an FIU) or `x-orig_aa_api_key` (to a FIP). | Yes | 1.7 |
 | 8 | Choose the route from the AIG and linkedAAs; retry and fail over to another route. | Yes | 1.8, 1.9 |
 | 9 | Read replies: check the hop's signature, decrypt, check the Target's signature, and handle every error case. | Yes | 1.7.6, 1.10 |
 | 10 | Serve the `/iop/*` APIs for FIUs (through their Connected-AA) and FIPs (through their Inter-AA), with all security checks, and answer with a signed, encrypted reply. | Yes | 1.11 |
@@ -127,6 +127,10 @@ The AA's entry in the Central Registry must have:
 | `baseurl` | Other participants send `/iop/*` calls to `<baseurl>/iop/<api>`. |
 | Signature public keys (`keys.signature`) | Hops and Targets verify the AA's signatures. Publish the public key of **every** signing key the AA may use (section 1.13). |
 | Encryption public keys (`keys.encryption`) | FIUs and FIPs encrypt requests and replies for the AA. |
+
+Each key in `keys.signature` and `keys.encryption` is published with a validity window, as
+`{"key": <JWK>, "start", "end"}`. Other participants use a key only between its `start` and `end`,
+so the window must cover the whole time the key is in use (section 1.13.2).
 
 The AA's links to the FIUs and FIPs it is directly connected to must also be published in the AIG,
 so that other AAs choose it as a hop (section 1.22).
@@ -174,6 +178,13 @@ cached copy (for example, the first start). Never cache private keys (section 1.
   `baseurl`, `interop`, `keys.signature` (or `certificate` when that list is empty) and
   `keys.encryption`. The type is the list it is in.
 - Use only RSA keys of at least 2048 bits with a `kid`. Skip other keys.
+- Each item of `keys.signature` and `keys.encryption` is `{"key": <JWK>, "start", "end"}`. `start`
+  and `end` are RFC 3339 timestamps with a time zone, for example `2026-11-01T00:00:00Z` or
+  `2026-11-01T05:30:00+05:30`; empty means no limit. Use a key, to verify a signature or to encrypt,
+  only while the current time is between its `start` and `end`, both included. Check this every time
+  a key is used, not only when the lists load, so that a key comes into use and goes out of use on
+  time. Skip a key whose `start` or `end` is not an RFC 3339 timestamp (a date alone included), or
+  whose `end` is before its `start`. `certificate` has no `start` or `end`.
 - `interop` absent or not `true` means **not interop ready**.
 - The AA application uses the new lists only if all three are fetched and read successfully;
   otherwise it keeps the lists it already has and tries again after 5 minutes.
@@ -194,8 +205,8 @@ cached copy (for example, the first start). Never cache private keys (section 1.
 |---|---|
 | Is the Target (FIU or FIP) interop ready? | Central Registry `interop` |
 | Which routes can reach the Target? | AIG, linkedAAs, Central Registry `interop` and `baseurl` |
-| Encrypt for the Target (as Initiator) or the Initiator (as Target) | Its `keys.encryption` (one chosen at random per message) |
-| Verify any participant's signature | Its `keys.signature`, matched by `kid` |
+| Encrypt for the Target (as Initiator) or the Initiator (as Target) | Its `keys.encryption` within their `start` and `end` (one chosen at random per message) |
+| Verify any participant's signature | Its `keys.signature` within their `start` and `end`, matched by `kid` |
 | Where to forward, as a hop | The Target's `baseurl` |
 
 #### 1.6.4 Access token
@@ -214,18 +225,18 @@ cached copy (for example, the first start). Never cache private keys (section 1.
 
 **To an FIU (the AA as Customer-AA).** Sent to one of the FIU's Connected-AAs, at
 `POST <Connected-AA baseurl>/iop/<api>`, with `Target` `{"type": "FIU", ...}` and the role api-key
-`cust_aa_api_key`.
+`x-cust_aa_api_key`.
 
-| IOP API | Same payload as the Direct API | Use |
+| IOP API | Encrypted payload of the Direct API | Use |
 |---|---|---|
 | `POST /iop/Consent/Notification` | `/Consent/Notification` | Consent status notification to the FIU |
 | `POST /iop/FI/Notification` | `/FI/Notification` | FI status notification to the FIU |
 
 **To a FIP (the AA as Origin-AA).** Sent to one of the FIP's Inter-AAs, at
 `POST <Inter-AA baseurl>/iop/<api>`, with `Target` `{"type": "FIP", ...}` and the role api-key
-`orig_aa_api_key`.
+`x-orig_aa_api_key`.
 
-| IOP API | Same payload as the Direct API | Use |
+| IOP API | Encrypted payload of the Direct API | Use |
 |---|---|---|
 | `POST /iop/Accounts/discover` | `/Accounts/discover` | Account discovery |
 | `POST /iop/Accounts/link` | `/Accounts/link` | Account linking |
@@ -276,7 +287,7 @@ For each request, the AA application:
 
 | Header | Mandatory | Value |
 |---|---|---|
-| `cust_aa_api_key` (to an FIU's Connected-AA) or `orig_aa_api_key` (to a FIP's Inter-AA) | Yes | The AA's access token (section 1.6.4). Send **no other** role api-key header. |
+| `x-cust_aa_api_key` (to an FIU's Connected-AA) or `x-orig_aa_api_key` (to a FIP's Inter-AA) | Yes | The AA's access token (section 1.6.4). Send **no other** role api-key header. |
 | `x-jws-signature` | Yes | The detached JWS over the envelope (step 5). |
 | `Content-Type` | Yes | `application/json` |
 
@@ -284,7 +295,7 @@ For each request, the AA application:
 
 ```http
 POST /iop/FI/request
-orig_aa_api_key: <the AA's access token>
+x-orig_aa_api_key: <the AA's access token>
 x-jws-signature: <detached JWS over the body>
 Content-Type: application/json
 
@@ -395,9 +406,9 @@ processed by the Target. The flow decides what to do next.
 The AA serves these at `<AA baseurl>/iop/<api>`.
 
 **From an FIU (the AA as Customer-AA).** The caller is the FIU's Connected-AA, with
-`conn_aa_api_key`; the `Initiator` is the FIU (`type` `FIU`).
+`x-conn_aa_api_key`; the `Initiator` is the FIU (`type` `FIU`).
 
-| IOP API | Method | Same payload as the Direct API | Called for |
+| IOP API | Method | Encrypted payload of the Direct API | Called for |
 |---|---|---|---|
 | `/iop/Consent` | `POST` | `/Consent` | Consent request |
 | `/iop/Consent/handle` | `POST` | `/Consent/handle` | Consent handle status |
@@ -409,9 +420,9 @@ The AA serves these at `<AA baseurl>/iop/<api>`.
 | `/iop/Heartbeat` | `POST` | — (no encrypted payload) | Heartbeat from the FIU |
 
 **From a FIP (the AA as Origin-AA).** The caller is the FIP's Inter-AA, with
-`inter_aa_api_key`; the `Initiator` is the FIP (`type` `FIP`).
+`x-inter_aa_api_key`; the `Initiator` is the FIP (`type` `FIP`).
 
-| IOP API | Method | Same payload as the Direct API | Called for |
+| IOP API | Method | Encrypted payload of the Direct API | Called for |
 |---|---|---|---|
 | `/iop/Consent/Notification` | `POST` | `/Consent/Notification` | Consent status notification |
 | `/iop/FI/Notification` | `POST` | `/FI/Notification` | FI status notification |
@@ -425,7 +436,7 @@ The same paths also serve the hop role, with other role api-keys (section 1.12.2
 
 | Header | Value |
 |---|---|
-| `conn_aa_api_key` or `inter_aa_api_key` | The calling Connected-AA's or Inter-AA's api-key: a token from the Sahamati token service |
+| `x-conn_aa_api_key` or `x-inter_aa_api_key` | The calling Connected-AA's or Inter-AA's api-key: a token from the Sahamati token service |
 | `x-jws-signature` | The caller's detached JWS over the envelope |
 
 #### 1.11.3 Checks, in this order
@@ -439,7 +450,7 @@ The same paths also serve the hop role, with other role api-keys (section 1.12.2
 | 5 | The sender is an AA registered in the Central Registry | `401 InvalidSecurity` / `403 InvalidSecurity` |
 | 6 | `x-jws-signature` is present and verifies over the exact received bytes with the sender's signature keys, matched by `kid` | `401 InvalidSecurity` (missing) / `401 SignatureDoesNotMatch` |
 | 7 | The body is a JSON object with `txnid` and a `correlationId` in standard UUID format | `400 InvalidRequest` |
-| 8 | The envelope has `Initiator` (a `Target`, if present, is ignored); `Initiator.type` is `FIU` with `conn_aa_api_key` and `FIP` with `inter_aa_api_key`; the Initiator is registered | `400 InvalidRequest` |
+| 8 | The envelope has `Initiator` (a `Target`, if present, is ignored); `Initiator.type` is `FIU` with `x-conn_aa_api_key` and `FIP` with `x-inter_aa_api_key`; the Initiator is registered | `400 InvalidRequest` |
 | 9 | The Initiator has an encryption key in the Central Registry (needed for the reply) | `500 InternalError` |
 | 10 | Except for `/iop/Heartbeat`: `encryptedData` is a compact JWE that decrypts with one of the AA's usable decryption keys, matched by `kid`, and contains a compact JWS. A heartbeat has no `encryptedData` | `400 InvalidRequest` |
 | 11 | Except for `/iop/Heartbeat`: the inner JWS verifies with the Initiator's signature keys | `401 SignatureDoesNotMatch`; the request is **not** processed |
@@ -518,12 +529,12 @@ The role api-key on the incoming call tells the AA its role on that leg:
 
 | Incoming role api-key | Leg | Envelope | The AA | Outgoing role api-key |
 |---|---|---|---|---|
-| `client_api_key` | FIU → its Connected-AA | `Target{AA}` (the Customer-AA) | Forwards (hop) | `conn_aa_api_key` |
-| `cust_aa_api_key` | Customer-AA → the FIU's Connected-AA | `Target{FIU}` | Forwards (hop) | `conn_aa_api_key` |
-| `orig_aa_api_key` | Origin-AA → the FIP's Inter-AA | `Target{FIP}` | Forwards (hop) | `inter_aa_api_key` |
-| `fip_api_key` | FIP → its Inter-AA | `Target{AA}` (the Origin-AA) | Forwards (hop) | `inter_aa_api_key` |
-| `conn_aa_api_key` | Connected-AA → this AA as Customer-AA | `Initiator{FIU}` | Is the Target (section 1.11) | — |
-| `inter_aa_api_key` | Inter-AA → this AA as Origin-AA | `Initiator{FIP}` | Is the Target (section 1.11) | — |
+| `client_api_key` | FIU → its Connected-AA | `Target{AA}` (the Customer-AA) | Forwards (hop) | `x-conn_aa_api_key` |
+| `x-cust_aa_api_key` | Customer-AA → the FIU's Connected-AA | `Target{FIU}` | Forwards (hop) | `x-conn_aa_api_key` |
+| `x-orig_aa_api_key` | Origin-AA → the FIP's Inter-AA | `Target{FIP}` | Forwards (hop) | `x-inter_aa_api_key` |
+| `fip_api_key` | FIP → its Inter-AA | `Target{AA}` (the Origin-AA) | Forwards (hop) | `x-inter_aa_api_key` |
+| `x-conn_aa_api_key` | Connected-AA → this AA as Customer-AA | `Initiator{FIU}` | Is the Target (section 1.11) | — |
+| `x-inter_aa_api_key` | Inter-AA → this AA as Origin-AA | `Initiator{FIP}` | Is the Target (section 1.11) | — |
 
 The sender's type must own the key: `client_api_key` only from an FIU, `fip_api_key` only from a
 FIP, and the other keys only from an AA.
@@ -532,13 +543,13 @@ FIP, and the other keys only from an AA.
 
 | Path | As Target | As hop |
 |---|---|---|
-| `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/link/reverify`, `/iop/Accounts/delink` | — | `orig_aa_api_key` |
-| `/iop/Account/link/Notification` | `inter_aa_api_key` | `fip_api_key` |
-| `/iop/Consent`, `/iop/FI/request`, `/iop/FI/fetch` | `conn_aa_api_key` | `client_api_key`, `orig_aa_api_key` |
-| `/iop/Consent/handle`, `/iop/Consent/fetch`, `/iop/User/discover` | `conn_aa_api_key` | `client_api_key` |
-| `/iop/Consent/Notification` | `conn_aa_api_key`, `inter_aa_api_key` | `client_api_key`, `cust_aa_api_key`, `orig_aa_api_key`, `fip_api_key` |
-| `/iop/FI/Notification` | `inter_aa_api_key` | `cust_aa_api_key`, `fip_api_key` |
-| `/iop/Heartbeat` | `conn_aa_api_key`, `inter_aa_api_key` | `client_api_key`, `orig_aa_api_key`, `fip_api_key`, and `cust_aa_api_key` (but a heartbeat to an FIU is refused, section 1.12.3) |
+| `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/link/reverify`, `/iop/Accounts/delink` | — | `x-orig_aa_api_key` |
+| `/iop/Account/link/Notification` | `x-inter_aa_api_key` | `fip_api_key` |
+| `/iop/Consent`, `/iop/FI/request`, `/iop/FI/fetch` | `x-conn_aa_api_key` | `client_api_key`, `x-orig_aa_api_key` |
+| `/iop/Consent/handle`, `/iop/Consent/fetch`, `/iop/User/discover` | `x-conn_aa_api_key` | `client_api_key` |
+| `/iop/Consent/Notification` | `x-conn_aa_api_key`, `x-inter_aa_api_key` | `client_api_key`, `x-cust_aa_api_key`, `x-orig_aa_api_key`, `fip_api_key` |
+| `/iop/FI/Notification` | `x-inter_aa_api_key` | `x-cust_aa_api_key`, `fip_api_key` |
+| `/iop/Heartbeat` | `x-conn_aa_api_key`, `x-inter_aa_api_key` | `client_api_key`, `x-orig_aa_api_key`, `fip_api_key`, and `x-cust_aa_api_key` (but a heartbeat to an FIU is refused, section 1.12.3) |
 
 #### 1.12.3 Checks, in this order
 
@@ -688,6 +699,12 @@ decrypt.
 | Signing | 1. Publish the new public key in the Central Registry. 2. Wait for participants to pick it up (their refresh interval, 6 hours by default). 3. Add the new private key to the set. 4. Set `expiry` (or `active: false`) on the old key. |
 | Decryption | 1. Add the new private key to the set first. 2. Publish the new public encryption key in the Central Registry. 3. Keep the old private key until participants have switched (at least their refresh interval). 4. Then set its `expiry` (or `active: false`). |
 
+Set the `start` and `end` of the published public keys to match the private keys. A public signing
+key's window must cover every time its private key may sign. A public encryption key's `end` must
+come before its private decryption key is removed. A new public key can be published ahead of time
+with a future `start`: participants begin to use it at its `start`, without waiting for their next
+refresh.
+
 #### 1.13.3 Protection
 
 - Keep private keys in secure storage, as the AA's key-management policy requires.
@@ -744,8 +761,8 @@ user discovery in these ways:
 
 | Role | API | Caller and role api-key | What the AA does |
 |---|---|---|---|
-| Customer-AA (Target) | `POST /iop/User/discover` | The FIU's Connected-AA, with `conn_aa_api_key`; `Initiator` is the FIU | Checks the request as in section 1.11.3, decrypts it, looks up the user and answers a `CustDiscoveryResponse` encrypted for the FIU (section 1.11.5) |
-| Connected-AA (hop) | `POST /iop/User/discover` | An FIU directly connected to this AA, with `client_api_key`; `Target` is an AA | Checks the request as in section 1.12.3, including the route check (the Target AA is in linkedAAs), and forwards it to the Target with `conn_aa_api_key` (sections 1.12.4 to 1.12.6). It never decrypts the content |
+| Customer-AA (Target) | `POST /iop/User/discover` | The FIU's Connected-AA, with `x-conn_aa_api_key`; `Initiator` is the FIU | Checks the request as in section 1.11.3, decrypts it, looks up the user and answers a `CustDiscoveryResponse` encrypted for the FIU (section 1.11.5) |
+| Connected-AA (hop) | `POST /iop/User/discover` | An FIU directly connected to this AA, with `client_api_key`; `Target` is an AA | Checks the request as in section 1.12.3, including the route check (the Target AA is in linkedAAs), and forwards it to the Target with `x-conn_aa_api_key` (sections 1.12.4 to 1.12.6). It never decrypts the content |
 
 The AA also serves the Direct API `POST /User/discover` for the FIUs linked to it, with
 `client_api_key` and `x-jws-signature`, and the same payloads in plain form.
@@ -842,23 +859,23 @@ Each item must be covered by automated tests with synthetic participants.
 | AC-6 | As Target, rejections: tampered body, missing signature, unknown or invalid api-key, a key the path does not accept, two role keys, an Initiator of the wrong type for the key, `Initiator` missing, missing or non-UUID `correlationId`, `encryptedData` on a heartbeat, unknown path, wrong method, oversized body. A spoofed Initiator (inner JWS not from the Initiator) is refused with `401 SignatureDoesNotMatch` and not processed. |
 | AC-7 | As Target: a repeated payload `txnid` (or, where the AA uses it, a repeated combination of payload `timestamp` and `txnid`) is not processed again and gets the earlier response, even when the envelope `txnid` differs. |
 | AC-8 | As hop, end to end for each leg of section 1.12.1: the Target receives the new envelope with `Initiator` set to the sender, a new `txnid`, the `correlationId` and `encryptedData` unchanged, signed by this AA; the sender gets the Target's reply, signed by this AA, with its own `txnid`. A false `Initiator` in the incoming envelope is ignored. |
-| AC-9 | As hop: `/iop/Accounts/link/reverify` received with `orig_aa_api_key` reaches the FIP with `inter_aa_api_key`. |
+| AC-9 | As hop: `/iop/Accounts/link/reverify` received with `x-orig_aa_api_key` reaches the FIP with `x-inter_aa_api_key`. |
 | AC-10 | As hop, rejections: a key the path does not accept, a sender type that does not own the key, `Target` missing or of the wrong type, Target is this AA (heartbeat included), heartbeat to an FIU, `encryptedData` not shaped like a JWE; an unregistered Target, or a Target not linked to this AA, gets `400 InvalidRoute` and is not called. The hop never decrypts the content and never calls its own application logic. |
 | AC-11 | As hop, retries: a Target that answers `503` without a payload and then succeeds is delivered on a retry; a `503` with `encryptedData` is not retried; an unreachable Target gives `502 IopDownstreamError` after any retries. |
 | AC-12 | As hop: a Target error with `encryptedData` reaches the sender as `IopDownstreamError` with that `encryptedData` unchanged, and with the Target's `errorSource` unchanged when present; without `encryptedData`, as `IopDownstreamError` with "No error payload received". |
 | AC-13 | Keys: signatures use only usable keys, at random; keys join at `applied` and drop at `expiry`; decryption tries keys by `kid`; key material never appears in logs or errors. |
 | AC-14 | Cryptographic profile: RS256 and PS256 round trips work; `alg: none`, HMAC, `b64: false`, `crit`, `zip` and a `kid` mismatch are refused. |
 | AC-15 | Reference data: lookups make no calls to the Central Registry or the AIG; a failed refresh keeps the previous data; a cached copy is served after a restart with the source down. |
-| AC-16 | User discovery: as Customer-AA, `/iop/User/discover` with `conn_aa_api_key` and `Initiator{FIU}` is answered with a `CustDiscoveryResponse` that decrypts and verifies at the FIU. As Connected-AA, `/iop/User/discover` with `client_api_key` from an FIU is forwarded with `conn_aa_api_key` to a Target AA in linkedAAs; a Target AA not in linkedAAs gets `400 InvalidRoute` and is not called. `orig_aa_api_key` on this path is refused with `403 InvalidSecurity`. The Direct API `/User/discover` answers a linked FIU with a signed `CustDiscoveryResponse`. |
+| AC-16 | User discovery: as Customer-AA, `/iop/User/discover` with `x-conn_aa_api_key` and `Initiator{FIU}` is answered with a `CustDiscoveryResponse` that decrypts and verifies at the FIU. As Connected-AA, `/iop/User/discover` with `client_api_key` from an FIU is forwarded with `x-conn_aa_api_key` to a Target AA in linkedAAs; a Target AA not in linkedAAs gets `400 InvalidRoute` and is not called. `x-orig_aa_api_key` on this path is refused with `403 InvalidSecurity`. The Direct API `/User/discover` answers a linked FIU with a signed `CustDiscoveryResponse`. |
+| AC-17 | Central Registry key windows: a key is used only between its `start` and `end`, both included; `start` and `end` are RFC 3339 timestamps, and a date alone is skipped; a key whose `end` has passed is used neither to verify nor to encrypt; a key with a future `start` comes into use at its `start` without a refresh; a key with `end` before `start` is skipped. |
 
 ### 1.25 Items to be confirmed
 
 | Item | Status |
 |---|---|
-| Role api-key header names (`client_api_key`, `fip_api_key`, `conn_aa_api_key`, `cust_aa_api_key`, `orig_aa_api_key`, `inter_aa_api_key`) and `Initiator{type: AA}` on the hop → FIU and hop → FIP legs | Subject to the final ReBIT specification for role api-key names |
+| Role api-key header names (`client_api_key`, `fip_api_key`, `x-conn_aa_api_key`, `x-cust_aa_api_key`, `x-orig_aa_api_key`, `x-inter_aa_api_key`) and `Initiator{type: AA}` on the hop → FIU and hop → FIP legs | Subject to the final ReBIT specification for role api-key names |
 | `fip_api_key` on `/iop/Consent/Notification` (FIP → Inter-AA) | Accepted, as FIPs send consent notifications; subject to the final ReBIT specification |
 | `InvalidRoute` as the error code of a hop that cannot route to the Target | Not yet a ReBIT IOP error code; subject to the final ReBIT specification |
 | User discovery APIs (Direct API `/User/discover`, `/iop/User/discover`) and their payloads (`CustDiscoveryRequest`, `CustDiscoveryResponse`) | Proposed by Sahamati in the AA_Interop_1_0_0 "Proposed-1" draft; subject to ReBIT approval |
-| `orig_aa_api_key` on `/iop/User/discover`, also listed in the proposed specification | Not used: the path accepts only `conn_aa_api_key` (as Target) and `client_api_key` (as hop); other keys get `403 InvalidSecurity`. Subject to the final ReBIT specification |
 | The account APIs: `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/link/reverify`, `/iop/Accounts/delink` and `/iop/Account/link/Notification` (plural and singular as in the Direct APIs) | Subject to the final ReBIT specification |
 | `ver` of the Heartbeat envelope, which has no payload to take it from | `1.0.0` used; subject to the final ReBIT specification |

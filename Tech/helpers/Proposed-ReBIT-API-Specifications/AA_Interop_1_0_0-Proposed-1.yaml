@@ -37,17 +37,17 @@ security:
 - client_api_key: []
 - fip_api_key: []
 - aa_api_key: []
-- conn_aa_api_key: []
-- inter_aa_api_key: []
-- cust_aa_api_key: []
-- orig_aa_api_key: []
+- x-conn_aa_api_key: []
+- x-inter_aa_api_key: []
+- x-cust_aa_api_key: []
+- x-orig_aa_api_key: []
 paths:
   /User/discover:
     post:
       tags:
       - User Discovery
       description: |-
-        The FIU uses this API to identify existing user handles on the AA.
+        The FIU uses this API to identify existing user handles on a connected-AA.
 
         <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
       parameters:
@@ -143,7 +143,7 @@ paths:
       - User Discovery
       description: |-
         This API is called by an FIU to a connected-AA or by a connected-AA to a customer-AA.
-        Business purpose: The FIU uses this API to identify existing user handles on the AA.
+        Business purpose: The FIU uses this API to identify existing user handles on an unconnected customer-AA.
 
         <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
       parameters:
@@ -169,7 +169,7 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - conn_aa_api_key: []
+      - x-conn_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -274,7 +274,7 @@ paths:
             - Target
             - Initiator
       security:
-      - orig_aa_api_key: []
+      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -394,7 +394,7 @@ paths:
             - Target
             - Initiator
       security:
-      - orig_aa_api_key: []
+      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -515,7 +515,7 @@ paths:
             - Target
             - Initiator
       security:
-      - orig_aa_api_key: []
+      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -636,7 +636,7 @@ paths:
             - Target
             - Initiator
       security:
-      - orig_aa_api_key: []
+      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -757,7 +757,7 @@ paths:
             - Target
             - Initiator
       security:
-      - orig_aa_api_key: []
+      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -880,7 +880,7 @@ paths:
             - Initiator
       security:
       - fip_api_key: []
-      - inter_aa_api_key: []
+      - x-inter_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1003,8 +1003,8 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - conn_aa_api_key: []
-      - orig_aa_api_key: []
+      - x-conn_aa_api_key: []
+      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1126,7 +1126,7 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - conn_aa_api_key: []
+      - x-conn_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1248,7 +1248,7 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - conn_aa_api_key: []
+      - x-conn_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1372,8 +1372,8 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - conn_aa_api_key: []
-      - orig_aa_api_key: []
+      - x-conn_aa_api_key: []
+      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1504,8 +1504,8 @@ paths:
             - Initiator
       security:
       - client_api_key: []
-      - conn_aa_api_key: []
-      - orig_aa_api_key: []
+      - x-conn_aa_api_key: []
+      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1640,10 +1640,10 @@ paths:
       security:
       - client_api_key: []
       - fip_api_key: []
-      - conn_aa_api_key: []
-      - orig_aa_api_key: []
-      - inter_aa_api_key: []
-      - cust_aa_api_key: []
+      - x-conn_aa_api_key: []
+      - x-orig_aa_api_key: []
+      - x-inter_aa_api_key: []
+      - x-cust_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1766,8 +1766,8 @@ paths:
             - Initiator
       security:
         - fip_api_key: []
-        - inter_aa_api_key: []
-        - cust_aa_api_key: []
+        - x-inter_aa_api_key: []
+        - x-cust_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1893,10 +1893,10 @@ paths:
       security:
       - client_api_key: []
       - fip_api_key: []
-      - conn_aa_api_key: []
-      - cust_aa_api_key: []
-      - inter_aa_api_key: []
-      - orig_aa_api_key: []
+      - x-conn_aa_api_key: []
+      - x-cust_aa_api_key: []
+      - x-inter_aa_api_key: []
+      - x-orig_aa_api_key: []
       responses:
         "200":
           description: OK
@@ -1986,25 +1986,25 @@ securityDefinitions:
     type: apiKey
     name: aa_api_key
     in: header
-  conn_aa_api_key:
-    description: conn_aa_api_key is provided by the connected-AA to the customer-AA
+  x-conn_aa_api_key:
+    description: x-conn_aa_api_key is provided by the connected-AA to the customer-AA
     type: apiKey
-    name: conn_aa_api_key
+    name: x-conn_aa_api_key
     in: header
-  cust_aa_api_key:
-    description: cust_aa_api_key is provided by the customer-AA to the connected-AA
+  x-cust_aa_api_key:
+    description: x-cust_aa_api_key is provided by the customer-AA to the connected-AA
     type: apiKey
-    name: cust_aa_api_key
+    name: x-cust_aa_api_key
     in: header
-  orig_aa_api_key:
-    description: orig_aa_api_key is provided by the origin-AA to the inter-AA
+  x-orig_aa_api_key:
+    description: x-orig_aa_api_key is provided by the origin-AA to the inter-AA
     type: apiKey
-    name: orig_aa_api_key
+    name: x-orig_aa_api_key
     in: header
-  inter_aa_api_key:
-    description: inter_aa_api_key is provided by the inter-AA to the origin-AA
+  x-inter_aa_api_key:
+    description: x-inter_aa_api_key is provided by the inter-AA to the origin-AA
     type: apiKey
-    name: inter_aa_api_key
+    name: x-inter_aa_api_key
     in: header
 definitions:
   CorrelationId:
@@ -2198,7 +2198,7 @@ definitions:
     description: Optionally set by the entity generating the error in response. A hop forwards it back to its immediate caller.
     xml:
       attribute: true
-  EncryptedData:
+  EncryptedPayload:
     type: string
     xml:
       attribute: true
@@ -3192,7 +3192,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3214,8 +3214,8 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
   IOPAccDiscoveryRequest:
     type: object
     description: |-
@@ -3241,7 +3241,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3263,7 +3263,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccDiscoveryPayload"
   IOPAccLinkRequestRequest:
     type: object
@@ -3290,7 +3290,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3312,7 +3312,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccLinkPayload"
   IOPAccLinkVerifyRequest:
     type: object
@@ -3339,7 +3339,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3361,7 +3361,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccLinkVerifyPayload"
   IOPAccDelinkRequest:
     type: object
@@ -3388,7 +3388,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3410,7 +3410,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccDelinkPayload"
   IOPConsentRequest:
     type: object
@@ -3437,7 +3437,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3459,7 +3459,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentPayload"
   IOPConsentartefactRequest:
     type: object
@@ -3486,7 +3486,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3508,7 +3508,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentartefactPayload"
   IOPConsentHandleRequest:
     type: object
@@ -3535,7 +3535,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3557,7 +3557,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentHandlePayload"
   IOPConsentFetchRequest:
     type: object
@@ -3584,7 +3584,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3606,7 +3606,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentfetchPayload"
   IOPFIFetchRequest:
     type: object
@@ -3633,7 +3633,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3655,7 +3655,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFIFetchPayload"
   IOPFIRequest:
     type: object
@@ -3682,7 +3682,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3704,7 +3704,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFIPayload"
   IOPLinkNotificationRequest:
     type: object
@@ -3731,7 +3731,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3753,7 +3753,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopNotificationPayload"
   IOPConsentNotificationRequest:
     type: object
@@ -3780,7 +3780,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3802,7 +3802,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentNotificationPayload"
  
   IOPFINotificationRequest:
@@ -3830,7 +3830,7 @@ definitions:
     - txnid
     - correlationId
     - ver
-    - encryptedData
+    - encryptedPayload
     properties:
       ver:
         type: string
@@ -3852,12 +3852,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFINotificationPayload"
   IOPResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -3883,12 +3883,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
   IOPAccDiscoveryResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -3914,12 +3914,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccDiscoveryResonsePayload"
   IOPAccLinkResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -3945,12 +3945,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccLinkResonsePayload"
   IOPAccLinkVerifyResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -3976,12 +3976,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccLinkVerifyResonsePayload"
   IOPAccDeLinkResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4007,12 +4007,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopAccDelinkResonsePayload"
   IOPConsentResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4038,13 +4038,13 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentResonsePayload"
  
   IOPConsentartefactResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4070,12 +4070,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/ConsentNotiResponsePayload"
   IOPConsentHandleResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4101,12 +4101,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentHandleResonsePayload"
   IOPConsentfetchResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4132,12 +4132,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopConsentFetchResonsePayload"
   IOPFIFetchResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4163,12 +4163,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFIFetchResponePayload"
   IOPFIResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4194,12 +4194,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/IopFIResponsePayload"
   IOPLinkNotificationResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4225,12 +4225,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/AccountLinkNotiResponsePayload"
   IOPConsentNotificationResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4256,12 +4256,12 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/ConsentNotiResponsePayload"
   IOPFINotificationResponse:
     type: object
     required:
-    - encryptedData
+    - encryptedPayload
     - timestamp
     - txnid
     - correlationId
@@ -4287,7 +4287,7 @@ definitions:
           attribute: true
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      encryptedData:
+      encryptedPayload:
         $ref: "#/definitions/FINotiResponsePayload"
   ErrorResponse:
     type: object
@@ -4322,7 +4322,7 @@ definitions:
         type: string
         xml:
           attribute: true
-        description: Mandatory when replying as a hop. Error code indicating the problem with the request. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+        description: Mandatory when replying as a hop. Error code indicating the problem with the request. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
       errorMsg:
         type: string
         example: Error code specific error message
@@ -4333,8 +4333,8 @@ definitions:
   IOPErrorResponse:
     type: object
     properties:
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
     description: Generic Error Response. Specific Error Responses extend from this.
   BadRequest:
     properties:
@@ -4342,7 +4342,7 @@ definitions:
         type: string
         xml:
           attribute: true
-        description: Error code pertaining to the invalid request. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+        description: Error code pertaining to the invalid request. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
         enum:
         - InvalidRequest
         - InvalidURI
@@ -4359,7 +4359,7 @@ definitions:
         type: string
         xml:
           attribute: true
-        description: Mandatory when replying as a hop. Indicates that the resource specified in the request was not found. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+        description: Mandatory when replying as a hop. Indicates that the resource specified in the request was not found. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
         enum:
         - NoSuchResource
         - IopDownstreamError
@@ -4373,7 +4373,7 @@ definitions:
         type: string
         xml:
           attribute: true
-        description: Mandatory when replying as a hop. IdempotencyError when UUID/Id is not unique. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+        description: Mandatory when replying as a hop. IdempotencyError when UUID/Id is not unique. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
         enum:
         - IdempotencyError
         - IopDownstreamError
@@ -4393,7 +4393,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/ErrorResponse"
     - {}
-    description: At least one of the preconditions you specified did not hold. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: At least one of the preconditions you specified did not hold. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   InternalServerError:
     properties:
       errorCode:
@@ -4406,7 +4406,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/ErrorResponse"
     - {}
-    description: Encountered an internal error. Please try again. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Encountered an internal error. Please try again. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   NotImplemented:
     properties:
       errorCode:
@@ -4419,7 +4419,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/ErrorResponse"
     - {}
-    description: Trying to access an unimplemented feature/API. Required when we provide backward compatiable API. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Trying to access an unimplemented feature/API. Required when we provide backward compatiable API. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   ServiceUnavailable:
     properties:
       errorCode:
@@ -4432,7 +4432,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/ErrorResponse"
     - {}
-    description: Service is unavailable. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Service is unavailable. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   UnauthorizedAccess:
     properties:
       errorCode:
@@ -4452,7 +4452,7 @@ definitions:
         type: string
         xml:
           attribute: true
-        description: Mandatory when replying as a hop. Error code pertaining to the invalid request. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+        description: Mandatory when replying as a hop. Error code pertaining to the invalid request. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
         enum:
         - InvalidRequest
         - InvalidURI
@@ -4471,7 +4471,7 @@ definitions:
         type: string
         xml:
           attribute: true
-        description: Mandatory when replying as a hop. Indicates that the resource specified in the request was not found. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+        description: Mandatory when replying as a hop. Indicates that the resource specified in the request was not found. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
         enum:
         - NoSuchResource
         - IopDownstreamError
@@ -4486,7 +4486,7 @@ definitions:
         type: string
         xml:
           attribute: true
-        description: Mandatory when replying as a hop. IdempotencyError when UUID/Id is not unique. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+        description: Mandatory when replying as a hop. IdempotencyError when UUID/Id is not unique. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
         enum:
         - IdempotencyError
         - IopDownstreamError
@@ -4508,7 +4508,7 @@ definitions:
     - $ref: "#/definitions/ErrorResponse"
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
-    description: At least one of the preconditions you specified did not hold. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: At least one of the preconditions you specified did not hold. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPInternalServerError:
     properties:
       errorCode:
@@ -4522,7 +4522,7 @@ definitions:
     - $ref: "#/definitions/ErrorResponse"
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
-    description: Encountered an internal error. Please try again. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Encountered an internal error. Please try again. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPNotImplemented:
     properties:
       errorCode:
@@ -4536,7 +4536,7 @@ definitions:
     - $ref: "#/definitions/ErrorResponse"
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
-    description: Trying to access an unimplemented feature/API. Required when we provide backward compatiable API. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Trying to access an unimplemented feature/API. Required when we provide backward compatiable API. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPBadGateway:
     properties:
       errorCode:
@@ -4550,7 +4550,7 @@ definitions:
     - $ref: "#/definitions/ErrorResponse"
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
-    description: Encountered a bad gateway error. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Encountered a bad gateway error. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPServiceUnavailable:
     properties:
       errorCode:
@@ -4564,7 +4564,7 @@ definitions:
     - $ref: "#/definitions/ErrorResponse"
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
-    description: Service is unavailable. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Service is unavailable. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPGatewayTimeout:
     properties:
       errorCode:
@@ -4578,7 +4578,7 @@ definitions:
     - $ref: "#/definitions/ErrorResponse"
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
-    description: Encountered a gateway timeout error. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Encountered a gateway timeout error. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPBadDiscoverRequest:
     properties:
       errorCode:
@@ -4593,7 +4593,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}
-    description: Bad Request during Consent Request. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Bad Request during Consent Request. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPBadRequestConsent:
     properties:
       errorCode:
@@ -4611,7 +4611,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}
-    description: Bad Request during Consent Request. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Bad Request during Consent Request. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPBadRequestConsentStatus:
     properties:
       errorCode:
@@ -4628,7 +4628,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}
-    description: Bad Request during Consent Request Status. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Bad Request during Consent Request Status. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPBadRequestConsentFetch:
     properties:
       errorCode:
@@ -4645,7 +4645,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}
-    description: Bad Request during Consent Fetch. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Bad Request during Consent Fetch. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPBadRequestFIRequest:
     properties:
       errorCode:
@@ -4667,7 +4667,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}
-    description: Bad Request during FIRequest. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Bad Request during FIRequest. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPForbiddenFIRequest:
     properties:
       ver:
@@ -4702,9 +4702,9 @@ definitions:
         type: string
         example: Error code specific error message
         description: Error message with additional details. Ensure no sensitive information is included in the error message.
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
-    description: Access is forbidden. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
+    description: Access is forbidden. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPNotFoundFIRequest:
     properties:
       errorCode:
@@ -4717,7 +4717,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/IOPNotFound"
     - {}
-    description: Not Found error during FI Request. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Not Found error during FI Request. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPBadRequestFIFetch:
     properties:
       errorCode:
@@ -4741,7 +4741,7 @@ definitions:
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}
-    description: Bad Request during FI Fetch. Set to IopDownstreamError when forwarding an error in the encryptedData field.
+    description: Bad Request during FI Fetch. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPForbiddenFIFetch:
     properties:
       ver:
@@ -4778,8 +4778,8 @@ definitions:
       errorMsg:
         type: string
         example: Error code specific error message
-      encryptedData:
-        $ref: "#/definitions/EncryptedData"
+      encryptedPayload:
+        $ref: "#/definitions/EncryptedPayload"
     description: Forbidden Request during FI Fetch
     
   IOPNotFoundFIFetch:

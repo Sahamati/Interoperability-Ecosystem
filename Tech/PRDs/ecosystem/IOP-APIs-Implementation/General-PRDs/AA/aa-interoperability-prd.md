@@ -1,9 +1,13 @@
 # AA PRD — Interoperability for AAs
 
+> **Disclaimer:** Please review and verify the contents of this document against the applicable system requirements and specifications.
+>
+> Kindly note that this document is subject to change as development, integration, and testing progress.
+
 |  |  |
 |---|---|
 | **Audience** | AA application teams that build AA Interoperability into their existing AA application |
-| **Version** | Draft 1.10, 2026-11-10 |
+| **Version** | Draft 1.11, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
 
@@ -293,7 +297,7 @@ For each request, the AA application:
 2. **Signs the payload** (inner JWS): a compact JWS over the payload bytes, with one of the AA's
    usable signing keys, its `kid` in the protected header (section 1.14).
 3. **Encrypts** the compact JWS for the Target: compact JWE, `RSA-OAEP-256` / `A256GCM`, with one
-   of the Target's encryption keys, its `kid` in the JWE header.
+   of the Target's encryption keys, its `kid` and `cty: "JWT"` in the JWE header.
 4. **Builds the envelope**:
 
    | Field | Value |
@@ -744,7 +748,7 @@ waiting for their next refresh.
 | Item | Requirement |
 |---|---|
 | JWS | `RS256` only, for both `x-jws-signature` and the inner JWS. `x-jws-signature` is a detached JWS with an unencoded payload (RFC 7797): protected header `{"alg", "kid", "b64": false, "crit": ["b64"]}`, signed over `BASE64URL(header) + "." + <the exact body bytes>`, sent as `header..signature`. The inner JWS inside `encryptedPayload` is a compact JWS with a base64url-encoded payload (RFC 7515). Refuse any other algorithm (`PS256`, `alg: none`, HMAC); an `x-jws-signature` without `"b64": false` and `"crit": ["b64"]`; and an inner JWS with `b64: false` or `crit`. |
-| JWE | Compact, `RSA-OAEP-256` / `A256GCM` only. Refuse `zip`. |
+| JWE | Compact, `RSA-OAEP-256` / `A256GCM` only. Protected header `{"alg": "RSA-OAEP-256", "enc": "A256GCM", "kid": <recipient's encryption key id>, "cty": "JWT"}`. Send `cty: "JWT"`; accept a JWE with or without `cty`. Refuse `zip`. |
 | RSA keys | At least 2048 bits, with a `kid`. |
 | Signature input | The exact bytes sent or received. Never re-serialise JSON before verifying. |
 | Inbound body | At most 2 MiB by default (`413` above). |

@@ -1,5 +1,9 @@
 # IOP Gateway — Integration Guide for the fip-core
 
+> **Disclaimer:** Please review and verify the contents of this document against the applicable system requirements and specifications.
+>
+> Kindly note that this document is subject to change as development, integration, and testing progress.
+
 |  |  |
 |---|---|
 | **Audience** | FIP core application teams (AA ecosystem participants) |

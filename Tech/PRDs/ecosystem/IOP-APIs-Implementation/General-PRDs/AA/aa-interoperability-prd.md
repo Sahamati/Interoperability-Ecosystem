@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | AA application teams that build AA Interoperability into their existing AA application |
-| **Version** | Draft 1.6, 2026-11-10 |
+| **Version** | Draft 1.7, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
 
@@ -128,9 +128,9 @@ The AA's entry in the Central Registry must have:
 | Signature public keys (`keys.signature`) | Hops and Targets verify the AA's signatures. Publish the public key of **every** signing key the AA may use (section 1.13). |
 | Encryption public keys (`keys.encryption`) | FIUs and FIPs encrypt requests and replies for the AA. |
 
-Each key in `keys.signature` and `keys.encryption` is published with a validity window, as
-`{"key": <JWK>, "start", "end"}`. Other participants use a key only between its `start` and `end`,
-so the window must cover the whole time the key is in use (section 1.13.2).
+Each key in `keys.signature` and `keys.encryption` is published with an optional validity window, as
+`{"key": <JWK>, "validFrom", "validTo"}`. Other participants use a key only between its `validFrom`
+and `validTo`, so the window must cover the whole time the key is in use (section 1.13.2).
 
 The AA's links to the FIUs and FIPs it is directly connected to must also be published in the AIG,
 so that other AAs choose it as a hop (section 1.22).
@@ -178,13 +178,14 @@ cached copy (for example, the first start). Never cache private keys (section 1.
   `baseurl`, `interop`, `keys.signature` (or `certificate` when that list is empty) and
   `keys.encryption`. The type is the list it is in.
 - Use only RSA keys of at least 2048 bits with a `kid`. Skip other keys.
-- Each item of `keys.signature` and `keys.encryption` is `{"key": <JWK>, "start", "end"}`. `start`
-  and `end` are RFC 3339 timestamps with a time zone, for example `2026-11-01T00:00:00Z` or
-  `2026-11-01T05:30:00+05:30`; empty means no limit. Use a key, to verify a signature or to encrypt,
-  only while the current time is between its `start` and `end`, both included. Check this every time
-  a key is used, not only when the lists load, so that a key comes into use and goes out of use on
-  time. Skip a key whose `start` or `end` is not an RFC 3339 timestamp (a date alone included), or
-  whose `end` is before its `start`. `certificate` has no `start` or `end`.
+- Each item of `keys.signature` and `keys.encryption` is `{"key": <JWK>, "validFrom", "validTo"}`.
+  `validFrom` and `validTo` are optional RFC 3339 timestamps with a time zone, for example
+  `2026-11-01T00:00:00Z` or `2026-11-01T05:30:00+05:30`; absent or empty means no limit. Use a key,
+  to verify a signature or to encrypt, only while the current time is between its `validFrom` and
+  `validTo`, both included. Check this every time a key is used, not only when the lists load, so
+  that a key comes into use and goes out of use on time. Skip a key whose `validFrom` or `validTo`
+  is not an RFC 3339 timestamp (a date alone included), or whose `validTo` is before its
+  `validFrom`. `certificate` has no `validFrom` or `validTo`.
 - `interop` absent or not `true` means **not interop ready**.
 - The AA application uses the new lists only if all three are fetched and read successfully;
   otherwise it keeps the lists it already has and tries again after 5 minutes.
@@ -205,8 +206,8 @@ cached copy (for example, the first start). Never cache private keys (section 1.
 |---|---|
 | Is the Target (FIU or FIP) interop ready? | Central Registry `interop` |
 | Which routes can reach the Target? | AIG, linkedAAs, Central Registry `interop` and `baseurl` |
-| Encrypt for the Target (as Initiator) or the Initiator (as Target) | Its `keys.encryption` within their `start` and `end` (one chosen at random per message) |
-| Verify any participant's signature | Its `keys.signature` within their `start` and `end`, matched by `kid` |
+| Encrypt for the Target (as Initiator) or the Initiator (as Target) | Its `keys.encryption` within their `validFrom` and `validTo` (one chosen at random per message) |
+| Verify any participant's signature | Its `keys.signature` within their `validFrom` and `validTo`, matched by `kid` |
 | Where to forward, as a hop | The Target's `baseurl` |
 
 #### 1.6.4 Access token
@@ -699,11 +700,11 @@ decrypt.
 | Signing | 1. Publish the new public key in the Central Registry. 2. Wait for participants to pick it up (their refresh interval, 6 hours by default). 3. Add the new private key to the set. 4. Set `expiry` (or `active: false`) on the old key. |
 | Decryption | 1. Add the new private key to the set first. 2. Publish the new public encryption key in the Central Registry. 3. Keep the old private key until participants have switched (at least their refresh interval). 4. Then set its `expiry` (or `active: false`). |
 
-Set the `start` and `end` of the published public keys to match the private keys. A public signing
-key's window must cover every time its private key may sign. A public encryption key's `end` must
-come before its private decryption key is removed. A new public key can be published ahead of time
-with a future `start`: participants begin to use it at its `start`, without waiting for their next
-refresh.
+Set the `validFrom` and `validTo` of the published public keys to match the private keys. A public
+signing key's window must cover every time its private key may sign. A public encryption key's
+`validTo` must come before its private decryption key is removed. A new public key can be published
+ahead of time with a future `validFrom`: participants begin to use it at its `validFrom`, without
+waiting for their next refresh.
 
 #### 1.13.3 Protection
 
@@ -867,7 +868,7 @@ Each item must be covered by automated tests with synthetic participants.
 | AC-14 | Cryptographic profile: RS256 and PS256 round trips work; `alg: none`, HMAC, `b64: false`, `crit`, `zip` and a `kid` mismatch are refused. |
 | AC-15 | Reference data: lookups make no calls to the Central Registry or the AIG; a failed refresh keeps the previous data; a cached copy is served after a restart with the source down. |
 | AC-16 | User discovery: as Customer-AA, `/iop/User/discover` with `x-conn_aa_api_key` and `Initiator{FIU}` is answered with a `CustDiscoveryResponse` that decrypts and verifies at the FIU. As Connected-AA, `/iop/User/discover` with `client_api_key` from an FIU is forwarded with `x-conn_aa_api_key` to a Target AA in linkedAAs; a Target AA not in linkedAAs gets `400 InvalidRoute` and is not called. `x-orig_aa_api_key` on this path is refused with `403 InvalidSecurity`. The Direct API `/User/discover` answers a linked FIU with a signed `CustDiscoveryResponse`. |
-| AC-17 | Central Registry key windows: a key is used only between its `start` and `end`, both included; `start` and `end` are RFC 3339 timestamps, and a date alone is skipped; a key whose `end` has passed is used neither to verify nor to encrypt; a key with a future `start` comes into use at its `start` without a refresh; a key with `end` before `start` is skipped. |
+| AC-17 | Central Registry key windows: a key is used only between its `validFrom` and `validTo`, both included; `validFrom` and `validTo` are RFC 3339 timestamps, and a date alone is skipped; a key whose `validTo` has passed is used neither to verify nor to encrypt; a key with a future `validFrom` comes into use at its `validFrom` without a refresh; a key with `validTo` before `validFrom` is skipped. |
 
 ### 1.25 Items to be confirmed
 

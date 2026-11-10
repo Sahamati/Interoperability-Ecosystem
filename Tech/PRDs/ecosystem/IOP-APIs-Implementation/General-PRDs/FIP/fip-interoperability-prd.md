@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIP application teams that build AA Interoperability into their existing FIP application |
-| **Version** | Draft 1.0, 2026-11-09 |
+| **Version** | Draft 1.2, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
 
@@ -65,8 +65,8 @@ logic does not change.
 | Interop ready | A participant whose `interop` flag in the Central Registry is `true`. |
 | Correlation-Id (`correlationId`) | The id of one flow, in **standard UUID format** (RFC 4122, for example `9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94`). The Initiator creates it; it stays the same on every message of the flow. |
 | `txnid` | Two different ids. **Payload `txnid`**: the id of one message, as in the Direct APIs; it is the same on every resend, end to end. **Envelope `txnid`**: the id of one transaction between two participants on one leg (for example the FIP and the Inter-AA); it is the same on retries to the same participant, and new for each route and for each leg. |
-| Envelope | The JSON body of an `/iop/*` request or response: `ver`, `timestamp`, `txnid`, `correlationId`, `Target` or `Initiator`, and `iopPayload` or `iopError`. The Initiator sets `Target` and sends it to the hop; the hop replaces it with `Initiator` when it forwards to the Target. The receiver reads only the field its leg needs (`Target` at the hop, `Initiator` at the Target); if the other one is also present, it is ignored. |
-| Inner JWS | The Initiator's (or Target's) compact JWS over the Direct API payload, carried encrypted inside `iopPayload` / `iopError`. |
+| Envelope | The JSON body of an `/iop/*` request or response: `ver`, `timestamp`, `txnid`, `correlationId`, `Target` or `Initiator`, and `encryptedData` (none on a heartbeat). `encryptedData` carries the request, and on a reply the response or the error alike: the HTTP status tells them apart. The Initiator sets `Target` and sends it to the hop; the hop replaces it with `Initiator` when it forwards to the Target. The receiver reads only the field its leg needs (`Target` at the hop, `Initiator` at the Target); if the other one is also present, it is ignored. |
+| Inner JWS | The Initiator's (or Target's) compact JWS over the Direct API payload, carried encrypted inside `encryptedData`. |
 | Outer signature | The detached JWS in the `x-jws-signature` header, over the whole envelope, made by the participant that sends it on that leg. |
 | Access token | The FIP's token from the Sahamati token service. It is the FIP's role api-key towards Inter-AAs and its bearer token for the Central Registry and the AIG. |
 
@@ -194,8 +194,9 @@ The FIP serves these at `<FIP baseurl>/iop/<api>`. The caller is always an Inter
 | `/iop/Accounts/discover` | `POST` | `/Accounts/discover` | Account discovery |
 | `/iop/Accounts/link` | `POST` | `/Accounts/link` | Account linking |
 | `/iop/Accounts/link/verify` | `POST` | `/Accounts/link/verify` | Account link verification |
+| `/iop/Accounts/link/reverify` | `POST` | `/Accounts/link/reverify` | Account link re-verification |
 | `/iop/Accounts/delink` | `POST` | `/Accounts/delink` | Account delinking |
-| `/iop/Consent` | `POST` | `/Consent` | Consent artefact (the Inter-AA delivers the Origin-AA's `/iop/Consent/artefact` here) |
+| `/iop/Consent` | `POST` | `/Consent` | Consent artefact |
 | `/iop/FI/request` | `POST` | `/FI/request` | FI data request |
 | `/iop/FI/fetch` | `POST` | `/FI/fetch` | FI data fetch |
 | `/iop/Consent/Notification` | `POST` | `/Consent/Notification` | Consent status notification |
@@ -207,7 +208,7 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`.
 
 | Header | Value |
 |---|---|
-| `x-inter_aa_api_key` | The Inter-AA's api-key: a token from the Sahamati token service |
+| `inter_aa_api_key` | The Inter-AA's api-key: a token from the Sahamati token service |
 | `x-jws-signature` | The Inter-AA's detached JWS over the envelope |
 
 #### 1.7.3 Checks, in this order
@@ -216,14 +217,14 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`.
 |---|---|---|
 | 1 | The path is one of section 1.7.1, with `POST` | `404 InvalidURI` / `405 InvalidRequest` |
 | 2 | The body is within the size limit (2 MiB by default) | `413 InvalidRequest` |
-| 3 | Exactly one role api-key header is present, and it is `x-inter_aa_api_key` | None or more than one: `401 InvalidSecurity`. Another key: `403 InvalidSecurity` |
+| 3 | Exactly one role api-key header is present, and it is `inter_aa_api_key` | None or more than one: `401 InvalidSecurity`. Another key: `403 InvalidSecurity` |
 | 4 | The api-key is a valid token: signature (RS256) with the issuer's public keys (from its JWKS URL) | `401 InvalidSecurity` |
 | 5 | The sender is an AA registered in the Central Registry | `401 InvalidSecurity` / `403 InvalidSecurity` |
 | 6 | `x-jws-signature` is present and verifies over the exact received bytes with the sender's signature keys, matched by `kid` | `401 InvalidSecurity` (missing) / `401 SignatureDoesNotMatch` |
 | 7 | The body is a JSON object with `txnid` and a `correlationId` in standard UUID format | `400 InvalidRequest` |
 | 8 | The envelope has `Initiator` (a `Target`, if present, is ignored); `Initiator.type` is `AA`, and the Initiator is registered | `400 InvalidRequest` |
 | 9 | The Initiator has an encryption key in the Central Registry (needed for the reply) | `500 InternalError` |
-| 10 | Except for `/iop/Heartbeat`: `iopPayload` is a compact JWE that decrypts with one of the FIP's usable decryption keys, matched by `kid`, and contains a compact JWS. A heartbeat has no `iopPayload` | `400 InvalidRequest` |
+| 10 | Except for `/iop/Heartbeat`: `encryptedData` is a compact JWE that decrypts with one of the FIP's usable decryption keys, matched by `kid`, and contains a compact JWS. A heartbeat has no `encryptedData` | `400 InvalidRequest` |
 | 11 | Except for `/iop/Heartbeat`: the inner JWS verifies with the Initiator's signature keys | `401 SignatureDoesNotMatch`; the request is **not** processed |
 
 Only then is the payload passed to the FIP's existing logic. Refresh the issuer's public keys at
@@ -255,8 +256,7 @@ signed the payload once.
    | `timestamp` | Now, UTC |
    | `txnid` | The request's `txnid` |
    | `correlationId` | The request's `correlationId`, unchanged |
-   | `iopPayload` | The compact JWE, when the status is below `300` |
-   | `iopError` | The compact JWE, when the status is `300` or above |
+   | `encryptedData` | The compact JWE, for a success and an error alike: the HTTP status tells them apart |
 
 5. **Sign the envelope** (detached JWS in `x-jws-signature`) and return it with the status.
 
@@ -279,10 +279,10 @@ signed with `x-jws-signature`:
 
 | Status | `errorCode` | When |
 |---|---|---|
-| `400` | `InvalidRequest` | Body not a valid envelope (no `txnid`, no or non-UUID `correlationId`, `Initiator` missing); Initiator not an AA or not registered; `iopPayload` not a compact JWE, not decryptable, or without a compact JWS inside; `iopPayload` on a heartbeat |
+| `400` | `InvalidRequest` | Body not a valid envelope (no `txnid`, no or non-UUID `correlationId`, `Initiator` missing); Initiator not an AA or not registered; `encryptedData` not a compact JWE, not decryptable, or without a compact JWS inside; `encryptedData` on a heartbeat |
 | `401` | `InvalidSecurity` | No role api-key header or more than one; invalid api-key; sender not registered; `x-jws-signature` missing |
 | `401` | `SignatureDoesNotMatch` | `x-jws-signature` or the Initiator's inner signature does not verify |
-| `403` | `InvalidSecurity` | A role api-key other than `x-inter_aa_api_key`, or the sender is not an AA |
+| `403` | `InvalidSecurity` | A role api-key other than `inter_aa_api_key`, or the sender is not an AA |
 | `404` | `InvalidURI` | Unknown `/iop` path |
 | `405` | `InvalidRequest` | Wrong HTTP method |
 | `413` | `InvalidRequest` | Body too large |
@@ -331,7 +331,7 @@ For each notification, the FIP application:
    | `txnid` | The id of this transaction between the FIP and the Inter-AA, created by the FIP (UUID): the same on retries to that Inter-AA, a new one for each other Inter-AA tried. It is **not** the inner payload's `txnid`, which stays inside the encrypted payload for the Origin-AA. The Inter-AA's reply carries the same `txnid` |
    | `correlationId` | The flow's correlation id |
    | `Target` | `{"type": "AA", "id": "<Origin-AA id>"}` |
-   | `iopPayload` | The compact JWE |
+   | `encryptedData` | The compact JWE |
 
 5. **Signs the envelope** (outer signature): a detached JWS over the exact envelope bytes, in
    `x-jws-signature`.
@@ -359,7 +359,7 @@ Content-Type: application/json
   "txnid": "3f2b8c1e-7d4a-4c9e-9b1f-2a6d5e8c4b71",
   "correlationId": "9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94",
   "Target": {"type": "AA", "id": "aa-test-002"},
-  "iopPayload": "<compact JWE>"
+  "encryptedData": "<compact JWE>"
 }
 ```
 
@@ -368,7 +368,8 @@ Content-Type: application/json
 1. **Check the Inter-AA's signature**: `x-jws-signature` on the reply must verify over the exact
    reply bytes with the Inter-AA's signature keys. If it does not, the reply is not used
    (section 1.11).
-2. If the reply has `iopPayload` (success) or `iopError` (the Origin-AA's error):
+2. If the reply has `encryptedData` (the Origin-AA's response or error; the HTTP status tells them
+   apart):
    - **decrypt** it with the FIP's usable decryption keys, matched by the JWE `kid`;
    - **check the Origin-AA's signature**: the decrypted content must be a compact JWS that
      verifies with the Origin-AA's signature keys;
@@ -381,7 +382,7 @@ a Direct API response.
 
 #### 1.8.7 Heartbeat
 
-- `POST /iop/Heartbeat` has **no** `iopPayload`. As for every `/iop/*` request, the FIP sets
+- `POST /iop/Heartbeat` has **no** `encryptedData`. As for every `/iop/*` request, the FIP sets
   `Target` (the Origin-AA) and sends it to the Inter-AA. The Inter-AA replaces it with `Initiator`
   (the FIP) when it forwards the heartbeat to the Origin-AA.
 
@@ -430,12 +431,18 @@ If no AA is eligible, the request cannot be sent.
    resends the same envelope (same envelope `txnid`); another Inter-AA gets a new envelope with a
    new envelope `txnid`. An Origin-AA can therefore receive a message twice, and must
    de-duplicate on the payload's `txnid`.
-2. **Errors from beyond the Inter-AA are final.** Another Inter-AA would reach the same Origin-AA.
-3. **The Inter-AA may retry too.** It may resend to the Origin-AA when the Origin-AA does not
-   answer or answers `502`/`503`/`504` without a payload, and then answers `IopUpstreamError`. The
+2. **Errors from beyond the Inter-AA are final.** A reply with `encryptedData`, or with `errorCode`
+   `IopDownstreamError`, is the Origin-AA's answer, or says that the Origin-AA could not be reached.
+   Another Inter-AA would reach the same Origin-AA.
+3. **Any other error from the Inter-AA means: try the next route.** An error answer without
+   `encryptedData` and with another `errorCode` (for example `400 InvalidRoute`, when the Inter-AA
+   cannot route to the Origin-AA) comes from the Inter-AA itself. The FIP tries the next eligible
+   Inter-AA.
+4. **The Inter-AA may retry too.** It may resend to the Origin-AA when the Origin-AA does not
+   answer or answers `502`/`503`/`504` without `encryptedData`, and then answers `IopDownstreamError`. The
    FIP's timeout per attempt should allow for this; otherwise the FIP may resend while the
    Inter-AA is still retrying.
-4. **When every route fails**, the notification has failed: the FIP application reports "all
+5. **When every route fails**, the notification has failed: the FIP application reports "all
    routes unavailable" to the flow, and may send it again later (with a new `txnid`).
 
 ### 1.11 Outcomes of a request
@@ -443,11 +450,11 @@ If no AA is eligible, the request cannot be sent.
 | Outcome | What the FIP application gets |
 |---|---|
 | Success | The Origin-AA's Direct API response, its status and its inner JWS (section 1.8.6). |
-| The Origin-AA's error (`iopError`) | The Origin-AA's Direct API error payload, its status and its inner JWS. |
-| The Origin-AA's error without a payload (`IopUpstreamError` without `iopError`) | The status only. |
+| The Origin-AA's error (`encryptedData` with a `4xx`/`5xx` status) | The Origin-AA's Direct API error payload, its status and its inner JWS. |
+| The Origin-AA's error without a payload (`IopDownstreamError` without `encryptedData`) | The status only. |
 | Every route failed | "All routes unavailable" (section 1.10.1). |
 | Not sent | The Origin-AA is not registered or not interop ready; no eligible Inter-AA; reference data, keys or the access token not available; the payload has no `txnid`; signing or encryption failed. |
-| The reply cannot be trusted | The Inter-AA's signature does not verify; `iopPayload`/`iopError` cannot be decrypted; the decrypted content is not a compact JWS; the Origin-AA's signature does not verify. The reply is **not used**, and the event is logged. |
+| The reply cannot be trusted | The Inter-AA's signature does not verify; `encryptedData` cannot be decrypted; the decrypted content is not a compact JWS; the Origin-AA's signature does not verify. The reply is **not used**, and the event is logged. |
 
 A reply that cannot be trusted is not retried automatically: the message may already have been
 processed by the Origin-AA. The flow decides what to do next.
@@ -461,7 +468,7 @@ The FIP keeps two sets of RSA private keys (at least 2048 bits):
 | Set | Used for | How a key is chosen |
 |---|---|---|
 | Signing keys | Inner JWS and outer `x-jws-signature`, on requests, replies and errors | One usable key **at random** per signature, its `kid` in the header |
-| Decryption keys | Decrypting `iopPayload` / `iopError` | Every usable key, matched by the JWE `kid` |
+| Decryption keys | Decrypting `encryptedData` | Every usable key, matched by the JWE `kid` |
 
 Each key has:
 
@@ -556,8 +563,8 @@ Each item must be covered by automated tests with synthetic participants.
 | # | Criterion |
 |---|---|
 | AC-1 | End to end: Origin-AA → Inter-AA → FIP for each API in section 1.7.1. The FIP's logic gets the Origin-AA's payload, and the Origin-AA gets the FIP's reply, decrypted and verified. |
-| AC-2 | A FIP error reaches the Origin-AA as an encrypted `iopError`, with its status. |
-| AC-3 | Request rejections: tampered body, missing signature, unknown or invalid api-key, a role key other than `x-inter_aa_api_key`, two role keys, sender not an AA, `Initiator` missing from the envelope, missing or non-UUID `correlationId`, `iopPayload` on a heartbeat, unknown path, wrong method, oversized body. |
+| AC-2 | A FIP error reaches the Origin-AA as `encryptedData` (encrypted for the Origin-AA), with its status. |
+| AC-3 | Request rejections: tampered body, missing signature, unknown or invalid api-key, a role key other than `inter_aa_api_key`, two role keys, sender not an AA, `Initiator` missing from the envelope, missing or non-UUID `correlationId`, `encryptedData` on a heartbeat, unknown path, wrong method, oversized body. |
 | AC-4 | A spoofed Initiator (inner JWS not from the Initiator) is refused with `401 SignatureDoesNotMatch` and the request is not processed. |
 | AC-5 | A repeated payload `txnid` (or, where the FIP uses it, a repeated combination of payload `timestamp` and `txnid`) is not processed again and gets the earlier response, even when the envelope `txnid` differs. |
 | AC-6 | Heartbeat received: answered with an encrypted, signed status for the Origin-AA. |
@@ -574,6 +581,6 @@ Each item must be covered by automated tests with synthetic participants.
 
 | Item | Status |
 |---|---|
-| Role api-key header names (`fip_api_key`, `x-inter_aa_api_key`) and `Initiator{type: AA}` on the Inter-AA → FIP leg | Subject to the final ReBIT specification for role api-key names |
-| The account APIs: `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/delink` and `/iop/Account/link/Notification` (plural and singular as in the Direct APIs) | Subject to the final ReBIT specification |
+| Role api-key header names (`fip_api_key`, `inter_aa_api_key`) and `Initiator{type: AA}` on the Inter-AA → FIP leg | Subject to the final ReBIT specification for role api-key names |
+| The account APIs: `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/link/reverify`, `/iop/Accounts/delink` and `/iop/Account/link/Notification` (plural and singular as in the Direct APIs) | Subject to the final ReBIT specification |
 | `ver` of the Heartbeat envelope, which has no payload to take it from | `1.0.0` used; subject to the final ReBIT specification |

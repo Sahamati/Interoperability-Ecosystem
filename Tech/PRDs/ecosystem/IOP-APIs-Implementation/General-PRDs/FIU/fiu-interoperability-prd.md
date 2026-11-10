@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIU application teams that build AA Interoperability into their existing FIU application |
-| **Version** | Draft 1.0, 2026-11-08 |
+| **Version** | Draft 1.3, 2026-11-10 |
 | **Published by** | Sahamati |
 | **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
 
@@ -36,6 +36,7 @@ This section describes what an FIU must build into its **own FIU application** t
   them;
 - the IOP security for both: api-keys, signatures, end-to-end encryption;
 - choosing the Connected-AA, retrying, and handling errors;
+- discovering which AAs hold a user, across linked and other AAs (section 1.17);
 - the keys, registry data, tokens and logs this needs.
 
 The payloads are **exactly those of the Direct APIs** the FIU already uses. IOP adds a signed,
@@ -46,7 +47,7 @@ does not change.
 
 | # | Goal |
 |---|---|
-| G1 | The FIU can request consent and FI data from, and receive notifications from, a Customer-AA it is not directly connected to. |
+| G1 | The FIU can discover a user at, request consent and FI data from, and receive notifications from, a Customer-AA it is not directly connected to. |
 | G2 | The FIU application implements every IOP security check: role api-key, sender identity, the Connected-AA's signature, the end-to-end encryption, and the Customer-AA's own signature. |
 | G3 | Delivery is resilient: if one Connected-AA fails, another eligible one is tried. |
 | G4 | Fail closed: anything outside the cryptographic profile, the wrong role, or an unknown path is refused. |
@@ -58,7 +59,6 @@ does not change.
 |---|---|
 | Redirecting the customer for interoperability flows | Section 2 of this document |
 | The customer's UX options | Section 3 of this document |
-| User discovery (`/iop/User/discover`) | To be written (section 1.17) |
 | Consent and FI business logic | Unchanged: the FIU application's existing logic |
 | Protection against replay beyond signatures and `txnid` de-duplication | Not covered in this release |
 
@@ -80,8 +80,8 @@ does not change.
 | Interop ready | A participant whose `interop` flag in the Central Registry is `true`. |
 | Correlation-Id (`correlationId`) | The id of one flow, in **standard UUID format** (RFC 4122, for example `9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94`). The Initiator creates it; it stays the same on every message of the flow. |
 | `txnid` | Two different ids. **Payload `txnid`**: the id of one message, as in the Direct APIs; it is the same on every resend, end to end. **Envelope `txnid`**: the id of one transaction between two participants on one leg (for example the FIU and the Connected-AA); it is the same on retries to the same participant, and new for each route and for each leg. |
-| Envelope | The JSON body of an `/iop/*` request or response: `ver`, `timestamp`, `txnid`, `correlationId`, `Target` or `Initiator`, and `iopPayload` or `iopError`. The Initiator sets `Target` and sends it to the hop; the hop replaces it with `Initiator` when it forwards to the Target. The receiver reads only the field its leg needs (`Target` at the hop, `Initiator` at the Target); if the other one is also present, it is ignored. |
-| Inner JWS | The Initiator's (or Target's) compact JWS over the Direct API payload, carried encrypted inside `iopPayload` / `iopError`. |
+| Envelope | The JSON body of an `/iop/*` request or response: `ver`, `timestamp`, `txnid`, `correlationId`, `Target` or `Initiator`, and `encryptedData` (none on a heartbeat). `encryptedData` carries the request, and on a reply the response or the error alike: the HTTP status tells them apart. The Initiator sets `Target` and sends it to the hop; the hop replaces it with `Initiator` when it forwards to the Target. The receiver reads only the field its leg needs (`Target` at the hop, `Initiator` at the Target); if the other one is also present, it is ignored. |
+| Inner JWS | The Initiator's (or Target's) compact JWS over the Direct API payload, carried encrypted inside `encryptedData`. |
 | Outer signature | The detached JWS in the `x-jws-signature` header, over the whole envelope, made by the participant that sends it on that leg. |
 | Access token | The FIU's token from the Sahamati token service. It is the FIU's role api-key towards Connected-AAs and its bearer token for the Central Registry and the AIG. |
 
@@ -106,6 +106,7 @@ does not change.
 | 13 | Manage signing and decryption key sets with validity dates, and rotate them in the right order. | Yes | 1.12 |
 | 14 | Enforce the cryptographic profile and size limits. | Yes | 1.13 |
 | 15 | Capture audit records and stats, as required by the FIU's regulatory or internal policy mandates. | Recommended | 1.14 |
+| 16 | Discover a user across AAs: the Direct API `/User/discover` to each linked AA and `/iop/User/discover` through a Connected-AA to each other interop-ready AA, in parallel; merge the answers. | Yes | 1.17 |
 
 ### 1.4 When to use the IOP APIs
 
@@ -115,6 +116,7 @@ does not change.
 | The Customer-AA is **not directly connected**, and is interop ready | Calls the IOP API (`/iop/*`) on a Connected-AA, with the Customer-AA as `Target` (section 1.7). |
 | The Customer-AA is not directly connected, and is **not** interop ready | Cannot reach it. The flow is not started. |
 | A Customer-AA that is not directly connected sends a notification | It arrives on the FIU's `/iop/*` endpoints through a Connected-AA (section 1.11). |
+| The FIU needs to know which AAs hold a user | Asks every AA it can reach, with the Direct API or the IOP API, in parallel (section 1.17). |
 
 ### 1.5 Prerequisites
 
@@ -212,6 +214,7 @@ always the Customer-AA (`type` `AA`).
 | `POST /iop/FI/request` | `/FI/request` | FI data request |
 | `POST /iop/FI/fetch` | `/FI/fetch` | FI data fetch |
 | `POST /iop/Consent/Notification` | `/Consent/Notification` | Consent status notification to the Customer-AA |
+| `POST /iop/User/discover` | `/User/discover` | User discovery at an AA that is not directly connected (section 1.17) |
 | `POST /iop/Heartbeat` | — (no encrypted payload) | Heartbeat towards the Customer-AA |
 
 #### 1.7.2 Correlation id
@@ -242,7 +245,7 @@ For each request, the FIU application:
    | `txnid` | The id of this transaction between the FIU and the Connected-AA, created by the FIU (UUID): the same on retries to that Connected-AA, a new one for each other Connected-AA tried. It is **not** the inner payload's `txnid`, which stays inside the encrypted payload for the Customer-AA. The Connected-AA's reply carries the same `txnid` |
    | `correlationId` | The flow's correlation id |
    | `Target` | `{"type": "AA", "id": "<Customer-AA id>"}` |
-   | `iopPayload` | The compact JWE |
+   | `encryptedData` | The compact JWE |
 
 5. **Signs the envelope** (outer signature): a detached JWS over the exact envelope bytes, in
    `x-jws-signature`.
@@ -270,7 +273,7 @@ Content-Type: application/json
   "txnid": "3f2b8c1e-7d4a-4c9e-9b1f-2a6d5e8c4b71",
   "correlationId": "9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94",
   "Target": {"type": "AA", "id": "aa-test-002"},
-  "iopPayload": "<compact JWE>"
+  "encryptedData": "<compact JWE>"
 }
 ```
 
@@ -279,7 +282,8 @@ Content-Type: application/json
 1. **Check the Connected-AA's signature**: `x-jws-signature` on the reply must verify over the
    exact reply bytes with the Connected-AA's signature keys. If it does not, the reply is not used
    (section 1.10).
-2. If the reply has `iopPayload` (success) or `iopError` (the Customer-AA's error):
+2. If the reply has `encryptedData` (the Customer-AA's response or error; the HTTP status tells them
+   apart):
    - **decrypt** it with the FIU's usable decryption keys, matched by the JWE `kid`;
    - **check the Customer-AA's signature**: the decrypted content must be a compact JWS that
      verifies with the Customer-AA's signature keys;
@@ -292,7 +296,7 @@ for a Direct API response.
 
 #### 1.7.7 Heartbeat
 
-- `POST /iop/Heartbeat` has **no** `iopPayload`. As for every `/iop/*` request, the FIU
+- `POST /iop/Heartbeat` has **no** `encryptedData`. As for every `/iop/*` request, the FIU
   sets `Target` (the Customer-AA) and sends it to the Connected-AA. The Connected-AA replaces it with `Initiator` (the FIU) when it forwards the
   heartbeat to the Customer-AA.
 
@@ -341,13 +345,18 @@ If no AA is eligible, the request cannot be sent.
    resends the same envelope (same envelope `txnid`); another Connected-AA gets a new envelope with
    a new envelope `txnid`. A Customer-AA can therefore receive a message twice, and must
    de-duplicate on the payload's `txnid`.
-2. **Errors from beyond the Connected-AA are final.** Another Connected-AA would reach the same
-   Customer-AA.
-3. **The Connected-AA may retry too.** It may resend to the Customer-AA when the Customer-AA does not
-   answer or answers `502`/`503`/`504` without a payload, and then answers `IopUpstreamError`. The
+2. **Errors from beyond the Connected-AA are final.** A reply with `encryptedData`, or with
+   `errorCode` `IopDownstreamError`, is the Customer-AA's answer, or says that the Customer-AA could
+   not be reached. Another Connected-AA would reach the same Customer-AA.
+3. **Any other error from the Connected-AA means: try the next route.** An error answer without
+   `encryptedData` and with another `errorCode` (for example `400 InvalidRoute`, when the Connected-AA
+   cannot route to the Customer-AA) comes from the Connected-AA itself. The FIU tries the next eligible
+   Connected-AA.
+4. **The Connected-AA may retry too.** It may resend to the Customer-AA when the Customer-AA does not
+   answer or answers `502`/`503`/`504` without `encryptedData`, and then answers `IopDownstreamError`. The
    FIU's timeout per attempt should allow for this; otherwise the FIU may resend while the
    Connected-AA is still retrying.
-4. **When every route fails**, the request has failed: the FIU application reports "all routes
+5. **When every route fails**, the request has failed: the FIU application reports "all routes
    unavailable" to the flow, and may start it again later (with a new `txnid`).
 
 ### 1.10 Outcomes of a request
@@ -355,11 +364,11 @@ If no AA is eligible, the request cannot be sent.
 | Outcome | What the FIU application gets |
 |---|---|
 | Success | The Customer-AA's Direct API response, its status and its inner JWS (section 1.7.6). |
-| The Customer-AA's error (`iopError`) | The Customer-AA's Direct API error payload, its status and its inner JWS. |
-| The Customer-AA's error without a payload (`IopUpstreamError` without `iopError`) | The status only. |
+| The Customer-AA's error (`encryptedData` with a `4xx`/`5xx` status) | The Customer-AA's Direct API error payload, its status and its inner JWS. |
+| The Customer-AA's error without a payload (`IopDownstreamError` without `encryptedData`) | The status only. |
 | Every route failed | "All routes unavailable" (section 1.9.1). |
 | Not sent | The Customer-AA is not registered or not interop ready; no eligible Connected-AA; reference data, keys or the access token not available; the payload has no `txnid`; signing or encryption failed. |
-| The reply cannot be trusted | The Connected-AA's signature does not verify; `iopPayload`/`iopError` cannot be decrypted; the decrypted content is not a compact JWS; the Customer-AA's signature does not verify. The reply is **not used**, and the event is logged. |
+| The reply cannot be trusted | The Connected-AA's signature does not verify; `encryptedData` cannot be decrypted; the decrypted content is not a compact JWS; the Customer-AA's signature does not verify. The reply is **not used**, and the event is logged. |
 
 A reply that cannot be trusted is not retried automatically: the message may already have been
 processed by the Customer-AA. The flow decides what to do next, for example a status check with
@@ -384,7 +393,7 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`. The
 
 | Header | Value |
 |---|---|
-| `x-conn_aa_api_key` | The Connected-AA's api-key: a token from the Sahamati token service |
+| `conn_aa_api_key` | The Connected-AA's api-key: a token from the Sahamati token service |
 | `x-jws-signature` | The Connected-AA's detached JWS over the envelope |
 
 #### 1.11.3 Checks, in this order
@@ -393,14 +402,14 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`. The
 |---|---|---|
 | 1 | The path is one of section 1.11.1, with `POST` | `404 InvalidURI` / `405 InvalidRequest` |
 | 2 | The body is within the size limit (2 MiB by default) | `413 InvalidRequest` |
-| 3 | Exactly one role api-key header is present, and it is `x-conn_aa_api_key` | None or more than one: `401 InvalidSecurity`. Another key: `403 InvalidSecurity` |
+| 3 | Exactly one role api-key header is present, and it is `conn_aa_api_key` | None or more than one: `401 InvalidSecurity`. Another key: `403 InvalidSecurity` |
 | 4 | The api-key is a valid token: signature (RS256) with the issuer's public keys (from its JWKS URL) | `401 InvalidSecurity` |
 | 5 | The sender is an AA registered in the Central Registry | `401 InvalidSecurity` / `403 InvalidSecurity` |
 | 6 | `x-jws-signature` is present and verifies over the exact received bytes with the sender's signature keys, matched by `kid` | `401 InvalidSecurity` (missing) / `401 SignatureDoesNotMatch` |
 | 7 | The body is a JSON object with `txnid` and a `correlationId` in standard UUID format | `400 InvalidRequest` |
 | 8 | The envelope has `Initiator` (a `Target`, if present, is ignored); `Initiator.type` is `AA`, and the Initiator is registered | `400 InvalidRequest` |
 | 9 | The Initiator has an encryption key in the Central Registry (needed for the reply) | `500 InternalError` |
-| 10 | `iopPayload` is a compact JWE that decrypts with one of the FIU's usable decryption keys, matched by `kid`, and contains a compact JWS | `400 InvalidRequest` |
+| 10 | `encryptedData` is a compact JWE that decrypts with one of the FIU's usable decryption keys, matched by `kid`, and contains a compact JWS | `400 InvalidRequest` |
 | 11 | The inner JWS verifies with the Initiator's signature keys | `401 SignatureDoesNotMatch`; the notification is **not** processed |
 
 Only then is the payload passed to the FIU's existing notification logic. Refresh the issuer's
@@ -433,8 +442,7 @@ Customer-AA signed the payload once.
    | `timestamp` | Now, UTC |
    | `txnid` | The request's `txnid` |
    | `correlationId` | The request's `correlationId`, unchanged |
-   | `iopPayload` | The compact JWE, when the status is below `300` |
-   | `iopError` | The compact JWE, when the status is `300` or above |
+   | `encryptedData` | The compact JWE, for a success and an error alike: the HTTP status tells them apart |
 
 5. **Sign the envelope** (detached JWS in `x-jws-signature`) and return it with the status.
 
@@ -457,10 +465,10 @@ signed with `x-jws-signature`:
 
 | Status | `errorCode` | When |
 |---|---|---|
-| `400` | `InvalidRequest` | Body not a valid envelope (no `txnid`, no or non-UUID `correlationId`, `Initiator` missing); Initiator not an AA or not registered; `iopPayload` not a compact JWE, not decryptable, or without a compact JWS inside |
+| `400` | `InvalidRequest` | Body not a valid envelope (no `txnid`, no or non-UUID `correlationId`, `Initiator` missing); Initiator not an AA or not registered; `encryptedData` not a compact JWE, not decryptable, or without a compact JWS inside |
 | `401` | `InvalidSecurity` | No role api-key header or more than one; invalid api-key; sender not registered; `x-jws-signature` missing |
 | `401` | `SignatureDoesNotMatch` | `x-jws-signature` or the Initiator's inner signature does not verify |
-| `403` | `InvalidSecurity` | A role api-key other than `x-conn_aa_api_key`, or the sender is not an AA |
+| `403` | `InvalidSecurity` | A role api-key other than `conn_aa_api_key`, or the sender is not an AA |
 | `404` | `InvalidURI` | Unknown `/iop` path |
 | `405` | `InvalidRequest` | Wrong HTTP method |
 | `413` | `InvalidRequest` | Body too large |
@@ -476,7 +484,7 @@ The FIU keeps two sets of RSA private keys (at least 2048 bits):
 | Set | Used for | How a key is chosen |
 |---|---|---|
 | Signing keys | Inner JWS and outer `x-jws-signature`, on requests, replies and errors | One usable key **at random** per signature, its `kid` in the header |
-| Decryption keys | Decrypting `iopPayload` / `iopError` | Every usable key, matched by the JWE `kid` |
+| Decryption keys | Decrypting `encryptedData` | Every usable key, matched by the JWE `kid` |
 
 Each key has:
 
@@ -547,7 +555,117 @@ Production uses the live sources. Local alternatives are **for testing only**.
 
 ### 1.17 User discovery
 
-*To be written.* User discovery (`/iop/User/discover`).
+User discovery tells the FIU which AAs hold a user, and under which customer addresses. The FIU
+sends the same discovery request to every AA it can reach, in parallel, and merges the answers.
+
+| API | Sent to | Used for |
+|---|---|---|
+| Direct API `POST /User/discover` | `<AA baseurl>/User/discover` | Each AA in the FIU's linkedAAs |
+| `POST /iop/User/discover` | `<Connected-AA baseurl>/iop/User/discover`, with the AA as `Target` | Each AA that is not in linkedAAs and is interop ready |
+
+#### 1.17.1 Payloads
+
+**Request (`CustDiscoveryRequest`)**: the body of the Direct API `/User/discover`, and the payload
+inside `encryptedData` on `/iop/User/discover`.
+
+| Field | Value |
+|---|---|
+| `ver` | API version |
+| `timestamp` | Now, UTC |
+| `txnid` | The id of this request (UUID): a new one for each AA asked (section 1.17.3) |
+| `correlationId` | The discovery flow's correlation id (UUID): the same for every AA asked |
+| `customer.vuaHash` | SHA-256 of the canonicalised VUA, base64url-encoded |
+| `customer.mobileHash` | SHA-256 of the mobile number in E.164 format, base64url-encoded |
+
+At least one of `vuaHash` and `mobileHash` is present.
+
+```json
+{
+  "ver": "2.0.0",
+  "timestamp": "2026-11-09T10:15:00.000Z",
+  "txnid": "6d1f3b8a-2c4e-4f7a-9b0d-3e5c7a9f1b24",
+  "correlationId": "9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94",
+  "customer": {"vuaHash": "synthetic-vua-hash", "mobileHash": "synthetic-mobile-hash"}
+}
+```
+
+**Response (`CustDiscoveryResponse`)**: the AA's answer.
+
+| Field | Value |
+|---|---|
+| `ver`, `timestamp` | As in the Direct APIs |
+| `txnid`, `correlationId` | Those of the request |
+| `status` | `User Found` or `User Not Found` |
+| `customerDiscoveryResponse` | One entry per customer address found: `customerAddress`, `maskedMobile`, `vuaAttestation` |
+
+```json
+{
+  "ver": "2.0.0",
+  "timestamp": "2026-11-09T10:15:01.000Z",
+  "txnid": "6d1f3b8a-2c4e-4f7a-9b0d-3e5c7a9f1b24",
+  "correlationId": "9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94",
+  "status": "User Found",
+  "customerDiscoveryResponse": [
+    {
+      "customerAddress": "customer-test-001@aa-test-002",
+      "maskedMobile": "XXXXXXXXXX",
+      "vuaAttestation": "<VUA attestation>"
+    }
+  ]
+}
+```
+
+For the verification of `vuaAttestation`, see section 1.22 (VUA attestation verification procedure).
+
+#### 1.17.2 Which AAs are asked
+
+The FIU goes through the AAs in its Central Registry AA list (the cached copy, section 1.6.1):
+
+| AA | How it is asked |
+|---|---|
+| In linkedAAs | Direct API `POST <AA baseurl>/User/discover` (section 1.17.3) |
+| Not in linkedAAs, interop ready | `POST /iop/User/discover` through an eligible Connected-AA, with the AA as `Target` (section 1.17.4) |
+| Not in linkedAAs, not interop ready | Not asked |
+
+#### 1.17.3 Direct API `/User/discover` (linked AAs)
+
+- Body: the `CustDiscoveryRequest`, not encrypted, as for the other Direct APIs.
+- Headers:
+
+  | Header | Value |
+  |---|---|
+  | `client_api_key` | The FIU's access token (section 1.6.4) |
+  | `x-jws-signature` | A detached JWS over the exact body, with one of the FIU's usable signing keys |
+  | `Content-Type` | `application/json` |
+
+- The answer is used only if its status is `200` and its `x-jws-signature` verifies over the exact
+  response bytes with the AA's signature keys from the Central Registry.
+
+#### 1.17.4 `/iop/User/discover` (other interop-ready AAs)
+
+`/iop/User/discover` follows the same rules as the other IOP requests of this section:
+
+- the `CustDiscoveryRequest` is signed (inner JWS) and encrypted for the AA in `encryptedData`
+  (section 1.7.3);
+- the headers are those of section 1.7.4 (`client_api_key`, `x-jws-signature`);
+- the Connected-AA is chosen as in section 1.8, with retries and failover as in section 1.9;
+- the reply is read as in section 1.7.6: its decrypted payload is the AA's `CustDiscoveryResponse`.
+
+#### 1.17.5 Sending, waiting and merging
+
+1. **One request per AA, in parallel.** Each request carries its own new `txnid` and the same
+   `correlationId`. The rest of the `CustDiscoveryRequest` is the same for every AA.
+2. **Wait** until every AA asked has answered, or until a configurable time has passed (for example,
+   10 seconds). Answers that arrive later are ignored.
+3. **Merge** the `customerDiscoveryResponse` entries of every answer whose `status` is
+   `User Found`. The merged result has `status` `User Found` when it has at least one entry, and
+   `User Not Found` with no entries otherwise.
+4. An AA whose request fails (error, reply that cannot be trusted, all routes unavailable, no answer
+   in time) adds nothing to the result. When no AA answers successfully, the discovery has failed:
+   this is reported to the flow as "all routes unavailable", not as `User Not Found`.
+
+The request and the answers carry hashed and masked customer data: they are never logged
+(section 1.15).
 
 ### 1.18 Uploading encryption public keys
 
@@ -584,21 +702,22 @@ Each item must be covered by automated tests with synthetic participants.
 | AC-4 | Route choice: only AAs that are in linkedAAs, linked to the Customer-AA in the AIG, interop ready and with a `baseurl` are used. |
 | AC-5 | A Customer-AA that is not interop ready, or no eligible Connected-AA, stops the request before anything is sent. |
 | AC-6 | Replies with a wrong Connected-AA signature, a payload that cannot be decrypted, or a wrong Customer-AA signature are not used. |
-| AC-7 | Heartbeat: sent with `Target` and no `iopPayload`; the reply is decrypted and verified. |
+| AC-7 | Heartbeat: sent as a `POST` with `Target` and no `encryptedData`; the reply is decrypted and verified. |
 | AC-8 | Notifications: `/iop/Consent/Notification` and `/iop/FI/Notification` from a Connected-AA are processed, and the reply decrypts and verifies at the Customer-AA. |
-| AC-9 | Notification rejections: tampered body, missing signature, unknown or invalid api-key, a role key other than `x-conn_aa_api_key`, two role keys, sender not an AA, `Initiator` missing from the envelope, missing or non-UUID `correlationId`, unknown path, wrong method, oversized body. |
+| AC-9 | Notification rejections: tampered body, missing signature, unknown or invalid api-key, a role key other than `conn_aa_api_key`, two role keys, sender not an AA, `Initiator` missing from the envelope, missing or non-UUID `correlationId`, unknown path, wrong method, oversized body. |
 | AC-10 | A spoofed Initiator (inner JWS not from the Initiator) is refused with `401 SignatureDoesNotMatch` and the notification is not processed. |
 | AC-11 | A repeated payload `txnid` (or, where the FIU uses it, a repeated combination of payload `timestamp` and `txnid`) is not processed again and gets the earlier response, even when the envelope `txnid` differs. |
 | AC-12 | Keys: signatures use only usable keys, at random; keys join at `applied` and drop at `expiry`; decryption tries keys by `kid`; key material never appears in logs or errors. |
 | AC-13 | Cryptographic profile: RS256 and PS256 round trips work; `alg: none`, HMAC, `b64: false`, `crit`, `zip` and a `kid` mismatch are refused. |
 | AC-14 | Reference data: lookups make no calls to the Central Registry or the AIG; a failed refresh keeps the previous data; a cached copy is served after a restart with the source down. |
+| AC-15 | User discovery: each linked AA gets the Direct API `/User/discover` with `client_api_key` and `x-jws-signature`; each other interop-ready AA gets `/iop/User/discover` through a Connected-AA; AAs that are not interop ready are not asked. The requests go in parallel, each with its own `txnid` and the same `correlationId`. The `customerDiscoveryResponse` entries of the `User Found` answers received within the wait time are merged; a Direct API answer that is not `200` or whose signature does not verify is not used; no successful answer gives "all routes unavailable". |
 
 ### 1.24 Items to be confirmed
 
 | Item | Status |
 |---|---|
-| Role api-key header names (`client_api_key`, `x-conn_aa_api_key`) and `Initiator{type: AA}` on the Connected-AA → FIU leg | Subject to the final ReBIT specification for role api-key names |
-| User discovery API (`/iop/User/discover`) implementation | Subject to the final ReBIT specification |
+| Role api-key header names (`client_api_key`, `conn_aa_api_key`) and `Initiator{type: AA}` on the Connected-AA → FIU leg | Subject to the final ReBIT specification for role api-key names |
+| User discovery APIs (Direct API `/User/discover`, `/iop/User/discover`) and their payloads (`CustDiscoveryRequest`, `CustDiscoveryResponse`) | Proposed by Sahamati in the AA_Interop_1_0_0 "Proposed-1" draft; subject to ReBIT approval |
 | `ver` of the Heartbeat envelope, which has no payload to take it from | `1.0.0` used; subject to the final ReBIT specification |
 
 ---

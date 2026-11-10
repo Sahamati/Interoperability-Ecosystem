@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | Draft 3.1, 2026-11-09 |
+| **Version** | Draft 4.0, 2026-11-10 |
 | **Audience** | AA ecosystem participants (AAs, FIUs, FIPs) and teams implementing or operating the IOP Gateway |
 | **Published by** | Sahamati |
 | **Scope** | Behaviour and interfaces of the IOP Gateway, independent of the implementation language. Library and runtime choices are left to each implementation. |
@@ -65,8 +65,8 @@ The configuration key `mode` selects one mode per process. `AA` is the default.
 | Mode | Acts as | `/iop/*` paths served | Accepted caller(s) |
 |---|---|---|---|
 | `AA` | AA gateway, both demand and supply side | All AA-hosted IOP paths (§5.3) | FIU, FIP, other AAs (six role keys) |
-| `FIU` | FIU connector | `/iop/Consent/Notification`, `/iop/FI/Notification` | Connected-AA (`x-conn_aa_api_key`) |
-| `FIP` | FIP connector | `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/link/reverify`, `/iop/Accounts/delink`, `/iop/Consent`, `/iop/FI/request`, `/iop/FI/fetch`, `/iop/Consent/Notification`, `/iop/Heartbeat` | Inter-AA (`x-inter_aa_api_key`) |
+| `FIU` | FIU connector | `/iop/Consent/Notification`, `/iop/FI/Notification` | Connected-AA (`conn_aa_api_key`) |
+| `FIP` | FIP connector | `/iop/Accounts/discover`, `/iop/Accounts/link`, `/iop/Accounts/link/verify`, `/iop/Accounts/link/reverify`, `/iop/Accounts/delink`, `/iop/Consent`, `/iop/FI/request`, `/iop/FI/fetch`, `/iop/Consent/Notification`, `/iop/Heartbeat` | Inter-AA (`inter_aa_api_key`) |
 
 In every mode, `GET /healthz` is unauthenticated and exists for liveness probes only.
 
@@ -85,7 +85,7 @@ gateway never generates one and refuses requests without it on every leg (FR-6, 
 | ID | Requirement |
 |---|---|
 | FR-1 | Unknown `/iop/*` paths return `404 InvalidURI`. A wrong HTTP method returns `405`. |
-| FR-2 | Exactly one of the six role api-key headers must be present (`client_api_key`, `x-conn_aa_api_key`, `x-cust_aa_api_key`, `x-orig_aa_api_key`, `fip_api_key`, `x-inter_aa_api_key`). None, or more than one, returns `401`. A header the path does not accept in the current mode returns `403`. |
+| FR-2 | Exactly one of the six role api-key headers must be present (`client_api_key`, `conn_aa_api_key`, `cust_aa_api_key`, `orig_aa_api_key`, `fip_api_key`, `inter_aa_api_key`). None, or more than one, returns `401`. A header the path does not accept in the current mode returns `403`. |
 | FR-3 | The sender-id is read from the api-key. In `jwt` mode, the token's signature (RS256/PS256), `exp`/`nbf` (with clock skew), and optionally `iss`/`aud` are checked against the issuer keys, and the sender-id is the `azp` claim (configurable). Issuer keys come from the issuer's **JWKS URL** (`apiKey.issuerKeysUrl`, https), fetched at start-up, every `issuerKeysRefreshSeconds` (default 3600), and again when a token names an unknown `kid` (at most once a minute, to pick up issuer rotation), or from PEM files (`issuerPublicKeys`), not both. Only RSA signing keys of at least 2048 bits are taken from the JWKS. A failed fetch keeps the current keys, and while none are loaded api-keys are rejected (`401`) and the fetch is retried every 30 s. A `static` mode exists for development and tests only. |
 | FR-4 | The sender must be a configured entity whose type owns that key header (e.g. only an FIU may use `client_api_key`). Otherwise the call returns `401` or `403`. |
 | FR-5 | `x-jws-signature` (detached JWS, RS256/PS256, base64url-encoded payload) must verify over the exact received bytes using the sender's configured signing key(s), matched by `kid`. A missing or failed signature returns `401` (`InvalidSecurity` or `SignatureDoesNotMatch`). |
@@ -109,12 +109,12 @@ gateway never generates one and refuses requests without it on every leg (FR-6, 
 
 | Inbound key | Leg | Envelope | Action | Outbound key |
 |---|---|---|---|---|
-| `client_api_key` | FIU → Connected-AA | `Target{AA}` | forward | `x-conn_aa_api_key` |
-| `x-cust_aa_api_key` | Customer-AA → Connected-AA | `Target{FIU}` | forward | `x-conn_aa_api_key` |
-| `x-orig_aa_api_key` | Origin-AA → Inter-AA | `Target{FIP}` | forward | `x-inter_aa_api_key` |
-| `fip_api_key` | FIP → Inter-AA | `Target{AA}` | forward | `x-inter_aa_api_key` |
-| `x-conn_aa_api_key` | Connected-AA → Customer-AA | `Initiator{FIU}` | terminate | core |
-| `x-inter_aa_api_key` | Inter-AA → Origin-AA | `Initiator{FIP}` | terminate | core |
+| `client_api_key` | FIU → Connected-AA | `Target{AA}` | forward | `conn_aa_api_key` |
+| `cust_aa_api_key` | Customer-AA → Connected-AA | `Target{FIU}` | forward | `conn_aa_api_key` |
+| `orig_aa_api_key` | Origin-AA → Inter-AA | `Target{FIP}` | forward | `inter_aa_api_key` |
+| `fip_api_key` | FIP → Inter-AA | `Target{AA}` | forward | `inter_aa_api_key` |
+| `conn_aa_api_key` | Connected-AA → Customer-AA | `Initiator{FIU}` | terminate | core |
+| `inter_aa_api_key` | Inter-AA → Origin-AA | `Initiator{FIP}` | terminate | core |
 
 | ID | Requirement |
 |---|---|
@@ -149,13 +149,13 @@ AA-mode routes and the key headers each accepts:
 
 | Path | Accepted keys |
 |---|---|
-| `/iop/Accounts/discover`, `/link`, `/link/verify`, `/link/reverify`, `/delink` | `x-orig_aa_api_key` |
-| `/iop/Account/link/Notification` | `fip_api_key`, `x-inter_aa_api_key` |
-| `/iop/Consent`, `/iop/FI/request`, `/iop/FI/fetch` | `client_api_key`, `x-conn_aa_api_key`, `x-orig_aa_api_key` |
-| `/iop/Consent/handle`, `/iop/Consent/fetch` | `client_api_key`, `x-conn_aa_api_key` |
-| `/iop/User/discover` | `client_api_key`, `x-conn_aa_api_key` (FR-139) |
+| `/iop/Accounts/discover`, `/link`, `/link/verify`, `/link/reverify`, `/delink` | `orig_aa_api_key` |
+| `/iop/Account/link/Notification` | `fip_api_key`, `inter_aa_api_key` |
+| `/iop/Consent`, `/iop/FI/request`, `/iop/FI/fetch` | `client_api_key`, `conn_aa_api_key`, `orig_aa_api_key` |
+| `/iop/Consent/handle`, `/iop/Consent/fetch` | `client_api_key`, `conn_aa_api_key` |
+| `/iop/User/discover` | `client_api_key`, `conn_aa_api_key` (FR-139) |
 | `/iop/Consent/Notification` | all six, including `fip_api_key` (FIP → Inter-AA) |
-| `/iop/FI/Notification` | `fip_api_key`, `x-inter_aa_api_key`, `x-cust_aa_api_key` |
+| `/iop/FI/Notification` | `fip_api_key`, `inter_aa_api_key`, `cust_aa_api_key` |
 | `/iop/Heartbeat` | all six |
 
 ### 5.4 FIU and FIP connector modes
@@ -163,9 +163,9 @@ AA-mode routes and the key headers each accepts:
 | ID | Requirement |
 |---|---|
 | FR-30 | Connectors only terminate (§5.2). They never forward. |
-| FR-31 | `FIU` mode: the caller is the Connected-AA (`x-conn_aa_api_key`), and `Initiator{type: AA}` is the Customer-AA. |
-| FR-32 | `FIP` mode: the caller is the Inter-AA (`x-inter_aa_api_key`), and `Initiator{type: AA}` is the Origin-AA. |
-| FR-33 | `FIP` mode serves `/iop/Accounts/link/reverify` like `/iop/Accounts/link/verify`: from the Inter-AA (`x-inter_aa_api_key`), delivered to `<core.pathPrefix>/Accounts/link/reverify` (e.g. `/fip-core/Accounts/link/reverify`). |
+| FR-31 | `FIU` mode: the caller is the Connected-AA (`conn_aa_api_key`), and `Initiator{type: AA}` is the Customer-AA. |
+| FR-32 | `FIP` mode: the caller is the Inter-AA (`inter_aa_api_key`), and `Initiator{type: AA}` is the Origin-AA. |
+| FR-33 | `FIP` mode serves `/iop/Accounts/link/reverify` like `/iop/Accounts/link/verify`: from the Inter-AA (`inter_aa_api_key`), delivered to `<core.pathPrefix>/Accounts/link/reverify` (e.g. `/fip-core/Accounts/link/reverify`). |
 | FR-34 | Configuration that only applies to forwarding `/iop/*` calls is **rejected at start-up** in connector mode: `forwarding.pathRewrite`, `forwarding.preserveUnknownEnvelopeFields`, `terminating.plaintextPaths`. `entities` may list AAs only. `self.outboundApiKey`, `forwarding.timeoutSeconds`, `forwarding.skipUpstreamResponseSignature` and entity `baseUrl`/`outboundApiKey` are allowed, because connectors send core-originated calls to a hop AA. |
 
 ### 5.5 Heartbeat (`POST /iop/Heartbeat`)
@@ -310,8 +310,8 @@ the gateway; the others are the AA ecosystem's standard codes.
 |---|---|---|---|---|
 | `FIU` | `POST /fiu-dgw/Consent`, `/fiu-dgw/Consent/handle`, `/fiu-dgw/Consent/fetch`, `/fiu-dgw/FI/request`, `/fiu-dgw/FI/fetch`, `/fiu-dgw/Consent/Notification`; `GET /fiu-dgw/Heartbeat`, `POST /fiu-dgw/User/discover` (FR-138) (→ same path under `/iop`) | `client_api_key` | `AA` (Customer-AA) | Connected-AA |
 | `FIU` | `POST /fiu-dgw/broadcast/User/discover` (FR-140) (→ Direct API `POST /User/discover` to each linked AA; `/iop/User/discover` to each other interop-ready AA) | `client_api_key` | None: every AA in the entity registry | None (Direct API) or Connected-AA (`/iop`) |
-| `AA` | `POST /aa-dgw/FI/Notification`, `/aa-dgw/Consent/Notification` (→ same path under `/iop`); `POST /aa-dgw/User/discover` (`501`) | `x-cust_aa_api_key` | `FIU` | Connected-AA |
-| `AA` | `POST /aa-sgw/Accounts/discover`, `/aa-sgw/Accounts/link`, `/aa-sgw/Accounts/delink`, `/aa-sgw/Accounts/link/verify`, `/aa-sgw/Accounts/link/reverify` (→ same path under `/iop`), `/aa-sgw/FI/request`, `/aa-sgw/FI/fetch`, `/aa-sgw/Consent/Notification`, `/aa-sgw/Consent` (→ same path under `/iop`); `GET /aa-sgw/Heartbeat` | `x-orig_aa_api_key` | `FIP` | Inter-AA |
+| `AA` | `POST /aa-dgw/FI/Notification`, `/aa-dgw/Consent/Notification` (→ same path under `/iop`); `POST /aa-dgw/User/discover` (`501`) | `cust_aa_api_key` | `FIU` | Connected-AA |
+| `AA` | `POST /aa-sgw/Accounts/discover`, `/aa-sgw/Accounts/link`, `/aa-sgw/Accounts/delink`, `/aa-sgw/Accounts/link/verify`, `/aa-sgw/Accounts/link/reverify` (→ same path under `/iop`), `/aa-sgw/FI/request`, `/aa-sgw/FI/fetch`, `/aa-sgw/Consent/Notification`, `/aa-sgw/Consent` (→ same path under `/iop`); `GET /aa-sgw/Heartbeat` | `orig_aa_api_key` | `FIP` | Inter-AA |
 | `FIP` | `POST /fip-sgw/Consent/Notification`, `/fip-sgw/FI/Notification`, `/fip-sgw/Account/link/Notification`; `GET /fip-sgw/Heartbeat` (→ same path under `/iop`) | `fip_api_key` | `AA` (Origin-AA) | Inter-AA |
 
 | ID | Requirement |
@@ -432,7 +432,7 @@ Inter-AA that carries it to the Target). Each retries only the failures it can s
 | FR-122 | `POST /aa-dgw/User/discover` (AA mode) is served but not implemented: after the token check it returns `501 NotImplemented`. `POST /fiu-dgw/User/discover` (FIU mode) is described in FR-138. |
 | FR-123 | Calls to the core carry only `Initiator-Entity`, `Correlation-Id`, `Forwarding-Hop`, `x-jws-signature` and, when configured, `Authorization`: **no role api-key header and no `Content-Type`**. Internal API responses to the core carry no `Content-Type`. The core is not required to send `Content-Type` on its requests or responses. |
 | FR-138 | **`POST /fiu-dgw/User/discover`** (FIU mode) works like every other `/fiu-dgw` API (§5.7, §5.8). The body is a CustDiscoveryRequest, the payload of the Direct API `POST /User/discover`: `{ver, timestamp, txnid, correlationId, customer: {vuaHash, mobileHash}}`, with at least one of `vuaHash` (SHA-256 of the canonicalised VUA, base64url) and `mobileHash` (SHA-256 of the E.164 mobile number, base64url). `Target-Entity` is `{"type":"AA","id":"<Customer-AA>"}`. The gateway sends `/iop/User/discover` to a Connected-AA with `client_api_key`, choosing and retrying routes as for the other APIs, and returns the Customer-AA's CustDiscoveryResponse `{ver, timestamp, txnid, correlationId, status, customerDiscoveryResponse: [{customerAddress, maskedMobile, vuaAttestation}]}` (`status` `User Found` or `User Not Found`) with the Customer-AA's detached `x-jws-signature` and `Forwarding-Hop` (FR-66). |
-| FR-139 | **`/iop/User/discover`** (AA mode) is encrypted like every other `/iop` API: the CustDiscoveryRequest travels signed, then encrypted, in `encryptedData`, and the reply carries the CustDiscoveryResponse in `encryptedData`. It is accepted with `client_api_key` (FIU → Connected-AA: this AA is a hop and forwards to the Customer-AA with `x-conn_aa_api_key`; the Target must be an AA in its `linkedAAs`, FR-126) and with `x-conn_aa_api_key` (Connected-AA → Customer-AA: this AA decrypts and calls `POST <core.pathPrefix>/User/discover` with `Initiator-Entity` = the FIU, like any other terminating call; the core's CustDiscoveryResponse is encrypted for the FIU, FR-14). Any other key returns `403`. `terminating.plaintextPaths` is a generic setting and is empty by default. |
+| FR-139 | **`/iop/User/discover`** (AA mode) is encrypted like every other `/iop` API: the CustDiscoveryRequest travels signed, then encrypted, in `encryptedData`, and the reply carries the CustDiscoveryResponse in `encryptedData`. It is accepted with `client_api_key` (FIU → Connected-AA: this AA is a hop and forwards to the Customer-AA with `conn_aa_api_key`; the Target must be an AA in its `linkedAAs`, FR-126) and with `conn_aa_api_key` (Connected-AA → Customer-AA: this AA decrypts and calls `POST <core.pathPrefix>/User/discover` with `Initiator-Entity` = the FIU, like any other terminating call; the core's CustDiscoveryResponse is encrypted for the FIU, FR-14). Any other key returns `403`. `terminating.plaintextPaths` is a generic setting and is empty by default. |
 | FR-140 | **`POST /fiu-dgw/broadcast/User/discover`** (FIU mode only; AA and FIP mode return `404 InvalidURI`) asks every AA whether it knows a customer. Request headers: `Authorization: Bearer <gwApi.token>` when a token is configured, `Correlation-Id` (mandatory, standard UUID format, FR-63), and optional `Http-Retries` / `Route-Retries`, which apply to the `/iop` requests. No `Target-Entity` and no `x-jws-signature`. Body: a CustDiscoveryRequest (FR-138). |
 | FR-141 | **Broadcast fan-out.** For every AA in the Central Registry entity list (the copy held by the gateway), in parallel: (1) an AA in `linkedAAs` gets the Direct API `POST <AA baseUrl>/User/discover` with `client_api_key` (the FIU's access token), `x-jws-signature` (detached, signed by the gateway with the FIU's signing key) and a plaintext body; its answer must be `200`, and its `x-jws-signature` must verify with the AA's signing keys (unless `forwarding.skipUpstreamResponseSignature` is set); (2) an AA not in `linkedAAs` and interop ready gets `/iop/User/discover` through a linked AA, chosen and retried as in FR-138; (3) an AA not in `linkedAAs` and not interop ready is not asked. Every request carries its own new `txnid` and the `Correlation-Id` value as `correlationId`; the rest of the body is the core's. |
 | FR-142 | **Broadcast reply.** The gateway waits until every AA asked has answered, or until `gwApi.broadcastTimeoutSeconds` (FIU mode; default 10; must not be negative) has passed; later answers are ignored. It answers the core `200` with `{ver, timestamp, txnid (the core's), correlationId, status, customerDiscoveryResponse}`: the `customerDiscoveryResponse` entries of every answer whose `status` is `User Found`, merged; `status` is `User Found` when there is at least one entry, otherwise `User Not Found` with an empty array. Like other internal API replies it echoes `Correlation-Id` and carries no `Content-Type`; it carries no `x-jws-signature`, since the entries come from several AAs. |
@@ -661,9 +661,9 @@ synthetic participants). Any implementation of this PRD must pass all of them.
 - AC-56 Hop retries: a Target that answers `503` without a body twice and then succeeds is delivered with the default `forwarding.httpRetries` (3 calls); with `0`, one call and `503 IopDownstreamError`; with the retries used up, the last `503` is wrapped; a `503` with `encryptedData` reaches the Target core once and is not retried; an unreachable Target gives `502` after the retries; `forwarding.httpRetries` is refused in FIU mode and when negative.
 - AC-57 Envelope `txnid`: retries on one route carry the same envelope `txnid`; another route gets a new one; both are UUIDs other than the payload's `txnid`. A hop relays the Target's reply with the `txnid` of the caller's request, signed by the hop.
 - AC-58 Unused party field: an Initiator next to the Target on a forwarding leg is ignored (the hop sets the sender as Initiator), and a Target next to the Initiator on a terminating leg is ignored; both calls are delivered.
-- AC-59 Link reverify: `/iop/Accounts/link/reverify` from the Origin-AA through the Inter-AA reaches the FIP connector and is delivered to `/fip-core/Accounts/link/reverify`; in AA mode it accepts `x-orig_aa_api_key` with `Target{FIP}` and is sent on with `x-inter_aa_api_key`; `/aa-sgw/Accounts/link/reverify` is in the internal API table and its leg is accepted by the AA-mode route table.
+- AC-59 Link reverify: `/iop/Accounts/link/reverify` from the Origin-AA through the Inter-AA reaches the FIP connector and is delivered to `/fip-core/Accounts/link/reverify`; in AA mode it accepts `orig_aa_api_key` with `Target{FIP}` and is sent on with `inter_aa_api_key`; `/aa-sgw/Accounts/link/reverify` is in the internal API table and its leg is accepted by the AA-mode route table.
 - AC-60 Hop route check: as a hop, an AA answers `400 InvalidRoute` and does not call the Target when an AA Target is not in its `linkedAAs`, when the AIG does not list it as a Connected-AA of the Target FIU, or when the AIG does not list it as an Inter-AA of the Target FIP.
 - AC-61 `errorSource`: when the Target's error answer carries an `errorSource` object, with or without `encryptedData`, the hop's answer carries it unchanged next to `errorCode` `IopDownstreamError`.
-- AC-62 FIU user discovery: a CustDiscoveryRequest on `/fiu-dgw/User/discover` with `Target-Entity` naming the Customer-AA goes to the Connected-AA with `client_api_key`, is forwarded with `x-conn_aa_api_key` and delivered to `/aa-core/User/discover` with `Initiator-Entity` naming the FIU; the fiu-core receives the Customer-AA's CustDiscoveryResponse (synthetic handle, e.g. `customer-test-001@aa-test-002`) with the Customer-AA's `x-jws-signature` and `Forwarding-Hop`.
+- AC-62 FIU user discovery: a CustDiscoveryRequest on `/fiu-dgw/User/discover` with `Target-Entity` naming the Customer-AA goes to the Connected-AA with `client_api_key`, is forwarded with `conn_aa_api_key` and delivered to `/aa-core/User/discover` with `Initiator-Entity` naming the FIU; the fiu-core receives the Customer-AA's CustDiscoveryResponse (synthetic handle, e.g. `customer-test-001@aa-test-002`) with the Customer-AA's `x-jws-signature` and `Forwarding-Hop`.
 - AC-63 Broadcast fan-out: with two linked AAs (one answering `User Found`, one slower than `gwApi.broadcastTimeoutSeconds`), one interop-ready AA that is not linked (answering `User Found` through `/iop/User/discover` via a linked AA) and one AA that is neither linked nor interop ready, the fiu-core gets `200 User Found` with the two found entries merged; the slow answer is ignored; the AA that is not interop ready is never asked; the linked AAs are called on the Direct API `/User/discover`; each AA receives its own `txnid` and the core's `correlationId`.
 - AC-64 Broadcast errors: when every AA fails, the fiu-core gets `503 AllRoutesUnavailable`; in AA mode the broadcast path returns `404`.

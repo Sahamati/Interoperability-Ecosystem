@@ -3,7 +3,7 @@
 |  |  |
 |---|---|
 | **Audience** | AA core application teams (AA ecosystem participants) |
-| **Version** | Draft 3.1, 2026-11-09 |
+| **Version** | Draft 4.0, 2026-11-10 |
 | **Covers** | How the aa-core sends and receives messages through the aa-iop-gw, when to call it, how the aa-core gives it keys and its list of linked AAs, and how the aa-iop-gw is configured |
 
 All identifiers in examples are illustrative.
@@ -476,8 +476,8 @@ participants: for example `POST /iop/Accounts/link/reverify` from an Origin-AA t
 
 `POST /iop/User/discover` from an FIU (with `client_api_key`) is one of these messages: the
 aa-iop-gw, as the FIU's Connected-AA, forwards it to the Customer-AA (the Target) with
-`x-conn_aa_api_key`. The Customer-AA must be in the AA's linkedAAs. When the aa-iop-gw is itself the
-Customer-AA (the call comes with `x-conn_aa_api_key`), it calls `POST /aa-core/User/discover`
+`conn_aa_api_key`. The Customer-AA must be in the AA's linkedAAs. When the aa-iop-gw is itself the
+Customer-AA (the call comes with `conn_aa_api_key`), it calls `POST /aa-core/User/discover`
 (section 4.3).
 
 | Step | What the aa-iop-gw does |

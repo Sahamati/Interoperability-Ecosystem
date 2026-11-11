@@ -313,7 +313,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the ConsentStatusNotification model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopNotificationResponsePayload:
@@ -346,7 +346,7 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the NotificationResponse model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   IopFINotificationPayload:
@@ -379,43 +379,9 @@ definitions:
             }
       ```
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted. Please refer to the FIStatusNotification model for more details.
+      The ciphertext contains the actual payload that needs to be encrypted.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IOPRequest:
-    type: object
-    required:
-    - timestamp
-    - txnid
-    - ver
-    - correlationId
-    - encryptedPayload
-    - Initiator
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      Initiator:
-        $ref: "#/definitions/Initiator"  
-      encryptedPayload:
-        $ref: "#/definitions/EncryptedPayload"
   IOPConsentNotificationRequest:
     type: object
     required:
@@ -484,37 +450,6 @@ definitions:
         $ref: "#/definitions/Initiator"  
       encryptedPayload:
         $ref: "#/definitions/IopFINotificationPayload"
-  IOPResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - ver
-    - correlationId
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/EncryptedPayload"
   IOPConsentNotificationResponse:
     type: object
     required:
@@ -768,164 +703,3 @@ definitions:
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
     description: Unauthorized Access
-  ConsentStatusNotification:
-      type: object
-      required:
-        - Notifier
-        - ConsentStatusNotification
-      properties:
-        Notifier:
-          type: object
-          description: Information about the notifier
-          required:
-            - type
-            - id
-          properties:
-            type:
-              type: string
-              example: AA
-              description: Type of the notifier entity
-              xml:
-                attribute: true
-            id:
-              type: string
-              example: AA-1
-              description: Unique ID to identify the entity
-              xml:
-                attribute: true
-        ConsentStatusNotification:
-          type: object
-          description: Contains the Consent ID, Consent Handle and Consent Status details.
-          required:
-            - consentStatus
-          properties:
-            consentId:
-              type: string
-              example: XXXX0-XXXX-XXXX
-              description: Unique ID generated by AA after consent approval is given by the customer.
-              xml:
-                attribute: true
-            consentHandle:
-              type: string
-              example: XXXX0-XXXX-XXXX
-              description: >-
-                Unique ID generated by AA after receiving the consent request. Consent Handle can 
-                be used by FIU/AA Client to check the consent status and also to retrieve the 
-                consent ID once consent is approved by the customer.
-              xml:
-                attribute: true
-            consentStatus:
-              type: string
-              example: PAUSED
-              description: Specifies the status of consent artefact.
-              xml:
-                attribute: true
-              enum:
-                - ACTIVE
-                - PENDING
-                - REVOKED
-                - PAUSED
-                - REJECTED
-                - EXPIRED
-
-
-  NotificationResponse:
-        type: object
-        properties:
-            response:
-              type: string
-              example: "OK"
-        xml:
-            attribute: true
-  FIStatusNotification:
-      type: object
-      required:
-        - Notifier
-        - FIStatusNotification
-      properties:
-        Notifier:
-          type: object
-          description: Information about the notifier
-          required:
-            - type
-            - id
-          properties:
-            type:
-              type: string
-              example: AA
-              description: Type of the notifier entity
-              xml:
-                attribute: true
-            id:
-              type: string
-              example: AA-1
-              description: Unique ID to identify the entity
-              xml:
-                attribute: true
-        FIStatusNotification:
-          type: object
-          description: Contains the financial information fetch session id, and session status details.
-          required:
-            - sessionId
-            - sessionStatus
-            - FIStatusResponse
-          properties:
-            sessionId:
-              type: string
-              example: XXXX0-XXXX-XXXX
-              description: A session ID is a base-64 encoded UUID number that an AA returns to the FIU or AA Client for each financial information access request.
-              xml:
-                attribute: true
-            sessionStatus:
-              type: string
-              example: ACTIVE
-              description: Status of the Financial Information fetch session.
-              enum:
-                - ACTIVE
-                - COMPLETED
-                - EXPIRED
-                - FAILED
-            FIStatusResponse:
-              type: array
-              description: List of financial information provider responses.
-              items:
-                type: object
-                required:
-                  - fipID
-                  - Accounts
-                properties:
-                  fipID:
-                    type: string
-                    example: FIP-1
-                    description: FIP ID as defined in the Account Aggregator Ecosystem.
-                  Accounts:
-                    type: array
-                    description: List of accounts linked with the FIP.
-                    items:
-                      type: object
-                      required:
-                        - linkRefNumber
-                        - FIStatus
-                        - description
-                      properties:
-                        linkRefNumber:
-                          type: string
-                          example: XXXX-XXXX-XXXX
-                          description: Reference number assigned by FIP as part of Account Linking Process.
-                        FIStatus:
-                          type: string
-                          example: READY
-                          description: Fetch Status of the Financial Information.
-                          xml:
-                            attribute: true
-                          enum:
-                            - READY
-                            - DENIED
-                            - PENDING
-                            - DELIVERED
-                            - TIMEOUT
-                        description:
-                          type: string
-                          example: "Status details description"
-                          description: Description associated with the current account fetch status.
-

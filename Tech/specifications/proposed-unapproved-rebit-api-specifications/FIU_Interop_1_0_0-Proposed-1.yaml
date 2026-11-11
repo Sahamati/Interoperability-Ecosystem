@@ -264,7 +264,7 @@ definitions:
 
       `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
 
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JOSE"}`
+      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
       2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
       3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
       4. **Ciphertext**: the signed JWS, encrypted with the CEK.
@@ -296,7 +296,7 @@ definitions:
 
       `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
 
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JOSE"}`
+      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
       2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
       3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
       4. **Ciphertext**: the signed JWS, encrypted with the CEK.
@@ -329,7 +329,7 @@ definitions:
 
       `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
 
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JOSE"}`
+      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
       2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
       3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
       4. **Ciphertext**: the signed JWS, encrypted with the CEK.
@@ -362,7 +362,7 @@ definitions:
 
       `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
 
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JOSE"}`
+      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
       2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
       3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
       4. **Ciphertext**: the signed JWS, encrypted with the CEK.

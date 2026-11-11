@@ -1,0 +1,15 @@
+{
+  "payloadFile": "testdata/payload.json",
+  "jweFile": "testdata/iopPayload.jwe",
+  "sender": {
+    "signingKeyFile": "keys/sig/private-key.pem",
+    "kid": "7ec33a02-84aa-46a2-aff5-3013226461d2",
+    "jwkFile": "keys/sig/public-key.jwk.json"
+  },
+  "recipient": {
+    "jwkFile": "keys/enc/public-key.jwk.json"
+  },
+  "self": {
+    "privateKeyFile": "keys/enc/private-key.pem"
+  }
+}

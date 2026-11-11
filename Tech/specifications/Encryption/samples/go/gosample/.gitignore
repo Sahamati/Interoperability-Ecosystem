@@ -1,0 +1,6 @@
+# never commit keys, local config or generated payloads
+keys/
+*.pem
+config.json
+.env*
+testdata/iopPayload.jwe

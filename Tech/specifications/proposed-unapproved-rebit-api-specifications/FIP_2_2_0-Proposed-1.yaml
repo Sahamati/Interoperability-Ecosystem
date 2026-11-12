@@ -921,6 +921,7 @@ paths:
                   required:
                     - fipID
                     - data
+                    - KeyMaterial
                   properties:
                     fipID:
                       type: string
@@ -946,6 +947,75 @@ paths:
                             description: >-
                               Contains the encrypted financial information based on the
                               key material defined corresponding to the user's Account
+                    KeyMaterial:
+                      type: object
+                      required:
+                        - cryptoAlg
+                        - Nonce
+                      description: >-
+                        Contains the cryptographic parameters that are required to perform  
+                        System intitilization parameters related to derive the session key
+                        and End-to-End encryption for sharing the financial 
+                        information between the encryption key producer and the consumer 
+                        in a secure manner. 
+                        Please refer this link for more information 
+                        - https://tools.ietf.org/html/rfc4492
+                        
+                      properties:
+                        cryptoAlg:
+                          type: string
+                          example: ECDH
+                          description: >-
+                            Specifies the cryptographic standard algorithm used for
+                            encrypting/decrypting the financial information. Currently ECDH is a
+                            crypto algorithm that is supported
+                          xml:
+                            attribute: true
+                        curve:
+                          type: string
+                          example: Curve25519
+                          description: Currently Curve25519 is supported
+                          xml:
+                            attribute: true
+                        params:
+                          type: string
+                          description: >-
+                            Specifies the secure standard cryptographic primitives to perform end
+                            to end encryption. Use Key-Value pair separated by a semicolon. The
+                            value given for cryptographic primitives in example should be used for
+                            symmetric encryption(AES-256 bits, GCM-128 bits and No Padding) and
+                            key exchange protocol(ECDH).
+                          example: cipher=AES/GCM/NoPadding;KeyPairGenerator=ECDH
+                          xml:
+                            attribute: true
+                        DHPublicKey:
+                          type: object
+                          required:
+                            - expiry
+                          description: 'Contain the Diffie-Hellman(DH)  public paramters information '
+                          properties:
+                            expiry:
+                              type: string
+                              format: date-time
+                              example: '2019-06-01T09:58:50.505Z'
+                              description: Expiry time for DH public paramters
+                              xml:
+                                attribute: true
+                            Parameters:
+                              type: string
+                              description: >-
+                                Define the Diffie-Hellman(DH)  public paramters used to calculate
+                                session (data encryption) key. For exapmle: Ephemeral public key
+                            KeyValue:
+                              type: string
+                              description: The value of DH public paramters
+                        Nonce:
+                          type: string
+                          description: >-
+                            Nonce is a random string generated every time during the publishing of Ephemeral public key to 
+                            ensure that old communications cannot be reused in replay attacks.Nonce should have a fixed length.
+                            Unlike random numbers, random strings do not require byte ordering. Hence session keys can be generated 
+                            in a platform independent way. Ref - https://tools.ietf.org/html/rfc5116
           headers:
             x-jws-signature:
                 type: string                
@@ -1873,6 +1943,7 @@ definitions:
       - txnid
       - Consent
       - FIDataRange
+      - KeyMaterial
     type: object
     properties:
       ver:
@@ -1939,6 +2010,8 @@ definitions:
             description: Date-time till which the financial information is requested
             xml:
               attribute: true
+      KeyMaterial:
+        $ref: '#/definitions/KeyMaterial'
   FIResponse:
     type: object
     required:
@@ -2085,6 +2158,7 @@ definitions:
           required:
             - fipID
             - data
+            - KeyMaterial
           properties:
             fipID:
               type: string
@@ -2111,6 +2185,8 @@ definitions:
                     type: string                    
                     description: >-
                       Contains the end to end encrypted financial information
+            KeyMaterial:
+              $ref: '#/definitions/KeyMaterial'
     xml:
       name: FetchFIResponse
   Error:
@@ -2135,6 +2211,82 @@ definitions:
         description: Description of the specific error
         xml:
           attribute: true
+  KeyMaterial:
+    type: object
+    required:
+      - cryptoAlg
+      - Nonce
+      - curve
+      - DHPublicKey
+    description: >-
+      Contains the cryptographic parameters that are required to perform
+      End-to-End encryption for sharing the financial information between the
+      producer and the consumer in a secure manner. Please refer this link for
+      more information: https://tools.ietf.org/html/rfc4492
+      
+    properties:
+      cryptoAlg:
+        type: string
+        example: ECDH
+        description: >-
+          Specifies the cryptographic standard algorithm used for
+          encrypting/decrypting the financial information. Currently ECDH is a crypto algorithm that is supported
+        xml:
+          attribute: true
+      curve:
+        type: string
+        example: Curve25519
+        description: Describes a secure elliptic curve standard that is used to perform ECDH.
+        enum:
+          - Curve25519
+          - X25519
+        xml:
+          attribute: true
+      params:
+        type: string
+        description: >-
+          Specifies the secure standard cryptographic primitives to perform end to end encryption. 
+          Use Key-Value pair separated by a semicolon. The value given for cryptographic primitives in 
+          example should be used for symmetric encryption(AES-256 bits, GCM-128 bits and No Padding) and key exchange protocol(ECDH).
+        example: cipher=AES/GCM/NoPadding;KeyPairGenerator=ECDH
+        xml:
+          attribute: true
+      DHPublicKey:
+        type: object
+        required:
+          - expiry
+          - KeyValue
+        description: >-
+          Contains the public information for performing the ECDH key exchange.
+        properties:
+          expiry:
+            type: string
+            format: date-time
+            example: '2019-06-01T09:58:50.505Z'
+            description: Specifies expiry date of the public key.
+            xml:
+              attribute: true
+          Parameters:
+            type: string
+            description: >-
+              Defines the public parameters used to calculate session (data
+                                encryption/decryption) key.
+          KeyValue:
+            type: string
+            description: Contains the value of emphemeral public key
+      Nonce:
+        type: string
+        example: 29512b70-ca84-46b5-9471-63765599cf15
+        description: >-
+          Nonce is a random string generated every time during 
+          the publishing of Ephemeral public key to ensure that 
+          old communications cannot be reused in replay attacks.
+          Nonce should have a fixed length. Unlike random numbers, 
+          random strings do not require byte ordering. 
+          Hence session keys can be generated in a platform 
+          independent way. Ref: https://tools.ietf.org/html/rfc5116.                         
+    xml:
+      name: KeyMaterial
   Account:
     type: object
     required:
@@ -3017,6 +3169,7 @@ definitions:
         type: string
         enum:
           - NoSuchVersion
+          - ExpiredKeyMaterial
         xml:
           attribute: true
   BadRequestFIFetch:
@@ -3087,6 +3240,7 @@ definitions:
         enum:
           - NoSuchVersion
           - NoDataFound
+          - ExpiredKeyMaterial
         xml:
           attribute: true
   UnauthorizedAccess:

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Sahamati AA Interoperability Graph (AIG) APIs
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Document Classification: Restricted.
 
@@ -15,7 +15,7 @@ info:
     | FIU | Identify connected-AAs towards a customer-AA (not needed once all AAs are interconnected). |
     | FIP | Identify inter-AAs towards an origin-AA (not needed once all AAs are interconnected). |
 
-    Error response codes 400, 401, 403, 429, 500, 501 and 503 apply to all APIs (per v1.0).
+    Error response codes 400, 401, 403, 429, 500, 501 and 503 apply to all APIs (per v1.1).
 servers:
   - url: https://cr.sahamati.org.in
     description: Production
@@ -26,8 +26,6 @@ tags:
     description: Lookup APIs for the AIG graph
   - name: Write
     description: APIs to publish AIG graph data
-security:
-  - bearerAuth: []
 
 paths:
   /v1/aig/fip:
@@ -135,14 +133,22 @@ paths:
         '501': { $ref: '#/components/responses/NotImplemented' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
-  /v1/aig/update:
+  /v1/aig/update/{aaid}:
     put:
       tags: [Write]
       operationId: updateAig
       summary: Publish AIG graph by AA
       description: Called by AAs to publish the FIPs, FIUs and peer AAs they are connected to.
       security:
-        - bearerAuth: []
+        - bearerUserAuth: []
+      parameters:
+        - name: aaid
+          in: path
+          required: true
+          description: Entity ID of the AA publishing its graph
+          schema:
+            type: string
+          example: "aa-entity-01"
       requestBody:
         required: true
         content:
@@ -183,8 +189,13 @@ components:
       scheme: bearer
       description: |
         Bearer token of the calling entity.
-        - /v1/aig/fip, /v1/aig/fiu, /v1/aig/update: token of an AA
+        - /v1/aig/fip, /v1/aig/fiu: token of an AA
         - /v1/aig/aa: token of an FIU or FIP
+    bearerUserAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Bearer token of user associated with the calling AA.
 
   schemas:
     BaseMessage:

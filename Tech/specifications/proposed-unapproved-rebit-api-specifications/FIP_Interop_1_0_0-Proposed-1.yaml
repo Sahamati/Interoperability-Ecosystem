@@ -2437,6 +2437,8 @@ definitions:
         type: string
         example: Error code specific error message
         description: Error message with additional details. Ensure no sensitive information is included in the error message.
+      errorSource:
+        $ref: "#/definitions/SourceOfError"
       encryptedPayload:
         $ref: "#/definitions/EncryptedPayload"
     description: Access is forbidden.
@@ -2510,6 +2512,8 @@ definitions:
       errorMsg:
         type: string
         example: Error code specific error message
+      errorSource:
+        $ref: "#/definitions/SourceOfError"
       encryptedPayload:
         $ref: "#/definitions/EncryptedPayload"
     description: Forbidden Request during FI Fetch

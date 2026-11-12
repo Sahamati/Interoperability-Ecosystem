@@ -235,6 +235,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPNotImplemented"
+        "502":
+          description: Bad Gateway
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPBadGateway"
         "503":
           description: Service Unavailable
           headers:
@@ -243,6 +251,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPServiceUnavailable"
+        "504":
+          description: Gateway Timeout
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPGatewayTimeout"
   /iop/Accounts/discover:
     post:
       tags:
@@ -4420,6 +4436,7 @@ definitions:
         - InvalidConsentDetail
         - InvalidConsentUse
         - IopDownstreamError
+        - InvalidRoute
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}
@@ -4494,6 +4511,7 @@ definitions:
         - InvalidConsentDetail
         - InvalidConsentUse
         - IopDownstreamError
+        - InvalidRoute
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}
@@ -4565,6 +4583,7 @@ definitions:
         - SignatureDoesNotMatch
         - InvalidNotifier
         - IopDownstreamError
+        - InvalidRoute
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}
@@ -4582,6 +4601,7 @@ definitions:
         - SignatureDoesNotMatch
         - InvalidFIStatusNotification
         - IopDownstreamError
+        - InvalidRoute
     allOf:
     - $ref: "#/definitions/IOPBadRequest"
     - {}

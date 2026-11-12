@@ -95,6 +95,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too many requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -190,6 +198,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too many requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -619,6 +635,19 @@ definitions:
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
     description: At least one of the preconditions you specified did not hold.
+  IOPTooManyRequests:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - TooManyRequests
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Too many requests received, try later.
   IOPInternalServerError:
     properties:
       errorCode:

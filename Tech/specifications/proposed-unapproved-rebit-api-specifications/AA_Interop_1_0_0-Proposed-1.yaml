@@ -59,7 +59,7 @@ paths:
       - in: body
         name: body
         description: Information of the user for discovering existing handles at the AAs
-        required: false
+        required: true
         schema:
           $ref: "#/definitions/CustDiscoveryRequest"
       security:
@@ -113,6 +113,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/PreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/TooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -219,6 +227,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -277,7 +293,7 @@ paths:
       - in: body
         name: body
         description: Information of the user for discovering the account/s at the FIP
-        required: false
+        required: true
         schema:
           allOf:
           - $ref: "#/definitions/IOPAccDiscoveryRequest"
@@ -340,6 +356,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -397,7 +421,7 @@ paths:
         type: string
       - in: body
         name: body
-        required: false
+        required: true
         schema:
           allOf:
           - $ref: "#/definitions/IOPAccLinkRequestRequest"
@@ -460,6 +484,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -518,7 +550,7 @@ paths:
       - in: body
         name: body
         description: Information of the user for discovering the account/s at the FIP
-        required: false
+        required: true
         schema:
           allOf:
           - $ref: "#/definitions/IOPAccLinkVerifyRequest"
@@ -581,6 +613,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -639,7 +679,7 @@ paths:
       - in: body
         name: body
         description: Information of the user handle and link reference number to be verified
-        required: false
+        required: true
         schema:
           allOf:
           - $ref: "#/definitions/IOPRequest"
@@ -702,6 +742,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -760,7 +808,7 @@ paths:
       - in: body
         name: body
         description: Information of the user for discovering the account/s at the FIP
-        required: false
+        required: true
         schema:
           allOf:
           - $ref: "#/definitions/IOPAccDelinkRequest"
@@ -823,6 +871,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -881,7 +937,7 @@ paths:
       - in: body
         name: body
         description: Information on the account linking status
-        required: false
+        required: true
         schema:
           allOf:
           - $ref: "#/definitions/IOPLinkNotificationRequest"
@@ -946,6 +1002,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -1070,6 +1134,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -1127,7 +1199,7 @@ paths:
         type: string
       - in: body
         name: body
-        required: false
+        required: true
         schema:
           allOf:
           - $ref: "#/definitions/IOPConsentHandleRequest"
@@ -1192,6 +1264,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -1249,7 +1329,7 @@ paths:
         type: string
       - in: body
         name: body
-        required: false
+        required: true
         schema:
           allOf:
           - $ref: "#/definitions/IOPConsentFetchRequest"
@@ -1314,6 +1394,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -1447,6 +1535,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -1504,7 +1600,7 @@ paths:
         description: Detached JWS of the body
       - in: body
         name: body
-        required: false
+        required: true
         schema:
           allOf:
           - $ref: "#/definitions/IOPFIFetchRequest"
@@ -1579,6 +1675,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -1640,7 +1744,6 @@ paths:
         schema:
           allOf:
           - $ref: "#/definitions/IOPConsentNotificationRequest"
-          - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIU"
           - $ref: "#/definitions/TargetFIU"
           - $ref: "#/definitions/TargetFIP"
@@ -1709,6 +1812,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -1833,6 +1944,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPPreconditionFailed"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -1894,7 +2013,6 @@ paths:
         schema:
           allOf:
           - $ref: "#/definitions/IOPBaseRequest"
-          - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIU"
           - $ref: "#/definitions/TargetFIP"
           - $ref: "#/definitions/TargetAA"
@@ -1946,6 +2064,14 @@ paths:
               description: Detached JWS of the response body
           schema:
             $ref: "#/definitions/IOPNotFound"
+        "429":
+          description: Too Many Requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/IOPTooManyRequests"
         "500":
           description: Internal Server Error
           headers:
@@ -4099,12 +4225,12 @@ definitions:
         type: string
         example: Error code specific error message
         description: Mandatory when replying as a hop. Error message with additional details. Ensure no sensitive information is included in the error message.
-      errorSource:
-        $ref: "#/definitions/SourceOfError"
     description: Generic Error Response. Specific Error Responses extend from this.
   IOPErrorResponse:
     type: object
     properties:
+      errorSource:
+        $ref: "#/definitions/SourceOfError"
       encryptedPayload:
         $ref: "#/definitions/EncryptedPayload"
     description: Generic Error Response. Specific Error Responses extend from this.
@@ -4166,6 +4292,19 @@ definitions:
     - $ref: "#/definitions/ErrorResponse"
     - {}
     description: At least one of the preconditions you specified did not hold. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
+  TooManyRequests:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - TooManyRequests
+        - IopDownstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - {}
+    description: Too many requests received, try later. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   InternalServerError:
     properties:
       errorCode:
@@ -4281,6 +4420,20 @@ definitions:
     - $ref: "#/definitions/IOPErrorResponse"
     - {}
     description: At least one of the preconditions you specified did not hold. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
+  IOPTooManyRequests:
+    properties:
+      errorCode:
+        type: string
+        xml:
+          attribute: true
+        enum:
+        - TooManyRequests
+        - IopDownstreamError
+    allOf:
+    - $ref: "#/definitions/ErrorResponse"
+    - $ref: "#/definitions/IOPErrorResponse"
+    - {}
+    description: Too many requests received, try later. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPInternalServerError:
     properties:
       errorCode:

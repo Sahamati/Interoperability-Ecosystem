@@ -1,0 +1,6 @@
+apiVersion: v2
+name: iop-gw-mocks
+description: Local stand-in for the Sahamati token service, Central Registry and AIG, for testing IOP Gateways. Testing only.
+type: application
+version: 0.1.0
+appVersion: "0.0.0.0"

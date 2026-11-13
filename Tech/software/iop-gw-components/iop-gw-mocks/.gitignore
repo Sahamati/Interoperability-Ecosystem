@@ -1,0 +1,8 @@
+target/
+.env*
+*.pem
+*.key
+*.crt
+*.p12
+mock-out/
+credentials*.json

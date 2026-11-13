@@ -1,0 +1,4 @@
+# Only what the build needs: the Maven project, not local build output.
+*
+!pom.xml
+!src/

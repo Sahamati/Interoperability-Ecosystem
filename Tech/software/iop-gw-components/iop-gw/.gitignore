@@ -1,0 +1,15 @@
+target/
+*.iml
+.idea/
+.vscode/
+
+# Secrets and deployment material must never be committed
+.env*
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+credentials*.json
+local/
+config.local.yaml

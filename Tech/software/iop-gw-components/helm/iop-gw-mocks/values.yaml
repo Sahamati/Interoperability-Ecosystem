@@ -1,0 +1,56 @@
+# iop-gw-mocks: a local stand-in for the Sahamati token service, Central
+# Registry and AIG, for testing and evaluating IOP Gateways. It uses synthetic
+# identities and keys only, and is not for production use.
+#
+# The mocks read their TLS certificate and token-signing key from a Secret, so
+# a restart keeps both and the gateways keep trusting them. The Service is
+# named after the release: install it as "mocks" and the gateways reach it at
+# https://mocks:9443 (same namespace). See MOCK_SETUP.md.
+
+image:
+  repository: iop-gw-mocks          # where the iop-gw-mocks image is (e.g. your registry)
+  tag: ""                            # defaults to the chart's appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Secret with keys tls.crt and tls.key (the TLS certificate and its PKCS#8
+# private key, both PEM; the certificate must be valid for the Service name the
+# gateways use, e.g. mocks.<namespace>.svc) and signing.pem (the token-signing
+# PKCS#8 RSA private key, PEM). Required.
+keysSecret: ""
+# Secret with the files the configuration names: the entities' public keys and
+# credentials files. Mounted at /etc/iop-gw-mocks/input. Required.
+inputSecret: ""
+
+# The mocks' configuration (MOCK_SETUP.md, section 4), without listenAddr,
+# outDir, tls and tokenService.signingKeyFile: the chart sets those. File paths
+# point under /etc/iop-gw-mocks/input/.
+config:
+  tokenService:
+    issuer: "https://mock-token-service.local/realms/sahamati"
+    credentialsFiles: []           # e.g. /etc/iop-gw-mocks/input/fiu-test-001-credentials.json
+  entities: []
+  aig: {fiu: [], fip: [], aa: []}
+
+service:
+  type: ClusterIP
+  port: 9443
+
+resources:
+  requests: {cpu: 50m, memory: 192Mi}
+  limits: {memory: 512Mi}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10002
+  runAsGroup: 10002
+  fsGroup: 10002
+  seccompProfile: {type: RuntimeDefault}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: {drop: [ALL]}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

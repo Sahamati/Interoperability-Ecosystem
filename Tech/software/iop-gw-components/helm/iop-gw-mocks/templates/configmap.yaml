@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "iop-gw-mocks.fullname" . }}-config
+  labels: {{- include "iop-gw-mocks.labels" . | nindent 4 }}
+data:
+  mocks.yaml: |
+{{ include "iop-gw-mocks.config" . | indent 4 }}

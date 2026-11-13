@@ -1,0 +1,30 @@
+# IOP Gateway for fip-test-003 (FIP mode): production sources, pointed at iop-gw-mocks.
+# Against Sahamati, change only the four https://mocks:9443 URLs (and drop the
+# truststore option in compose.yaml).
+mode: FIP
+logging: {level: INFO, audit: true, statsIntervalSeconds: 60}
+listenAddr: "0.0.0.0:8080"
+self:
+  id: fip-test-003
+  signingKey: {source: file, kid: fip-test-003-sig, file: /etc/iop-gw/generated/fip-test-003/sig.pem}
+  decryptionKeys: {source: file, keys: [{kid: fip-test-003-enc, file: /etc/iop-gw/generated/fip-test-003/enc.pem}]}
+core: {baseUrl: "http://core-fip-test-003:8090", timeoutSeconds: 10}
+tokenService:
+  baseUrl: "https://mocks:9443"
+  credentialsFile: /etc/iop-gw/generated/fip-test-003/credentials.json
+apiKey:
+  mode: jwt
+  issuerKeysUrl: "https://mocks:9443/tokenservice/jwks"
+  issuer: "https://mock-token-service.local/realms/sahamati"
+jws: {algorithm: RS256}
+cr: {source: api, baseUrl: "https://mocks:9443"}
+aigSource: api
+aigBaseUrl: "https://mocks:9443"
+gwApi:
+  listenAddr: "0.0.0.0:8443"
+  httpListenAddr: "0.0.0.0:8081"
+  tls: {certFile: /etc/iop-gw/generated/gw-tls.crt, keyFile: /etc/iop-gw/generated/gw-tls.key}
+  token: "${IOPGW_API_TOKEN}"
+linkedAAs: {source: config, aas: [aa-test-002]}
+forwarding: {timeoutSeconds: 10}
+cache: {dir: /var/lib/iop-gw/cache}

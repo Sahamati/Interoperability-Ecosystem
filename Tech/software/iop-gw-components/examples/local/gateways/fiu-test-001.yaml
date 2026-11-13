@@ -1,0 +1,30 @@
+# IOP Gateway for fiu-test-001 (FIU mode): production sources, pointed at iop-gw-mocks.
+# Against Sahamati, change only the four https://mocks:9443 URLs (and drop the
+# truststore option in compose.yaml).
+mode: FIU
+logging: {level: INFO, audit: true, statsIntervalSeconds: 60}
+listenAddr: "0.0.0.0:8080"
+self:
+  id: fiu-test-001
+  signingKey: {source: file, kid: fiu-test-001-sig, file: /etc/iop-gw/generated/fiu-test-001/sig.pem}
+  decryptionKeys: {source: file, keys: [{kid: fiu-test-001-enc, file: /etc/iop-gw/generated/fiu-test-001/enc.pem}]}
+core: {baseUrl: "http://core-fiu-test-001:8090", timeoutSeconds: 10}
+tokenService:
+  baseUrl: "https://mocks:9443"
+  credentialsFile: /etc/iop-gw/generated/fiu-test-001/credentials.json
+apiKey:
+  mode: jwt
+  issuerKeysUrl: "https://mocks:9443/tokenservice/jwks"
+  issuer: "https://mock-token-service.local/realms/sahamati"
+jws: {algorithm: RS256}
+cr: {source: api, baseUrl: "https://mocks:9443"}
+aigSource: api
+aigBaseUrl: "https://mocks:9443"
+gwApi:
+  listenAddr: "0.0.0.0:8443"
+  httpListenAddr: "0.0.0.0:8081"
+  tls: {certFile: /etc/iop-gw/generated/gw-tls.crt, keyFile: /etc/iop-gw/generated/gw-tls.key}
+  token: "${IOPGW_API_TOKEN}"
+linkedAAs: {source: config, aas: [aa-test-002]}
+forwarding: {timeoutSeconds: 10}
+cache: {dir: /var/lib/iop-gw/cache}

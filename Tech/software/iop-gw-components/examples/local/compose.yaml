@@ -1,0 +1,90 @@
+# Local example: iop-gw-mocks (token service, Central Registry, AIG) and one
+# IOP Gateway per mode, all on their production sources. Testing only.
+#
+#   ./setup.sh                 # synthetic keys, credentials, .env
+#   docker compose up -d --wait
+#   ./smoke.sh                 # one call: FIU -> Connected-AA -> Customer-AA core
+#   docker compose down -v
+#
+# To use the real Sahamati services instead of the mocks, change the
+# https://mocks:9443 URLs in gateways/*.yaml and drop the javax.net.ssl
+# options below (the real services have publicly trusted certificates).
+
+x-gateway: &gateway
+  image: iop-gw:0.0.0.0
+  env_file: .env
+  environment:
+    # The image's JVM options, plus trust for the mocks' self-signed certificate.
+    JAVA_TOOL_OPTIONS: >-
+      -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -XX:-HeapDumpOnOutOfMemoryError
+      -Djavax.net.ssl.trustStore=/mocks-out/truststore.p12
+      -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=PKCS12
+  depends_on:
+    mocks: {condition: service_healthy}
+  tmpfs: [/tmp]
+  read_only: true
+  healthcheck:
+    test: ["CMD", "curl", "-fs", "http://localhost:8080/healthz"]
+    interval: 3s
+    timeout: 3s
+    retries: 40
+
+services:
+  mocks:
+    image: iop-gw-mocks:0.0.0.0
+    volumes:
+      - ./mocks.yaml:/etc/iop-gw-mocks/mocks.yaml:ro
+      - ./generated:/etc/iop-gw-mocks/generated:ro
+      - mocks-out:/var/lib/iop-gw-mocks/out
+    tmpfs: [/tmp]
+    read_only: true
+    healthcheck:
+      test: ["CMD", "curl", "-fsk", "https://localhost:9443/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  core-aa-test-004:
+    image: python:3.13-alpine
+    command: ["python", "/core-stub.py"]
+    volumes: ["./core-stub.py:/core-stub.py:ro"]
+
+  gw-fiu-test-001:
+    <<: *gateway
+    volumes:
+      - ./gateways/fiu-test-001.yaml:/etc/iop-gw/config.yaml:ro
+      - ./generated:/etc/iop-gw/generated:ro
+      - mocks-out:/mocks-out:ro
+      - cache-fiu-test-001:/var/lib/iop-gw/cache
+    ports: ["127.0.0.1:18081:8081"]   # fiu-test-001's internal API, for smoke.sh
+
+  gw-aa-test-002:
+    <<: *gateway
+    volumes:
+      - ./gateways/aa-test-002.yaml:/etc/iop-gw/config.yaml:ro
+      - ./generated:/etc/iop-gw/generated:ro
+      - mocks-out:/mocks-out:ro
+      - cache-aa-test-002:/var/lib/iop-gw/cache
+
+  gw-aa-test-004:
+    <<: *gateway
+    volumes:
+      - ./gateways/aa-test-004.yaml:/etc/iop-gw/config.yaml:ro
+      - ./generated:/etc/iop-gw/generated:ro
+      - mocks-out:/mocks-out:ro
+      - cache-aa-test-004:/var/lib/iop-gw/cache
+
+  gw-fip-test-003:
+    <<: *gateway
+    volumes:
+      - ./gateways/fip-test-003.yaml:/etc/iop-gw/config.yaml:ro
+      - ./generated:/etc/iop-gw/generated:ro
+      - mocks-out:/mocks-out:ro
+      - cache-fip-test-003:/var/lib/iop-gw/cache
+
+volumes:
+  mocks-out:
+  cache-fiu-test-001:
+  cache-aa-test-002:
+  cache-aa-test-004:
+  cache-fip-test-003:

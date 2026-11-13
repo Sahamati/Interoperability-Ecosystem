@@ -1,0 +1,3 @@
+# Synthetic keys, credentials and tokens made by setup.sh: never commit.
+generated/
+.env

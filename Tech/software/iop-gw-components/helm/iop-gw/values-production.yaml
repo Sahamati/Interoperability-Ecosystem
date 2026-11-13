@@ -1,6 +1,10 @@
-# Production values for the IOP Gateway chart: copy this file, replace every
-# REPLACE-ME, and install with:
-#   helm install <release> ./iop-gw -f my-values.yaml
+# Production values for the IOP Gateway chart, on the Sahamati services.
+#
+# Use it together with a small file of your own, holding only what is yours
+# (your entity id, key ids, core address, linked AAs and image location):
+#   helm install iop-gw ./iop-gw -f values-production.yaml -f my-entity.yaml
+# The chart refuses to install until each of those values is set, and names
+# every missing one. An example my-entity.yaml is at the end of this file.
 #
 # Before installing, create the two Secrets the gateway reads (names below):
 #   kubectl create secret generic iop-gw-env --from-literal=IOPGW_API_TOKEN=<random token>
@@ -12,8 +16,12 @@
 # (or let Vault / your cloud secret store create them with these keys).
 
 image:
-  repository: REPLACE-ME/iop-gw
+  repository: ""                 # yours: where the iop-gw image is (your registry)
   tag: "0.0.0.0"
+
+# The Sahamati services have publicly trusted certificates: no truststore
+# (this replaces the chart default, which trusts iop-gw-mocks).
+truststore: {existingSecret: ""}
 
 replicaCount: 1
 
@@ -35,34 +43,45 @@ resources:
   limits: {memory: 1536Mi}
 
 config:
-  mode: AA                       # AA, FIU or FIP
   logging: {level: INFO, audit: true, statsIntervalSeconds: 60}
-  self:
-    id: REPLACE-ME-entity-id     # your Central Registry id
-    signingKey: {source: file, kid: REPLACE-ME-signing-kid, file: /etc/iop-gw/secrets/signing.pem}
-    decryptionKeys: {source: file, keys: [{kid: REPLACE-ME-decryption-kid, file: /etc/iop-gw/secrets/decryption.pem}]}
-  core: {baseUrl: "http://REPLACE-ME-core-service:8090", timeoutSeconds: 30}
+  # The Sahamati services, replacing the chart's iop-gw-mocks defaults. Set
+  # each URL to the one for your Sahamati environment; the chart refuses to
+  # install until they are set.
   tokenService:
-    baseUrl: "https://REPLACE-ME-token-service"
+    baseUrl: ""                  # Sahamati token service, with its version prefix (e.g. .../iam/v1)
     credentialsFile: /etc/iop-gw/secrets/credentials.json
   apiKey:
     mode: jwt
-    issuerKeysUrl: "https://REPLACE-ME-token-service-jwks"
+    issuerKeysUrl: ""            # the token service's JWKS (…/auth/realms/sahamati/protocol/openid-connect/certs)
+    issuer: null                 # the token service's issuer (…/auth/realms/sahamati), checked when set
   jws: {algorithm: RS256}
-  cr: {source: api, baseUrl: "https://REPLACE-ME-central-registry"}
+  cr: {source: api, baseUrl: ""} # Sahamati Central Registry
   aigSource: api
-  aigBaseUrl: "https://REPLACE-ME-aig"
+  aigBaseUrl: ""                 # Sahamati AIG
   gwApi:
     listenAddr: "0.0.0.0:8443"
     httpListenAddr: null         # no plain-HTTP internal listener
     tls: {certFile: /etc/iop-gw/secrets/gw-tls.crt, keyFile: /etc/iop-gw/secrets/gw-tls.key}
     token: "${IOPGW_API_TOKEN}"
-  linkedAAs: {source: config, aas: [REPLACE-ME-linked-aa-id]}
   forwarding: {timeoutSeconds: 30}
 
 # Expose the public /iop listener to other entities' gateways, for example:
 # ingress:
 #   enabled: true
 #   className: nginx
-#   host: iop.REPLACE-ME.example
-#   tls: [{secretName: iop-tls, hosts: [iop.REPLACE-ME.example]}]
+#   host: iop.your-domain.example
+#   tls: [{secretName: iop-tls, hosts: [iop.your-domain.example]}]
+
+# ---------------------------------------------------------------------------
+# Example my-entity.yaml (your own values; illustrative ids):
+#
+# image:
+#   repository: registry.your-domain.example/iop-gw
+# config:
+#   mode: AA                                   # AA, FIU or FIP
+#   self:
+#     id: aa-test-002                          # your Central Registry id
+#     signingKey: {source: file, kid: aa-test-002-sig-2026-11, file: /etc/iop-gw/secrets/signing.pem}
+#     decryptionKeys: {source: file, keys: [{kid: aa-test-002-enc-2026-11, file: /etc/iop-gw/secrets/decryption.pem}]}
+#   core: {baseUrl: "http://aa-core.your-namespace.svc:8090"}
+#   linkedAAs: {source: config, aas: [aa-test-003, aa-test-004]}

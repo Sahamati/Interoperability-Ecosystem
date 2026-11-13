@@ -1,0 +1,63 @@
+{{- $keys := required "set keysSecret: a Secret with tls.crt, tls.key and signing.pem (see MOCK_SETUP.md)" .Values.keysSecret -}}
+{{- $input := required "set inputSecret: a Secret with the entities' public keys and credentials files" .Values.inputSecret -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "iop-gw-mocks.fullname" . }}
+  labels: {{- include "iop-gw-mocks.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- include "iop-gw-mocks.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "iop-gw-mocks.selector" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "iop-gw-mocks.config" . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      automountServiceAccountToken: false
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mocks
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["/etc/iop-gw-mocks/mocks.yaml"]
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - {name: https, containerPort: {{ .Values.service.port }}}
+          readinessProbe:
+            httpGet: {path: /healthz, port: https, scheme: HTTPS}
+            periodSeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: https, scheme: HTTPS}
+            periodSeconds: 20
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config, mountPath: /etc/iop-gw-mocks/mocks.yaml, subPath: mocks.yaml, readOnly: true}
+            - {name: keys, mountPath: /etc/iop-gw-mocks/keys, readOnly: true}
+            - {name: input, mountPath: /etc/iop-gw-mocks/input, readOnly: true}
+            - {name: out, mountPath: /var/lib/iop-gw-mocks/out}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config
+          configMap: {name: {{ include "iop-gw-mocks.fullname" . }}-config}
+        - name: keys
+          secret: {secretName: {{ $keys }}, defaultMode: 0440}
+        - name: input
+          secret: {secretName: {{ $input }}, defaultMode: 0440}
+        - name: out
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 32Mi}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

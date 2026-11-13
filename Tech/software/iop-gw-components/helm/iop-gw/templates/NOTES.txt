@@ -10,3 +10,8 @@ Its logs (JSON):    kubectl logs -l app.kubernetes.io/instance={{ .Release.Name 
 
 WARNING: createSecrets is on. It is for testing only: use existing Secrets for real keys and secrets.
 {{- end }}
+{{- if contains "//mocks:" (toString .Values.config.cr.baseUrl) }}
+
+NOTE: this gateway uses iop-gw-mocks (testing). For the Sahamati services, install
+with values-production.yaml as well (SETUP.md, section 4.1).
+{{- end }}

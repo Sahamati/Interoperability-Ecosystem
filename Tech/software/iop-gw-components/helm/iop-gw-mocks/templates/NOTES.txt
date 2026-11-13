@@ -1,0 +1,9 @@
+iop-gw-mocks installed as {{ include "iop-gw-mocks.fullname" . }}, for testing and evaluation only.
+
+  Token service, Central Registry and AIG: https://{{ include "iop-gw-mocks.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+  Token-signing keys (JWKS):              https://{{ include "iop-gw-mocks.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/tokenservice/jwks
+  Entities listed: {{ len .Values.config.entities }}
+
+The iop-gw chart uses these mocks by default (release "mocks", same namespace),
+with a truststore Secret "mocks-truststore" holding the certificate from
+{{ .Values.keysSecret }} (MOCK_SETUP.md, section 8).

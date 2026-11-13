@@ -1,0 +1,29 @@
+# Configuration for mock-setup.sh: IOP Gateways on Kubernetes with iop-gw-mocks
+# in place of the Sahamati services. For testing and evaluation only.
+# See MOCK_SETUP.md, section 8.
+
+# The kube context to install into. Required: the script never uses your current
+# context by default. List yours with: kubectl config get-contexts
+context: ""
+
+# The namespace everything is installed into. uninstall removes this namespace.
+namespace: iop-gw-mock-setup
+
+# Images. The cluster must be able to pull them: push them to a registry it can
+# reach, or load them into a local cluster with that tool's own command.
+images:
+  gateway: iop-gw:0.0.0.0
+  mocks: iop-gw-mocks:0.0.0.0
+  coreStub: python:3.13-alpine
+
+# Where each gateway delivers messages to its core. Leave a value empty to use
+# the stand-in core (it answers every call), and set it to your own core's URL
+# once it is ready, then run install again. In the test calls, aa-test-004's
+# core receives the call from fiu-test-001, and fip-test-003's core the call
+# from aa-test-004; aa-test-002 only forwards. fiu-test-001's core receives
+# notifications sent to the FIU.
+cores:
+  fiu-test-001: ""
+  aa-test-002: ""
+  aa-test-004: ""
+  fip-test-003: ""

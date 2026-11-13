@@ -1,9 +1,15 @@
 # IOP Gateway Helm chart. Defaults are small: one replica, no persistent cache.
-# Everything entity-specific is a placeholder: set it in your own values file.
+#
+# By default the gateway uses iop-gw-mocks (release "mocks" in the same
+# namespace) in place of the Sahamati services, for testing and evaluation. For
+# the Sahamati services, add values-production.yaml.
+#
+# Entity-specific values are left empty: set them in your own values file. The
+# chart refuses to install until they are set, and names each missing value.
 
 image:
-  repository: sahamatidevsecops/iop-gw     # where the iop-gw image is published
-  tag: "0.0.0.0"                            # defaults to the chart's appVersion
+  repository: ""                   # required: where the iop-gw image is (your registry)
+  tag: ""                            # defaults to the chart's appVersion
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
@@ -18,26 +24,28 @@ config:
   logging: {level: INFO, audit: true, statsIntervalSeconds: 60}
   listenAddr: "0.0.0.0:8080"                 # public /iop listener
   self:
-    id: REPLACE-ME-entity-id
-    signingKey: {source: file, kid: REPLACE-ME-sig-kid, file: /etc/iop-gw/secrets/signing.pem}
-    decryptionKeys: {source: file, keys: [{kid: REPLACE-ME-enc-kid, file: /etc/iop-gw/secrets/decryption.pem}]}
-  core: {baseUrl: "http://REPLACE-ME-core:8090", timeoutSeconds: 30}
+    id: ""                                   # required: your Central Registry id
+    signingKey: {source: file, kid: "", file: /etc/iop-gw/secrets/signing.pem}          # kid required
+    decryptionKeys: {source: file, keys: [{kid: "", file: /etc/iop-gw/secrets/decryption.pem}]}  # kid required
+  core: {baseUrl: "", timeoutSeconds: 30}    # baseUrl required: where your core is reached
+  # The services: iop-gw-mocks by default (values-production.yaml replaces these).
   tokenService:
-    baseUrl: "https://REPLACE-ME-token-service"
+    baseUrl: "https://mocks:9443"
     credentialsFile: /etc/iop-gw/secrets/credentials.json
   apiKey:
     mode: jwt
-    issuerKeysUrl: "https://REPLACE-ME-issuer/jwks"
+    issuerKeysUrl: "https://mocks:9443/tokenservice/jwks"
+    issuer: "https://mock-token-service.local/realms/sahamati"   # the mocks' tokenService.issuer
   jws: {algorithm: RS256}
-  cr: {source: api, baseUrl: "https://REPLACE-ME-central-registry"}
+  cr: {source: api, baseUrl: "https://mocks:9443"}
   aigSource: api
-  aigBaseUrl: "https://REPLACE-ME-aig"
+  aigBaseUrl: "https://mocks:9443"
   gwApi:
     listenAddr: "0.0.0.0:8443"               # internal APIs, HTTPS (also key push)
     httpListenAddr: "0.0.0.0:8081"           # internal APIs, plain HTTP (optional)
     tls: {certFile: /etc/iop-gw/secrets/gw-tls.crt, keyFile: /etc/iop-gw/secrets/gw-tls.key}
     token: "${IOPGW_API_TOKEN}"
-  linkedAAs: {source: config, aas: [REPLACE-ME-aa-id]}
+  linkedAAs: {source: config, aas: []}       # required: the AAs you are linked to
   forwarding: {timeoutSeconds: 30}
 
 # Container ports; keep them in step with config listenAddr / gwApi.
@@ -67,7 +75,7 @@ createSecrets:
 # private CA, or iop-gw-mocks in a test cluster): a PKCS12 truststore from a
 # Secret key. Leave empty for the Sahamati services (publicly trusted).
 truststore:
-  existingSecret: ""
+  existingSecret: mocks-truststore   # the mocks' certificate (MOCK_SETUP.md, section 8); values-production.yaml clears it
   key: truststore.p12
   password: changeit
 

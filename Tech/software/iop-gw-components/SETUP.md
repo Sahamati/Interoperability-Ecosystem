@@ -147,7 +147,20 @@ Whichever way you install, the steps are the same:
 
 ### 4.1 Kubernetes (Helm), recommended
 
-The chart is in `helm/iop-gw`. Start from `helm/iop-gw/values-production.yaml`.
+The chart is in `helm/iop-gw`. **By default it uses `iop-gw-mocks` in place of the Sahamati
+services**, for testing ([MOCK_SETUP.md](MOCK_SETUP.md), section 8), and its install notes say so.
+For the Sahamati services, you install it with two values files:
+
+- `helm/iop-gw/values-production.yaml`: the production settings and the Sahamati services (it
+  replaces every mock default);
+- a small file of your own (here `my-entity.yaml`) with what only you know: your entity id, key
+  ids, core address, linked AAs and image location. An example is at the end of
+  `values-production.yaml`.
+
+The chart refuses to install until every value it needs is set, and lists each missing one.
+
+To try the chart without the Sahamati services first, see [MOCK_SETUP.md](MOCK_SETUP.md),
+section 8: it installs mock services and four gateways wired together.
 
 1. **Create the two Secrets** the gateway reads (or let Vault or your cloud secret store create them
    with these keys):
@@ -167,14 +180,35 @@ The chart is in `helm/iop-gw`. Start from `helm/iop-gw/values-production.yaml`.
    Each key of `iop-gw-env` becomes an environment variable (the configuration refers to it as
    `${IOPGW_API_TOKEN}`); each key of `iop-gw-files` becomes a file under `/etc/iop-gw/secrets/`.
 
-2. **Copy `values-production.yaml`** and replace every `REPLACE-ME`: the image location, your
-   entity id and key ids, your core's address, the Sahamati URLs, and your linked AAs. The `config:`
-   section is the gateway configuration (section 5), in the same format as the file.
+2. **Write `my-entity.yaml`** with your values. Its `config:` section is the gateway configuration
+   (section 5), in the same format as the file, and only needs the keys you set: Helm merges it
+   with `values-production.yaml`.
+
+   ```yaml
+   image:
+     repository: registry.your-domain.example/iop-gw
+   config:
+     mode: AA                                   # AA, FIU or FIP
+     self:
+       id: aa-test-002                          # your Central Registry id
+       signingKey: {source: file, kid: aa-test-002-sig-2026-11, file: /etc/iop-gw/secrets/signing.pem}
+       decryptionKeys: {source: file, keys: [{kid: aa-test-002-enc-2026-11, file: /etc/iop-gw/secrets/decryption.pem}]}
+     core: {baseUrl: "http://aa-core.your-namespace.svc:8090"}
+     linkedAAs: {source: config, aas: [aa-test-003, aa-test-004]}
+   ```
 
 3. **Install:**
 
    ```bash
-   helm install iop-gw ./helm/iop-gw -f my-values.yaml
+   helm install iop-gw ./helm/iop-gw -f helm/iop-gw/values-production.yaml -f my-entity.yaml
+   ```
+
+   If a value is missing, nothing is installed and the error lists what to set, for example:
+
+   ```
+   These values must be set (see SETUP.md, section 5):
+     - config.self.id: your Central Registry id
+     - config.core.baseUrl: where your core is reached
    ```
 
 4. **Expose the public `/iop` listener** to other participants (an Ingress or a load balancer, with
@@ -192,7 +226,7 @@ internal listener, larger resources, and existing Secrets named `iop-gw-env` and
 
 | Value | Default | What it does |
 |---|---|---|
-| `image.repository` | `sahamatidevsecops/iop-gw` | Registry and name of the gateway image. Set it to where Sahamati publishes the image, or to your own registry if you mirror it. |
+| `image.repository` | – (required) | Registry and name of the gateway image. Set it to where Sahamati publishes the image, or to your own registry if you mirror it. |
 | `image.tag` | the chart's `appVersion` (`0.0.0.0`) | Image version. Pin an exact version; upgrade it together with the chart. |
 | `image.pullPolicy` | `IfNotPresent` | Standard Kubernetes pull policy. |
 | `imagePullSecrets` | `[]` | `[{name: <secret>}]` when your registry needs credentials. |
@@ -201,7 +235,7 @@ internal listener, larger resources, and existing Secrets named `iop-gw-env` and
 
 | Value | Default | What it does |
 |---|---|---|
-| `config` | an AA-mode example with `REPLACE-ME` placeholders | The whole gateway configuration (section 5), written as YAML under this key. The chart renders it into a ConfigMap mounted at `/etc/iop-gw/config.yaml`. |
+| `config` | the structure, with every entity-specific value empty (required) | The whole gateway configuration (section 5), written as YAML under this key. The chart renders it into a ConfigMap mounted at `/etc/iop-gw/config.yaml`. |
 
 Helm **merges** your `config` with the chart's default key by key: a key you leave out keeps the
 chart's value, and a list you set replaces the chart's list. To remove a default key, set it to
@@ -231,7 +265,7 @@ A change to `config` applied with `helm upgrade` restarts the pods automatically
 
 | Value | Default | What it does |
 |---|---|---|
-| `truststore.existingSecret` | – | Name of a Secret holding a PKCS12 truststore. Only needed when the gateway calls a service whose TLS certificate is signed by a CA the JVM does not already trust, for example a core served over HTTPS with your internal CA (`core.keysBaseUrl`, key and linkedAAs URLs). The Sahamati services use publicly trusted certificates and need none. The truststore **replaces** the JVM's default trust store, so it must also contain the public CAs of any public service the gateway calls. |
+| `truststore.existingSecret` | `mocks-truststore` (`values-production.yaml`: none) | Name of a Secret holding a PKCS12 truststore. The default trusts `iop-gw-mocks`; `values-production.yaml` removes it. Only needed when the gateway calls a service whose TLS certificate is signed by a CA the JVM does not already trust, for example a core served over HTTPS with your internal CA (`core.keysBaseUrl`, key and linkedAAs URLs). The Sahamati services use publicly trusted certificates and need none. The truststore **replaces** the JVM's default trust store, so it must also contain the public CAs of any public service the gateway calls. |
 | `truststore.key` | `truststore.p12` | The key in that Secret that holds the truststore file. |
 | `truststore.password` | `changeit` | The truststore password. It appears in the pod's environment; a truststore holds only public certificates. |
 | `javaOpts` | – | Extra JVM options, added after the image's own: memory sized from the container limit, exit on out-of-memory, no heap dumps. Do not enable debug or JMX ports here. |
@@ -693,7 +727,7 @@ as in section 4.2.
 | Operation | Helm | Docker |
 |---|---|---|
 | **Restart** with the same settings | `kubectl rollout restart deployment/iop-gw` (`statefulset/iop-gw` with `cache.persistent`) | `docker restart iop-gw` |
-| **Change the configuration** | Edit `config` in your values file, then `helm upgrade iop-gw ./helm/iop-gw -f my-values.yaml`. The pods restart by themselves. | Edit `config.yaml`, then `docker restart iop-gw`. |
+| **Change the configuration** | Edit `config` in your values file, then `helm upgrade iop-gw ./helm/iop-gw -f helm/iop-gw/values-production.yaml -f my-entity.yaml`. The pods restart by themselves. | Edit `config.yaml`, then `docker restart iop-gw`. |
 | **Add or replace a secret file** | Update the files Secret with all its files (below). The new file appears in running pods within a minute or two. | Copy the file into `./secrets`. It is visible in the container at once. |
 | **Change an environment variable** (`${NAME}`) | Update the env Secret, then restart. | Remove and re-create the container with the new `-e` value (`docker rm -f iop-gw`, then the `docker run` of section 4.2). `docker restart` keeps the old values. With Compose: edit `.env`, then `docker compose up -d`. |
 

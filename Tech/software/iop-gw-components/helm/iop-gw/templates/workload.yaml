@@ -1,4 +1,5 @@
 {{- $persistent := .Values.cache.persistent -}}
+{{- include "iop-gw.validate" . -}}
 {{- if not (include "iop-gw.envSecret" .) }}{{ fail "set secretEnv.existingSecret (or createSecrets.enabled for testing)" }}{{ end -}}
 {{- if not (include "iop-gw.filesSecret" .) }}{{ fail "set files.existingSecret (or createSecrets.enabled for testing)" }}{{ end -}}
 apiVersion: apps/v1

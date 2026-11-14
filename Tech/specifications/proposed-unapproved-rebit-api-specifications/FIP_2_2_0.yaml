@@ -6,8 +6,6 @@ info:
   description: >-
     # Summary
 
-    # Proposed by Sahamati, subject to approval by ReBIT.
-
     The Financial Information Providers (FIPs) maintain accounts of the
     customers. The Account Aggregator may request FIP for financial information
     of the customers using explicit electronic consents obtained through
@@ -17,11 +15,13 @@ info:
     explicit digitally signed electronic consent. The FIP further maintains the
     status of the consents and exposes the notification API so AA can
     notify it about the changes in the status of consent, account delinking
-    requests etc. Subject to approval by ReBIT.
+    requests etc.
 
 
     ---
-  version: 2.2.0
+  version: 2.1.0
+  contact:
+    email: aa-api@rebit.org.in
 tags:
   - name: Account Discovery and Linking
     description: These APIs are used by AA to discover and link customer FIP accounts.
@@ -576,97 +576,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/LinkDelinkTokenResponse'
-          headers:
-            x-jws-signature:
-                type: string                
-                description: Detached JWS of the response body
-        '400':
-          description: Bad Request
-          schema:
-              $ref: '#/definitions/BadRequestLinkToken'
-          headers:
-            x-jws-signature:
-                type: string                
-                description: Detached JWS of the response body
-        '401':
-          description: Unauthorized
-          schema:
-              $ref: '#/definitions/UnauthorizedLinkToken'
-          headers:
-            x-jws-signature:
-                type: string                
-                description: Detached JWS of the response body
-        '404':
-          description: Not Found
-          schema:
-              $ref: '#/definitions/NotFoundLink'
-          headers:
-            x-jws-signature:
-                type: string                
-                description: Detached JWS of the response body
-        '409':
-          description: Conflict
-          schema:
-              $ref: '#/definitions/Conflict'
-          headers:
-            x-jws-signature:
-                type: string                
-                description: Detached JWS of the response body
-        '412':
-          description: Precondition failed
-          schema:
-              $ref: '#/definitions/PreconditionFailed'
-          headers:
-            x-jws-signature:
-                type: string                
-                description: Detached JWS of the response body
-        '500':
-          description: Internal Server Error
-          schema:
-              $ref: '#/definitions/InternalServerError'
-          headers:
-            x-jws-signature:
-                type: string                
-                description: Detached JWS of the response body
-        '501':
-          description: Not Implemented
-          schema:
-              $ref: '#/definitions/NotImplemented'
-          headers:
-            x-jws-signature:
-                type: string                
-                description: Detached JWS of the response body
-        '503':
-          description: Service Unavailable
-          schema:
-              $ref: '#/definitions/ServiceUnavailable'
-          headers:
-            x-jws-signature:
-                type: string                
-                description: Detached JWS of the response body
-  /Accounts/link/reverify:
-    post:
-      tags:
-        - Account Discovery and Linking
-      description: >-
-        This API is used by an AA to reverify the account linking for a given user handle and link reference number. The primary purpose of this API is to generate attestation of handles that existed before interoperability.
-
-        <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
-      parameters:
-        - name: x-jws-signature
-          type: string          
-          in: header
-          required: true
-          description: Detached JWS of the body
-        - name: body
-          in: body
-          schema:
-            $ref: '#/definitions/LinkReverifyRequest'
-      responses:
-        '200':
-          description: OK
-          schema:
-            $ref: '#/definitions/LinkReverifyResponse'
           headers:
             x-jws-signature:
                 type: string                
@@ -1806,124 +1715,6 @@ definitions:
               type: string
               description: Unique FIP Account Reference Number which is linked with the masked account number.
               example: XXXXXXXXXXXX
-              xml:
-                attribute: true
-            status:
-              type: string
-              description: Status of Account Linking
-              example: LINKED
-              enum:
-                - LINKED
-                - DELINKED
-              xml:
-                attribute: true
-  LinkReverifyRequest:
-    description: >-
-      Information of the user handle and link reference number to be verified
-    type: object
-    required:
-      - ver
-      - timestamp
-      - txnid
-      - token
-      - customerAddress
-      - linkRefNumber
-    properties:
-      ver:
-        type: string
-        example: '2.0.0'
-        description: API version
-        xml:
-          attribute: true
-      timestamp:
-        type: string
-        description: Creation timestamp of the message.
-        format: date-time
-        example: '2023-06-26T10:27:17.699+0000'
-        xml:
-          attribute: true
-      txnid:
-        type: string
-        description: >-
-          Unique transaction identifier used for providing an end to end
-          traceability.
-        example: 410c2d2e-4a1e-11e8-960e-0277a9fbfedc
-        xml:
-          attribute: true
-      customerAddress:
-        type: string
-        description: Identifier of the Customer generated during the registration with AA.
-        example: customer_address@aa_identifier
-        xml:
-          attribute: true
-      linkRefNumber:
-        type: string
-        description: Reference number assigned by FIP as part of Account Linking Process.
-        example: xxxxxxxxxxxxx
-        xml:
-          attribute: true
-  LinkReverifyResponse:
-    description: >-
-      A response of confirmation for account reverify with a link reference number
-      and user handle for vua attestation
-    type: object
-    required:
-      - ver
-      - timestamp
-      - txnid
-      - status
-      - AccLinkReverifyDetails
-    properties:
-      ver:
-        type: string
-        example: '2.0.0'
-        description: API version
-        xml:
-          attribute: true
-      timestamp:
-        type: string
-        description: Creation timestamp of the message.
-        format: date-time
-        example: '2023-06-26T10:27:17.699+0000'
-        xml:
-          attribute: true
-      txnid:
-        type: string
-        description: >-
-          Unique transaction identifier used for providing an end to end
-          traceability.
-        example: 410c2d2e-4a1e-11e8-960e-0277a9fbfedc
-        xml:
-          attribute: true
-      status:
-        type: string
-        description: Status of the requested link parameters.
-        example: FOUND
-        enum:
-          - FOUND
-          - NOT_FOUND
-        xml:
-          attribute: true          
-      AccLinkReverifyDetails:
-        type: array
-        description: Linked account details, if found.
-        items:
-          type: object
-          required:
-            - customerAddress
-            - linkRefNumber
-            - status
-          properties:
-            customerAddress:
-              type: string
-              description: Identifier of the Customer generated during the registration with AA.
-              example: customer_address@aa_identifier
-              xml:
-                attribute: true
-            linkRefNumber:
-              type: string
-              description: Reference number assigned by FIP as part of Account Linking Process.
-              example: xxxxxxxxxxxxx
               xml:
                 attribute: true
             status:

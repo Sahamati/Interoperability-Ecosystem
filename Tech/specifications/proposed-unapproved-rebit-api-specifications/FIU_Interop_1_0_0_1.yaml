@@ -8,7 +8,7 @@ info:
        The Financial Information User (FIU) Interoperability APIs enable communication between unconnected FIUs and AAs. These APIs facilitate the flow of information between unconnected entities, with their mutually linked AAs acting as gateways. Eventually, customers would be able to use any FIU of their choice to fetch their financial information from any FIP of their choice. Subject to approval by ReBIT.
 
     ---
-  version: 1.0.0
+  version: 1.0.0.1
   title: Financial Information User Interoperability Callback API
   x-custom-tags:
     x-api-name: Financial Information User (FIU) Interoperability Callback API

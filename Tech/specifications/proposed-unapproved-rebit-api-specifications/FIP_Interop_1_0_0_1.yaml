@@ -9,7 +9,7 @@ info:
        The Financial Information Provider (FIP) Interoperability APIs enable communication between unconnected FIPs and AAs. These APIs facilitate the flow of information between unconnected entities, with their mutually linked AAs acting as gateways. Eventually, customers would be able to use any FIU of their choice to fetch their financial information from any FIP of their choice. Subject to approval by ReBIT.
 
     ---
-  version: 1.0.0
+  version: 1.0.0.1
   title: Financial Information Provider Interoperability API
   x-custom-tags:
     x-api-name: Financial Information Provider (FIP) Interoperability API
@@ -74,7 +74,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequest"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -82,7 +82,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -90,7 +90,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFound"
+            $ref: "#/definitions/IOPErrorResponse"
         "409":
           description: Conflict
           headers:
@@ -98,7 +98,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConflict"
+            $ref: "#/definitions/IOPErrorResponse"
         "412":
           description: Precondition failed
           headers:
@@ -106,7 +106,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPPreconditionFailed"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -114,7 +114,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -122,7 +122,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -130,7 +130,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -138,7 +138,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
   /iop/Accounts/link:
     post:
       tags:
@@ -177,7 +177,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequest"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -185,7 +185,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -193,7 +193,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFound"
+            $ref: "#/definitions/IOPErrorResponse"
         "409":
           description: Conflict
           headers:
@@ -201,7 +201,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConflict"
+            $ref: "#/definitions/IOPErrorResponse"
         "412":
           description: Precondition failed
           headers:
@@ -209,7 +209,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPPreconditionFailed"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -217,7 +217,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -225,7 +225,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -233,7 +233,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -241,7 +241,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
   /iop/Accounts/link/verify:
     post:
       tags:
@@ -281,7 +281,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequest"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -289,7 +289,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -297,7 +297,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFound"
+            $ref: "#/definitions/IOPErrorResponse"
         "409":
           description: Conflict
           headers:
@@ -305,7 +305,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConflict"
+            $ref: "#/definitions/IOPErrorResponse"
         "412":
           description: Precondition failed
           headers:
@@ -313,7 +313,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPPreconditionFailed"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -321,7 +321,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -329,7 +329,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -337,7 +337,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -345,7 +345,106 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
+  /Accounts/link/reverify:
+    post:
+      tags:
+        - Account Linking
+      description: >-
+        This API is used by an AA to reverify the account linking for a given user handle and link reference number. The primary purpose of this API is to generate attestation of handles that existed before interoperability.
+
+        <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
+      parameters:
+        - name: x-jws-signature
+          type: string
+          in: header
+          required: true
+          description: Detached JWS of the body
+        - name: body
+          in: body
+          schema:
+            $ref: '#/definitions/LinkReverifyRequest'
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/LinkReverifyResponse'
+          headers:
+            x-jws-signature:
+                type: string
+                description: Detached JWS of the response body
+        '400':
+          description: Bad Request
+          schema:
+              $ref: '#/definitions/BadRequestLinkToken'
+          headers:
+            x-jws-signature:
+                type: string
+                description: Detached JWS of the response body
+        '401':
+          description: Unauthorized
+          schema:
+              $ref: '#/definitions/UnauthorizedLinkToken'
+          headers:
+            x-jws-signature:
+                type: string
+                description: Detached JWS of the response body
+        '404':
+          description: Not Found
+          schema:
+              $ref: '#/definitions/NotFoundLink'
+          headers:
+            x-jws-signature:
+                type: string
+                description: Detached JWS of the response body
+        '409':
+          description: Conflict
+          schema:
+              $ref: '#/definitions/Conflict'
+          headers:
+            x-jws-signature:
+                type: string
+                description: Detached JWS of the response body
+        '412':
+          description: Precondition failed
+          schema:
+              $ref: '#/definitions/PreconditionFailed'
+          headers:
+            x-jws-signature:
+                type: string
+                description: Detached JWS of the response body
+        "429":
+          description: Too many requests
+          headers:
+            x-jws-signature:
+              type: string
+              description: Detached JWS of the response body
+          schema:
+            $ref: "#/definitions/TooManyRequests"
+        '500':
+          description: Internal Server Error
+          schema:
+              $ref: '#/definitions/InternalServerError'
+          headers:
+            x-jws-signature:
+                type: string
+                description: Detached JWS of the response body
+        '501':
+          description: Not Implemented
+          schema:
+              $ref: '#/definitions/NotImplemented'
+          headers:
+            x-jws-signature:
+                type: string
+                description: Detached JWS of the response body
+        '503':
+          description: Service Unavailable
+          schema:
+              $ref: '#/definitions/ServiceUnavailable'
+          headers:
+            x-jws-signature:
+                type: string
+                description: Detached JWS of the response body
   /iop/Accounts/link/reverify:
     post:
       tags:
@@ -385,7 +484,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequest"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -393,7 +492,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -401,7 +500,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFound"
+            $ref: "#/definitions/IOPErrorResponse"
         "409":
           description: Conflict
           headers:
@@ -409,7 +508,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConflict"
+            $ref: "#/definitions/IOPErrorResponse"
         "412":
           description: Precondition failed
           headers:
@@ -417,7 +516,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPPreconditionFailed"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -425,7 +524,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -433,7 +532,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -441,7 +540,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -449,7 +548,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
   /iop/Accounts/delink:
     post:
       tags:
@@ -488,7 +587,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequest"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -496,7 +595,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -504,7 +603,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFound"
+            $ref: "#/definitions/IOPErrorResponse"
         "409":
           description: Conflict
           headers:
@@ -512,7 +611,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConflict"
+            $ref: "#/definitions/IOPErrorResponse"
         "412":
           description: Precondition failed
           headers:
@@ -520,7 +619,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPPreconditionFailed"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -528,7 +627,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -536,7 +635,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -544,7 +643,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -552,7 +651,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
   /iop/Consent:
     post:
       tags:
@@ -591,7 +690,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequestConsent"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -599,7 +698,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -607,7 +706,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFound"
+            $ref: "#/definitions/IOPErrorResponse"
         "409":
           description: Conflict
           headers:
@@ -615,7 +714,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConflict"
+            $ref: "#/definitions/IOPErrorResponse"
         "412":
           description: Precondition failed
           headers:
@@ -623,7 +722,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPPreconditionFailed"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -631,7 +730,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -639,7 +738,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -647,7 +746,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -655,7 +754,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
   /iop/FI/request:
     post:
       tags:
@@ -695,7 +794,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequestFIRequest"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -703,7 +802,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "403":
           description: Forbidden
           headers:
@@ -711,7 +810,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPForbiddenFIRequest"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -719,7 +818,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFoundFIRequest"
+            $ref: "#/definitions/IOPErrorResponse"
         "409":
           description: Conflict
           headers:
@@ -727,7 +826,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConflict"
+            $ref: "#/definitions/IOPErrorResponse"
         "412":
           description: Precondition failed
           headers:
@@ -735,7 +834,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPPreconditionFailed"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -743,7 +842,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -751,7 +850,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -759,7 +858,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -767,7 +866,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
   /iop/FI/fetch:
     post:
       tags:
@@ -779,7 +878,7 @@ paths:
         <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
       parameters:
       - name: x-jws-signature 
-        type: string          
+        type: string
         in: header
         required: true
         description: Detached JWS of the body
@@ -806,7 +905,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequestFIFetch"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -814,7 +913,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "403":
           description: Forbidden
           headers:
@@ -822,7 +921,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPForbiddenFIFetch"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -830,7 +929,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFoundFIFetch"
+            $ref: "#/definitions/IOPErrorResponse"
         "409":
           description: Conflict
           headers:
@@ -838,7 +937,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConflict"
+            $ref: "#/definitions/IOPErrorResponse"
         "412":
           description: Precondition failed
           headers:
@@ -846,7 +945,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPPreconditionFailed"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -854,7 +953,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -862,7 +961,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -870,7 +969,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -878,7 +977,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
   /iop/Consent/Notification:
     post:
       tags:
@@ -890,7 +989,7 @@ paths:
         <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
       parameters:
       - name: x-jws-signature 
-        type: string          
+        type: string
         in: header
         required: true
         description: Detached JWS of the body
@@ -917,7 +1016,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequestConsentNotification"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -925,7 +1024,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -933,7 +1032,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFound"
+            $ref: "#/definitions/IOPErrorResponse"
         "409":
           description: Conflict
           headers:
@@ -941,7 +1040,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConflict"
+            $ref: "#/definitions/IOPErrorResponse"
         "412":
           description: Precondition failed
           headers:
@@ -949,7 +1048,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPPreconditionFailed"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -957,7 +1056,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -965,7 +1064,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -973,7 +1072,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -981,7 +1080,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
   /iop/Heartbeat:
     post:
       tags:
@@ -993,7 +1092,7 @@ paths:
         <br>Note: "Request Body Example Value" and "Responses Example Value" given below is for illustrative purposes only.
       parameters:
       - name: x-jws-signature 
-        type: string          
+        type: string
         in: header
         required: true
         description: Detached JWS of the body
@@ -1022,7 +1121,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPBadRequest"
+            $ref: "#/definitions/IOPErrorResponse"
         "401":
           description: Unauthorized Access
           headers:
@@ -1030,7 +1129,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPUnauthorizedAccess"
+            $ref: "#/definitions/IOPErrorResponse"
         "404":
           description: Not Found
           headers:
@@ -1038,7 +1137,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotFound"
+            $ref: "#/definitions/IOPErrorResponse"
         "429":
           description: Too many requests
           headers:
@@ -1046,7 +1145,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPTooManyRequests"
+            $ref: "#/definitions/IOPErrorResponse"
         "500":
           description: Internal Server Error
           headers:
@@ -1054,7 +1153,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPInternalServerError"
+            $ref: "#/definitions/IOPErrorResponse"
         "501":
           description: Not Implemented
           headers:
@@ -1062,7 +1161,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPNotImplemented"
+            $ref: "#/definitions/IOPErrorResponse"
         "503":
           description: Service Unavailable
           headers:
@@ -1070,7 +1169,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPServiceUnavailable"
+            $ref: "#/definitions/IOPErrorResponse"
 securityDefinitions:
   x-inter_aa_api_key:
     description: x-inter_aa_api_key is provided by the inter-AA to the FIP
@@ -1742,8 +1841,6 @@ definitions:
         $ref: "#/definitions/Initiator"  
       encryptedPayload:
         $ref: "#/definitions/EncryptedPayload"
-        
-
   IOPAccountDiscoverRequest:
     type: object
     required:
@@ -1811,7 +1908,125 @@ definitions:
       Initiator:
         $ref: "#/definitions/Initiator"  
       encryptedPayload:
-        $ref: "#/definitions/IopAccountLinkRequestPayload"      
+        $ref: "#/definitions/IopAccountLinkRequestPayload"
+  LinkReverifyRequest:
+    description: >-
+      Information of the user handle and link reference number to be verified
+    type: object
+    required:
+      - ver
+      - timestamp
+      - txnid
+      - token
+      - customerAddress
+      - linkRefNumber
+    properties:
+      ver:
+        type: string
+        example: '2.0.0'
+        description: API version
+        xml:
+          attribute: true
+      timestamp:
+        type: string
+        description: Creation timestamp of the message.
+        format: date-time
+        example: '2023-06-26T10:27:17.699+0000'
+        xml:
+          attribute: true
+      txnid:
+        type: string
+        description: >-
+          Unique transaction identifier used for providing an end to end
+          traceability.
+        example: 410c2d2e-4a1e-11e8-960e-0277a9fbfedc
+        xml:
+          attribute: true
+      customerAddress:
+        type: string
+        description: Identifier of the Customer generated during the registration with AA.
+        example: customer_address@aa_identifier
+        xml:
+          attribute: true
+      linkRefNumber:
+        type: string
+        description: Reference number assigned by FIP as part of Account Linking Process.
+        example: xxxxxxxxxxxxx
+        xml:
+          attribute: true
+  LinkReverifyResponse:
+    description: >-
+      A response of confirmation for account reverify with a link reference number
+      and user handle for vua attestation
+    type: object
+    required:
+      - ver
+      - timestamp
+      - txnid
+      - status
+      - AccLinkReverifyDetails
+    properties:
+      ver:
+        type: string
+        example: '2.0.0'
+        description: API version
+        xml:
+          attribute: true
+      timestamp:
+        type: string
+        description: Creation timestamp of the message.
+        format: date-time
+        example: '2023-06-26T10:27:17.699+0000'
+        xml:
+          attribute: true
+      txnid:
+        type: string
+        description: >-
+          Unique transaction identifier used for providing an end to end
+          traceability.
+        example: 410c2d2e-4a1e-11e8-960e-0277a9fbfedc
+        xml:
+          attribute: true
+      status:
+        type: string
+        description: Status of the requested link parameters.
+        example: FOUND
+        enum:
+          - FOUND
+          - NOT_FOUND
+        xml:
+          attribute: true
+      AccLinkReverifyDetails:
+        type: array
+        description: Linked account details, if found.
+        items:
+          type: object
+          required:
+            - customerAddress
+            - linkRefNumber
+            - status
+          properties:
+            customerAddress:
+              type: string
+              description: Identifier of the Customer generated during the registration with AA.
+              example: customer_address@aa_identifier
+              xml:
+                attribute: true
+            linkRefNumber:
+              type: string
+              description: Reference number assigned by FIP as part of Account Linking Process.
+              example: xxxxxxxxxxxxx
+              xml:
+                attribute: true
+            status:
+              type: string
+              description: Status of Account Linking
+              example: LINKED
+              enum:
+                - LINKED
+                - DELINKED
+              xml:
+                attribute: true
   IOPAccountLinkVerifyRequest:
     type: object
     required:
@@ -2298,8 +2513,6 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
         $ref: "#/definitions/IopConsentNotificationPayload"
-         
-    
   ErrorResponse:
     type: object
     required:
@@ -2307,6 +2520,8 @@ definitions:
     - correlationId
     - txnid
     - ver
+    - errorCode
+    - errorMsg
     properties:
       ver:
         type: string
@@ -2342,239 +2557,15 @@ definitions:
   IOPErrorResponse:
     type: object
     required:
+    - timestamp
+    - correlationId
+    - txnid
+    - ver
     - encryptedPayload
     properties:
-      errorSource:
-        $ref: "#/definitions/SourceOfError"
-      encryptedPayload:
-        $ref: "#/definitions/EncryptedPayload"
-    description: Generic Error Response. Specific Error Responses extend from this.
-  IOPBadRequest:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        description: Error code pertaining to the invalid request.
-        enum:
-        - InvalidRequest
-        - InvalidURI
-        - InvalidSecurity
-        - SignatureDoesNotMatch
-    allOf:
-    - $ref: "#/definitions/ErrorResponse"
-    - $ref: "#/definitions/IOPErrorResponse"
-    - {}
-    description: Response to bad request.
-  IOPNotFound:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        description: Indicates that the resource specified in the request was not found.
-        enum:
-        - NoSuchResource
-    allOf:
-    - $ref: "#/definitions/ErrorResponse"
-    - $ref: "#/definitions/IOPErrorResponse"
-    - {}
-    description: Requested resource was not found.
-  IOPConflict:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        description: IdempotencyError when UUID/Id is not unique.
-        enum:
-        - IdempotencyError
-    allOf:
-    - $ref: "#/definitions/ErrorResponse"
-    - $ref: "#/definitions/IOPErrorResponse"
-    - {}
-    description: IdempotencyError when UUID/Id is not unique
-  IOPPreconditionFailed:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - PreconditionFailed
-    allOf:
-    - $ref: "#/definitions/ErrorResponse"
-    - $ref: "#/definitions/IOPErrorResponse"
-    - {}
-    description: At least one of the preconditions you specified did not hold.
-  IOPTooManyRequests:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - TooManyRequests
-    allOf:
-    - $ref: "#/definitions/ErrorResponse"
-    - $ref: "#/definitions/IOPErrorResponse"
-    - {}
-    description: Too many requests received, try later.
-  IOPInternalServerError:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - InternalError
-    allOf:
-    - $ref: "#/definitions/ErrorResponse"
-    - $ref: "#/definitions/IOPErrorResponse"
-    - {}
-    description: Encountered an internal error. Please try again.
-  IOPNotImplemented:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - NotImplemented
-    allOf:
-    - $ref: "#/definitions/ErrorResponse"
-    - $ref: "#/definitions/IOPErrorResponse"
-    - {}
-    description: Trying to access an unimplemented feature/API. Required when we provide backward compatiable API.
-  IOPServiceUnavailable:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - ServiceUnavailable
-    allOf:
-    - $ref: "#/definitions/ErrorResponse"
-    - $ref: "#/definitions/IOPErrorResponse"
-    - {}
-    description: Service is unavailable.
-  IOPBadRequestConsent:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - InvalidRequest
-        - InvalidURI
-        - InvalidSecurity
-        - SignatureDoesNotMatch
-        - InvalidCustomerAddress
-        - InvalidConsentPurpose
-    allOf:
-    - $ref: "#/definitions/IOPBadRequest"
-    - {}
-    description: Bad Request during Consent Request.
-  IOPBadRequestFIRequest:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - InvalidRequest
-        - InvalidURI
-        - InvalidSecurity
-        - SignatureDoesNotMatch
-        - InvalidKey
-        - InvalidDateRange
-        - InvalidConsentId
-        - InvalidConsentStatus
-        - InvalidConsentDetail
-        - InvalidConsentUse
-    allOf:
-    - $ref: "#/definitions/IOPBadRequest"
-    - {}
-    description: Bad Request during FIRequest.
-  IOPForbiddenFIRequest:
-    properties:
       ver:
         type: string
-        example: 2.0.0
-        xml:
-          attribute: true
-        description: API version
-      timestamp:
-        type: string
-        format: date-time
-        example: 2023-06-26T06:13:30.967+0000
-        xml:
-          attribute: true
-        description: Creation timestamp of the message.
-      txnid:
-        type: string
-        example: f35761ac-4a18-11e8-96ff-0277a9fbfed
-        description: Unique transaction identifier used for providing an end to end traceability.
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - ConsentExpired
-        - ConsentRevoked
-        - ConsentPaused
-      errorMsg:
-        type: string
-        example: Error code specific error message
-        description: Error message with additional details. Ensure no sensitive information is included in the error message.
-      errorSource:
-        $ref: "#/definitions/SourceOfError"
-      encryptedPayload:
-        $ref: "#/definitions/EncryptedPayload"
-    description: Access is forbidden.
-  IOPNotFoundFIRequest:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - NoSuchVersion
-    allOf:
-    - $ref: "#/definitions/IOPNotFound"
-    - {}
-    description: Not Found error during FI Request.
-  IOPBadRequestFIFetch:
-    properties:
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - InvalidRequest
-        - InvalidURI
-        - InvalidSecurity
-        - SignatureDoesNotMatch
-        - InvalidFIPId
-        - InvalidKey
-        - InvalidDateRange
-        - InvalidSessionId
-        - InvalidConsentId
-        - InvalidConsentStatus
-        - InvalidConsentDetail
-        - InvalidConsentUse
-    allOf:
-    - $ref: "#/definitions/IOPBadRequest"
-    - {}
-    description: Bad Request during FI Fetch.
-  IOPForbiddenFIFetch:
-    properties:
-      ver:
-        type: string
-        example: 2.0.0
+        example: 1.0.0
         xml:
           attribute: true
         description: API version.
@@ -2593,66 +2584,167 @@ definitions:
         description: Response timestamp
       correlationId:
         $ref: "#/definitions/CorrelationId"
-      errorCode:
-        type: string
-        xml:
-          attribute: true
-        enum:
-        - DataFetchRequestInProgress
-        - ConsentExpired
-        - ConsentRevoked
-        - ConsentPaused
-      errorMsg:
-        type: string
-        example: Error code specific error message
       errorSource:
         $ref: "#/definitions/SourceOfError"
       encryptedPayload:
         $ref: "#/definitions/EncryptedPayload"
-    description: Forbidden Request during FI Fetch
-  IOPNotFoundFIFetch:
+    description: Mandatory, when the error is generated by the target entity.
+  BadRequest:
+    description: Response to bad request.
+    allOf:
+      - $ref: '#/definitions/ErrorResponse'
     properties:
       errorCode:
         type: string
+        description: Error code pertaining to the invalid request
+        enum:
+          - InvalidRequest
+          - InvalidURI
+          - InvalidSecurity
+          - SignatureDoesNotMatch
         xml:
           attribute: true
-        enum:
-        - NoSuchVersion
-        - NoDataFound
+  NotFound:
+    description: Requested resource was not found.
     allOf:
-    - $ref: "#/definitions/IOPNotFound"
-    - {}
-    description: Not found error during FI Fetch
-  IOPBadRequestConsentNotification:
+      - $ref: '#/definitions/ErrorResponse'
     properties:
       errorCode:
         type: string
+        description: Indicates that the version ID specified in the request does not match an existing version
+        enum:
+          - NoSuchVersion
         xml:
           attribute: true
-        enum:
-        - InvalidRequest
-        - InvalidURI
-        - InvalidSecurity
-        - SignatureDoesNotMatch
-        - InvalidNotifier
+  Conflict:
+    description: IdempotencyError when UUID/Id is not unique
     allOf:
-    - $ref: "#/definitions/IOPBadRequest"
-    - {}
-    description: Bad Request during Consent Notification
-  IOPUnauthorizedAccess:
+      - $ref: '#/definitions/ErrorResponse'
+    properties:
+      errorCode:
+        description: IdempotencyError when UUID/Id is not unique
+        type: string
+        enum:
+          - IdempotencyError
+        xml:
+          attribute: true
+  BadRequestLinkToken:
+    description: Bad Request confirming linking token
+    allOf:
+      - $ref: '#/definitions/BadRequest'
     properties:
       errorCode:
         type: string
+        enum:
+          - InvalidRequest
+          - InvalidURI
+          - InvalidSecurity
+          - SignatureDoesNotMatch
+          - InvalidLinkToken
         xml:
           attribute: true
+  UnauthorizedLinkToken:
+    description: Unauthorized request.
+    properties:
+      ver:
+        type: string
+        description: API version
+        example: '2.0.0'
+        xml:
+          attribute: true
+      timestamp:
+        type: string
+        description: Creation timestamp of the message.
+        format: date-time
+        example: '2023-06-26T06:13:30.967+0000'
+        xml:
+          attribute: true
+      txnid:
+        type: string
+        description: >-
+          Unique transaction identifier used for providing an end to end
+          traceability.
+        example: f35761ac-4a18-11e8-96ff-0277a9fbfedc
+        xml:
+          attribute: true
+      errorCode:
+        type: string
         enum:
-        - Unauthorized
+          - LinkTokenExpired
+      errorMsg:
+        type: string
+        description: >-
+          Error message with additional details. Ensure no sensitive information
+          is included in the error message.
+        xml:
+          attribute: true
+  NotFoundLink:
+    description: Not found
     allOf:
-    - $ref: "#/definitions/ErrorResponse"
-    - $ref: "#/definitions/IOPErrorResponse"
-    - {}
-    description: Unauthorized Access
-  
+      - $ref: '#/definitions/NotFound'
+    properties:
+      errorCode:
+        type: string
+        enum:
+          - NoSuchVersion
+          - AccountNotFound
+        xml:
+          attribute: true
+  PreconditionFailed:
+    description: At least one of the preconditions you specified did not hold
+    allOf:
+      - $ref: '#/definitions/ErrorResponse'
+    properties:
+      errorCode:
+        type: string
+        enum:
+          - PreconditionFailed
+        xml:
+          attribute: true
+  TooManyRequests:
+    description: Too many requests received, try later
+    allOf:
+      - $ref: '#/definitions/ErrorResponse'
+    properties:
+      errorCode:
+        type: string
+        enum:
+          - TooManyRequests
+        xml:
+          attribute: true
+  InternalServerError:
+    description: Encountered an internal error. Please try again
+    allOf:
+      - $ref: '#/definitions/ErrorResponse'
+    properties:
+      errorCode:
+        type: string
+        enum:
+          - InternalError
+        xml:
+          attribute: true
+  NotImplemented:
+    description: Trying to access an unimplemented feature/API. Required when we provide backward compatiable API.
+    allOf:
+      - $ref: '#/definitions/ErrorResponse'
+    properties:
+      errorCode:
+        type: string
+        enum:
+          - NotImplemented
+        xml:
+          attribute: true
+  ServiceUnavailable:
+    description: Service is unavailable
+    allOf:
+      - $ref: '#/definitions/ErrorResponse'
+    properties:
+      errorCode:
+        type: string
+        enum:
+          - ServiceUnavailable
+        xml:
+          attribute: true
   IOPBaseRequest:
     type: object
     required:

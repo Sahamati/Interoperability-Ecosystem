@@ -8,7 +8,7 @@ info:
        The Account Aggregator (AA) Interoperability APIs enable communication between unconnected FIUs and AAs, and unconnected FIPs and AAs. These APIs facilitate the flow of information between unconnected entities, with their mutually linked AAs acting as gateways. Eventually, customers would be able to use any FIU of their choice to fetch their financial information from any FIP of their choice. Subject to approval by ReBIT.
 
     ---
-  version: 1.0.0
+  version: 1.0.0.1
   title: Account Aggregator Interoperability API
   x-custom-tags:
     x-api-name: Account Aggregator (AA) Interoperability API
@@ -4228,12 +4228,14 @@ definitions:
     description: Generic Error Response. Specific Error Responses extend from this.
   IOPErrorResponse:
     type: object
+    required:
+    - encryptedPayload
     properties:
       errorSource:
         $ref: "#/definitions/SourceOfError"
       encryptedPayload:
         $ref: "#/definitions/EncryptedPayload"
-    description: Generic Error Response. Specific Error Responses extend from this.
+    description: Encrypted error response. Mandatory if returned by a target.
   BadRequest:
     properties:
       errorCode:
@@ -4628,10 +4630,9 @@ definitions:
         type: string
         example: Error code specific error message
         description: Error message with additional details. Ensure no sensitive information is included in the error message.
-      errorSource:
-        $ref: "#/definitions/SourceOfError"
-      encryptedPayload:
-        $ref: "#/definitions/EncryptedPayload"
+    allOf:
+      - $ref: "#/definitions/IOPErrorResponse"
+      - {}
     description: Access is forbidden. Set to IopDownstreamError when forwarding an error in the encryptedPayload field.
   IOPNotFoundFIRequest:
     properties:
@@ -4707,10 +4708,9 @@ definitions:
       errorMsg:
         type: string
         example: Error code specific error message
-      errorSource:
-        $ref: "#/definitions/SourceOfError"
-      encryptedPayload:
-        $ref: "#/definitions/EncryptedPayload"
+    allOf:
+      - $ref: "#/definitions/IOPErrorResponse"
+      - {}
     description: Forbidden Request during FI Fetch
     
   IOPNotFoundFIFetch:

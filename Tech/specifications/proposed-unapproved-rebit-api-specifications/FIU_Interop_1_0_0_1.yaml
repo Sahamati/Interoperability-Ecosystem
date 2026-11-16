@@ -463,7 +463,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/IopFINotificationPayload"
   IOPConsentNotificationResponse:

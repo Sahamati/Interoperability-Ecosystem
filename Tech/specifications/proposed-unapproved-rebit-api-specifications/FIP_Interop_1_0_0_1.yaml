@@ -1838,7 +1838,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/EncryptedPayload"
   IOPAccountDiscoverRequest:
@@ -1872,7 +1872,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/IopAccountDiscoverPayload"      
   IOPAccountLinkRequest:
@@ -1906,7 +1906,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/IopAccountLinkRequestPayload"
   LinkReverifyRequest:
@@ -1917,13 +1917,14 @@ definitions:
       - ver
       - timestamp
       - txnid
+      - correlationId
       - token
       - customerAddress
       - linkRefNumber
     properties:
       ver:
         type: string
-        example: '2.0.0'
+        example: '1.0.0'
         description: API version
         xml:
           attribute: true
@@ -1942,6 +1943,8 @@ definitions:
         example: 410c2d2e-4a1e-11e8-960e-0277a9fbfedc
         xml:
           attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
       customerAddress:
         type: string
         description: Identifier of the Customer generated during the registration with AA.
@@ -1963,12 +1966,13 @@ definitions:
       - ver
       - timestamp
       - txnid
+      - correlationId
       - status
       - AccLinkReverifyDetails
     properties:
       ver:
         type: string
-        example: '2.0.0'
+        example: '1.0.0'
         description: API version
         xml:
           attribute: true
@@ -1987,6 +1991,8 @@ definitions:
         example: 410c2d2e-4a1e-11e8-960e-0277a9fbfedc
         xml:
           attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
       status:
         type: string
         description: Status of the requested link parameters.
@@ -2058,7 +2064,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/IopAccountLinkVerifyPayload"      
   IOPAccountDelinkRequest:
@@ -2092,7 +2098,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/IopAccountDelinkRequestPayload"     
   IOPConsentNotificationRequest:
@@ -2126,7 +2132,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/IopConsentNotificationRequestPayload"      
     
@@ -2161,7 +2167,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/IopFiFetchRequestPayload"
      
@@ -2196,7 +2202,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/IopFIPayload"    
   IOPConsentRequest:
@@ -2230,7 +2236,7 @@ definitions:
       correlationId:
         $ref: "#/definitions/CorrelationId"
       Initiator:
-        $ref: "#/definitions/Initiator"  
+        $ref: "#/definitions/Initiator"
       encryptedPayload:
         $ref: "#/definitions/IopConsentPayload"
   IOPResponse:
@@ -2645,6 +2651,13 @@ definitions:
           attribute: true
   UnauthorizedLinkToken:
     description: Unauthorized request.
+    required:
+    - timestamp
+    - correlationId
+    - txnid
+    - ver
+    - errorCode
+    - errorMsg
     properties:
       ver:
         type: string
@@ -2667,6 +2680,8 @@ definitions:
         example: f35761ac-4a18-11e8-96ff-0277a9fbfedc
         xml:
           attribute: true
+      correlationId:
+        $ref: "#/definitions/CorrelationId"
       errorCode:
         type: string
         enum:

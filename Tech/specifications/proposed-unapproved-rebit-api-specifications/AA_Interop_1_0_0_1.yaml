@@ -170,8 +170,8 @@ paths:
           - $ref: "#/definitions/InitiatorFIU"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
+              Envelope with encrypted payload. One of `Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
             x-oneOf-required:
             - Target
             - Initiator
@@ -296,15 +296,11 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPAccDiscoveryRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetFIP"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope payload with encrypted data.
       security:
       - x-orig_aa_api_key: []
       responses:
@@ -315,7 +311,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPAccDiscoveryResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -424,15 +420,11 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPAccLinkRequestRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetFIP"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope payload with encrypted data.
       security:
       - x-orig_aa_api_key: []
       responses:
@@ -443,7 +435,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPAccLinkResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -553,15 +545,11 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPAccLinkVerifyRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetFIP"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope payload with encrypted data.
       security:
       - x-orig_aa_api_key: []
       responses:
@@ -572,7 +560,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPAccLinkVerifyResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -686,11 +674,7 @@ paths:
           - $ref: "#/definitions/TargetFIP"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope payload with encrypted data.
       security:
       - x-orig_aa_api_key: []
       responses:
@@ -807,19 +791,15 @@ paths:
         type: string
       - in: body
         name: body
-        description: Information of the user for discovering the account/s at the FIP
+        description: Information of the user for delinking the account/s at the FIP
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPAccDelinkRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetFIP"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope payload with encrypted data.
       security:
       - x-orig_aa_api_key: []
       responses:
@@ -830,7 +810,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPAccDeLinkResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -940,16 +920,27 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPLinkNotificationRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIP"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope with encrypted payload. One of`Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
+
+              <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+                <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+                <tbody>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                </tbody>
+              </table>
       security:
       - fip_api_key: []
       - x-inter_aa_api_key: []
@@ -961,7 +952,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPLinkNotificationResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -1070,17 +1061,28 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPConsentRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetFIP"
           - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIU"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope with encrypted payload. One of`Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
+
+              <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+                <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+                <tbody>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                </tbody>
+              </table>
       security:
       - client_api_key: []
       - x-conn_aa_api_key: []
@@ -1093,7 +1095,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConsentResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -1202,16 +1204,27 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPConsentHandleRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIU"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope with encrypted payload. One of`Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
+
+              <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+                <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+                <tbody>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                </tbody>
+              </table>
       security:
       - client_api_key: []
       - x-conn_aa_api_key: []
@@ -1223,7 +1236,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConsentHandleResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -1332,16 +1345,27 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPConsentFetchRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIU"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope with encrypted payload. One of`Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
+
+              <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+                <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+                <tbody>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                </tbody>
+              </table>
       security:
       - client_api_key: []
       - x-conn_aa_api_key: []
@@ -1353,7 +1377,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConsentfetchResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -1463,17 +1487,28 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPFIRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetFIP"
           - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIU"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope with encrypted payload. One of`Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
+
+              <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+                <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+                <tbody>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                </tbody>
+              </table>
       security:
       - client_api_key: []
       - x-conn_aa_api_key: []
@@ -1486,7 +1521,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPFIResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -1603,17 +1638,28 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPFIFetchRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetFIP"
           - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIU"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope with encrypted payload. One of`Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
+
+              <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+                <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+                <tbody>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                </tbody>
+              </table>
       security:
       - client_api_key: []
       - x-conn_aa_api_key: []
@@ -1626,7 +1672,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPFIFetchResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -1743,7 +1789,7 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPConsentNotificationRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/InitiatorFIU"
           - $ref: "#/definitions/TargetFIU"
           - $ref: "#/definitions/TargetFIP"
@@ -1751,11 +1797,22 @@ paths:
           - $ref: "#/definitions/InitiatorFIP"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope with encrypted payload. One of`Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
+
+              <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+                <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+                <tbody>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                </tbody>
+              </table>
       security:
       - client_api_key: []
       - fip_api_key: []
@@ -1771,7 +1828,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPConsentNotificationResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -1880,17 +1937,28 @@ paths:
         required: true
         schema:
           allOf:
-          - $ref: "#/definitions/IOPFINotificationRequest"
+          - $ref: "#/definitions/IOPRequest"
           - $ref: "#/definitions/TargetFIU"
           - $ref: "#/definitions/TargetAA"
           - $ref: "#/definitions/InitiatorFIP"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope with encrypted payload. One of`Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
+
+              <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+                <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+                <tbody>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                </tbody>
+              </table>
       security:
         - fip_api_key: []
         - x-inter_aa_api_key: []
@@ -1903,7 +1971,7 @@ paths:
               type: string
               description: Detached JWS of the response body
           schema:
-            $ref: "#/definitions/IOPFINotificationResponse"
+            $ref: "#/definitions/IOPResponse"
         "400":
           description: Bad Request
           headers:
@@ -2019,11 +2087,22 @@ paths:
           - $ref: "#/definitions/InitiatorFIP"
           - type: object
             description: |-
-              Exactly one of `Target` or `Initiator` MUST be present.
-              A request containing both, or neither, MUST be rejected with 400 Bad Request.
-            x-oneOf-required:
-            - Target
-            - Initiator
+              Envelope with encrypted payload. One of`Initiator` or `Target` MUST be present.
+              Target is mandatory when sender sends to a hop. Initiator is mandatory when a hop delivers to a recipient.
+
+              <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
+                <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
+                <tbody>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
+                  <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
+                </tbody>
+              </table>
       security:
       - client_api_key: []
       - fip_api_key: []
@@ -2274,800 +2353,6 @@ definitions:
       Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
     pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
     example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccDiscoveryPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccLinkPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccLinkVerifyPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccDelinkPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentHandlePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentfetchPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopFIPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopFIFetchPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopNotificationPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentNotificationPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopFINotificationPayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccDiscoveryResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  
-  
-  IopAccLinkResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccLinkVerifyResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopAccDelinkResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentHandleResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopConsentFetchResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopFIResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  IopFIFetchResponePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  AccountLinkNotiResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  ConsentNotiResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
-  FINotiResponsePayload:
-    type: string
-    xml:
-      attribute: true
-    description: |-
-      End-to-end **signed-then-encrypted** business payload, readable only by the target entity. Gateways forward it unchanged.
-
-      The originator first signs the payload (JWS, RFC 7515), then encrypts the signed JWS using the recipient's public encryption key published in the Central Registry (CR). The result is a JWE in **Compact Serialization** (RFC 7516). Hop-AAs (Connected-AA, Inter-AA) forward it unchanged and cannot read it.
-
-      The value consists of five base64url-encoded parts separated by `.`:
-
-      `BASE64URL(JWE_PROTECTED_HEADER).BASE64URL(ENCRYPTED_CEK).BASE64URL(IV).BASE64URL(CIPHERTEXT).BASE64URL(AUTH_TAG)`
-
-      1. **Protected header**: JSON header identifying the algorithms and key, e.g. `{"alg":"RSA-OAEP-256","enc":"A256GCM","kid":"<recipient-key-id>","cty":"JWT"}`
-      2. **Encrypted key**: the content encryption key (CEK), encrypted with the recipient's public key.
-      3. **Initialisation vector**: 96-bit (12-byte) nonce used for AES-GCM.
-      4. **Ciphertext**: the signed JWS, encrypted with the CEK.
-      5. **Authentication tag**: 128-bit AES-GCM authentication tag.
-
-      For reference, the same parts in JWE JSON Serialization member names (RFC 7516 §7.2):
-      ```json
-            {
-              "protected": "BASE64URL(JWE_PROTECTED_HEADER)",
-              "encrypted_key": "BASE64URL(ENCRYPTED_CEK)",
-              "iv": "BASE64URL(96BIT_NONCE)",
-              "ciphertext": "BASE64URL(ENCRYPTED_SIGNED_JWS)",
-              "tag": "BASE64URL(128BIT_AUTH_TAG)"
-            }
-      ```
-      Only the Compact Serialization string is sent on the wire; the JSON form above is explanatory.
-      The ciphertext contains the actual payload that needs to be encrypted.
-    pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
-    example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIiwia2lkIjoic2VydmVyLWtleS0wMSJ9.ENCRYPTED_CEK.NONCE_96BIT.CIPHERTEXT.AUTH_TAG_128BIT
   CustDiscoveryRequest:
     type: object
     required:
@@ -3147,24 +2432,6 @@ definitions:
           $ref: "#/definitions/CustDiscoveryResponse_customerDiscoveryResponse"
   IOPRequest:
     type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
     required:
     - timestamp
     - txnid
@@ -3194,595 +2461,6 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
         $ref: "#/definitions/EncryptedPayload"
-  IOPAccDiscoveryRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopAccDiscoveryPayload"
-  IOPAccLinkRequestRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopAccLinkPayload"
-  IOPAccLinkVerifyRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopAccLinkVerifyPayload"
-  IOPAccDelinkRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopAccDelinkPayload"
-  IOPConsentRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopConsentPayload"
-  IOPConsentHandleRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopConsentHandlePayload"
-  IOPConsentFetchRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopConsentfetchPayload"
-  IOPFIFetchRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopFIFetchPayload"
-  IOPFIRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopFIPayload"
-  IOPLinkNotificationRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopNotificationPayload"
-  IOPConsentNotificationRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopConsentNotificationPayload"
- 
-  IOPFINotificationRequest:
-    type: object
-    description: |-
-      Exactly one of `Initiator` or `Target` MUST be present.
-  
-      A request containing both, or neither, MUST be rejected with 400 Bad Request.
-      <table border="1" style="border-collapse: collapse; border: 1px solid #999;">
-        <thead><tr><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Sender</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Receiver</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable field</th><th style="border: 1px solid #999; padding: 4px 8px; text-align: left; background-color: #f0f0f0;">Applicable values</th></tr></thead>
-        <tbody>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">FIP</td><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;orig-aa-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Inter-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Origin-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIP", "id":"&lt;fip-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Customer-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Target</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"FIU", "id":"&lt;fiu-id&gt;"}</code></td></tr>
-          <tr><td style="border: 1px solid #999; padding: 4px 8px;">Connected-AA</td><td style="border: 1px solid #999; padding: 4px 8px;">FIU</td><td style="border: 1px solid #999; padding: 4px 8px;"><code>Initiator</code></td><td style="border: 1px solid #999; padding: 4px 8px;"><code>{"type":"AA", "id":"&lt;cust-aa-id&gt;"}</code></td></tr>
-        </tbody>
-      </table>
-
-    required:
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    - encryptedPayload
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopFINotificationPayload"
   IOPResponse:
     type: object
     required:
@@ -3814,379 +2492,6 @@ definitions:
         $ref: "#/definitions/CorrelationId"
       encryptedPayload:
         $ref: "#/definitions/EncryptedPayload"
-  IOPAccDiscoveryResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopAccDiscoveryResponsePayload"
-  IOPAccLinkResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopAccLinkResponsePayload"
-  IOPAccLinkVerifyResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopAccLinkVerifyResponsePayload"
-  IOPAccDeLinkResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopAccDelinkResponsePayload"
-  IOPConsentResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopConsentResponsePayload"
- 
-  IOPConsentHandleResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopConsentHandleResponsePayload"
-  IOPConsentfetchResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopConsentFetchResponsePayload"
-  IOPFIFetchResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopFIFetchResponePayload"
-  IOPFIResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/IopFIResponsePayload"
-  IOPLinkNotificationResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/AccountLinkNotiResponsePayload"
-  IOPConsentNotificationResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/ConsentNotiResponsePayload"
-  IOPFINotificationResponse:
-    type: object
-    required:
-    - encryptedPayload
-    - timestamp
-    - txnid
-    - correlationId
-    - ver
-    properties:
-      ver:
-        type: string
-        example: 1.0.0
-        xml:
-          attribute: true
-        description: API version.
-      timestamp:
-        type: string
-        format: date-time
-        example: 2026-10-07T07:35:00Z
-        xml:
-          attribute: true
-        description: Request creation timestamp.
-      txnid:
-        type: string
-        example: 4a4adbbe-29ae-11e8-a8d7-0289437bf331
-        xml:
-          attribute: true
-      correlationId:
-        $ref: "#/definitions/CorrelationId"
-      encryptedPayload:
-        $ref: "#/definitions/FINotiResponsePayload"
   ErrorResponse:
     type: object
     required:

@@ -7,9 +7,9 @@
 |  |  |
 |---|---|
 | **Audience** | FIU application teams that build AA Interoperability into their existing FIU application |
-| **Version** | Draft 1.11, 2026-11-10 |
+| **Version** | Draft 1.13, 2026-11-18 |
 | **Published by** | Sahamati |
-| **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification) |
+| **Based on** | AA_Interop_1_0_0 (ReBIT AA Interoperability specification); Sahamati AIG APIs v1.2; Sahamati Interoperability CR and Token-service APIs v1.0 |
 
 All identifiers, URLs and values in examples are illustrative.
 
@@ -87,8 +87,8 @@ does not change.
 | Envelope | The JSON body of an `/iop/*` request or response: `ver`, `timestamp`, `txnid`, `correlationId`, `Target` or `Initiator`, and `encryptedPayload` (none on a heartbeat). `encryptedPayload` carries the request, and on a reply the response or the error alike: the HTTP status tells them apart. The Initiator sets `Target` and sends it to the hop; the hop replaces it with `Initiator` when it forwards to the Target. The receiver reads only the field its leg needs (`Target` at the hop, `Initiator` at the Target); if the other one is also present, it is ignored. |
 | Inner JWS | The Initiator's (or Target's) compact JWS over the Direct API payload, carried encrypted inside `encryptedPayload`. |
 | Outer signature | The detached JWS in the `x-jws-signature` header, over the whole envelope, made by the participant that sends it on that leg. |
-| Access token | The FIU's token from the Sahamati token service (`/entity/token/generate`). It is the FIU's api-key on Direct API calls and its bearer token for the Central Registry and the AIG. |
-| IopToken | The FIU's IOP token from the Sahamati token service (`/entity/iopToken/generate`). It is the FIU's role api-key on every `/iop` call it sends to Connected-AAs (section 1.6.5). |
+| Access token | The FIU's regular token from the Sahamati token service (`/v1/entity/token/generate`). It is the FIU's api-key on Direct API calls, its role api-key `client_api_key` on `/iop` calls, and its bearer token for the Central Registry and the AIG. |
+| IopToken | An AA's IOP token from the Sahamati token service. Its claims include `token_use: iop`. Only AAs use it; the FIU does not get one. The FIU receives a Connected-AA's IopToken in `x-conn_aa_api_key` and checks it (section 1.6.5). |
 
 ### 1.3 Changes needed in the FIU application
 
@@ -99,7 +99,7 @@ does not change.
 | 1 | Register as interop ready in the Central Registry, with the FIU's `/iop` base URL, signature public keys and **encryption public keys**. | Yes | 1.5.1 |
 | 2 | Keep the list of linkedAAs (the Connected-AAs the FIU may use). | Yes | 1.5.2 |
 | 3 | Load and refresh the Central Registry entity lists and the AIG, and keep a cached copy. | Yes | 1.6 |
-| 4 | Get and refresh the FIU's access token and IopToken from the Sahamati token service, and use the IopToken on every `/iop` call. | Yes | 1.6.4, 1.6.5 |
+| 4 | Get and refresh the FIU's access token from the Sahamati token service, and use it on Direct API and `/iop` calls. Check that `x-conn_aa_api_key` received on `/iop` calls is an IopToken. | Yes | 1.6.4, 1.6.5 |
 | 5 | Decide per customer: Direct APIs (Customer-AA directly connected) or IOP APIs (not directly connected). | Yes | 1.4 |
 | 6 | Create a `correlationId` (UUID) for each new flow, and keep it on every message of that flow. | Yes | 1.7.2 |
 | 7 | Build `/iop/*` requests: inner JWS, encryption for the Customer-AA, envelope, outer signature, role api-key `client_api_key`. | Yes | 1.7 |
@@ -107,7 +107,7 @@ does not change.
 | 9 | Read replies: check the Connected-AA's signature, decrypt, check the Customer-AA's signature, and handle every error case. | Yes | 1.7.6, 1.10 |
 | 10 | Serve `/iop/Consent/Notification` and `/iop/FI/Notification` for Connected-AAs, with all security checks. | Yes | 1.11 |
 | 11 | Answer notifications with a signed, encrypted reply for the Customer-AA. | Yes | 1.11.5 |
-| 12 | De-duplicate incoming messages on the payload's `txnid`. | Yes | 1.11.4 |
+| 12 | De-duplicate incoming messages on the payload's `txnid`, and answer a repeat with `409 IdempotencyError`. | Yes | 1.11.4 |
 | 13 | Manage signing and decryption key sets with validity dates, and rotate them in the right order. | Yes | 1.12 |
 | 14 | Enforce the cryptographic profile and size limits. | Yes | 1.13 |
 | 15 | Capture audit records and stats, as required by the FIU's regulatory or internal policy mandates. | Recommended | 1.14 |
@@ -162,9 +162,8 @@ The FIU application loads this data in the background and serves every lookup fr
 | Which AAs are linked to which AAs | AIG `GET /v1/aig/aa` | Every 6 hours | Keep the previous graph; retry after 5 minutes |
 | linkedAAs | The FIU's own list (section 1.5.2) | When it changes | Keep the current list |
 | Access token | Sahamati token service | Before it expires | Keep the current token until it expires; retry at most every 10 seconds |
-| IopToken | Sahamati token service | Before it expires | Keep the current token until it expires; retry at most every 10 seconds |
 
-Keep a cached copy of the Central Registry AA list, the AIG, the access token and the IopToken, so
+Keep a cached copy of the Central Registry AA list, the AIG and the access token, so
 that a restart can serve while a source is down. At start-up, the FIU application uses the cached
 copy and does not fetch the Central Registry AA list or the AIG; it fetches them at start-up only
 when there is no cached copy (for example, the first start). Never cache private keys (section
@@ -177,6 +176,9 @@ when there is no cached copy (for example, the first start). Never cache private
 - The response is a top-level JSON array; each element's `entityinfo` gives one participant:
   `id`, `baseurl`, `interop`, `keys.signature` (or `certificate` when that list is empty) and
   `keys.encryption`.
+- `baseurl` is one URL, or a comma-separated list whose entries may carry a version prefix, for
+  example `v1:https://aa.example.invalid/v1, v2:https://aa.example.invalid/v2`. Use the `v2` URL if
+  present, else the `v1` URL, else a URL without a prefix. Ignore other prefixes.
 - Use only RSA keys of at least 2048 bits with a `kid`. Skip other keys.
 - Each item of `keys.signature` and `keys.encryption` is `{"key": <JWK>, "validFrom", "validTo"}`.
   `validFrom` and `validTo` are optional RFC 3339 timestamps with a time zone, for example
@@ -193,8 +195,8 @@ when there is no cached copy (for example, the first start). Never cache private
 
 #### 1.6.2 AIG (AA graph)
 
-- Call `GET <AIG base URL>/v1/aig/aa` with `Authorization: Bearer <access token>`.
-- Response: `{"aa": [{"id": "<aa id>", "peer-AA": [{"id": "<aa id>", "verified": …, "attr": …}]}]}`.
+- Call `GET <AIG base URL>/v1/aig/aa` with `Authorization: Bearer <access token>` (section 1.21).
+- Response: `{"ver", "timestamp", "txnid", "aa": [{"id": "<aa id>", "peer-AA": [{"id": "<aa id>", "verified": …, "attr": …}]}]}`.
   It lists only AAs and the AAs each is linked to (no FIUs or FIPs).
 - Two AAs are linked if either lists the other (both directions count). The FIU may choose to use
   `verified` or not, for example to prefer verified routes; `attr` is not used.
@@ -210,9 +212,14 @@ when there is no cached copy (for example, the first start). Never cache private
 
 #### 1.6.4 Access token
 
-- Get the token with `POST <token service base URL>/entity/token/generate`, form fields `id`
-  (the FIU's entity id) and `secret` (its entity secret).
-- Response: `{"accessToken", "expiresIn", …}`. Errors: `{"errorCode", "errorMsg"}`.
+- Get the token with `POST <token service URL>/v1/entity/token/generate`, form
+  (`application/x-www-form-urlencoded`) fields `id` (the FIU's entity id) and `secret` (its entity
+  secret). No bearer token is sent.
+- The token service URL is `https://api.sahamati.org.in/iam` (production) or `https://api.uat.sahamati.org.in/iam` (UAT).
+- Response: `{"ver", "timestamp", "txnId", "accessToken", "expiresIn", "refreshExpiresIn", "tokenType",
+  "notBeforePolicy", "scope"}`. `expiresIn` is the lifetime in seconds (for example `86400`).
+- Errors: `400`, `401`, `403`, `429`, `500`, `501` or `503`, with `{"errorCode", "errorMsg"}`.
+- This is the **regular token**. It has no `token_use: iop` claim (section 1.6.5).
 - Get a new token when less than 1 hour of its lifetime remains, or at half its lifetime if it
   lives shorter than that.
 - Read the secret from secure storage each time, so that it can be rotated without a restart.
@@ -220,23 +227,42 @@ when there is no cached copy (for example, the first start). Never cache private
 
 #### 1.6.5 IopToken
 
-The FIU holds two tokens from the Sahamati token service, and uses each for its own calls:
+**Only AAs use the IopToken** (Sahamati token service specification). The FIU does not get one. It
+uses its access token, the regular token (section 1.6.4), on every call it sends:
 
-| Token | Get it with | Use it for |
+| Call sent | Header | Token |
 |---|---|---|
-| Access token (section 1.6.4) | `POST <token service base URL>/entity/token/generate` | Direct API calls, such as `/User/discover` to the AAs the FIU is linked to (section 1.17.3); the bearer token for the Central Registry and the AIG |
-| IopToken | `POST <token service base URL>/entity/iopToken/generate` | The role api-key `client_api_key` on every `/iop` call the FIU sends |
+| Direct API call to an AA | `client_api_key` | Access token |
+| `/iop` call to a Connected-AA (section 1.7.4) | `client_api_key` | Access token |
+| Central Registry and AIG | `Authorization: Bearer` | Access token |
 
-- The token service base URL is, for example, `https://token-generation-url/iam/v1`, so the IopToken
-  is generated with `POST https://token-generation-url/iam/v1/entity/iopToken/generate`.
-- The form fields (`id`, `secret`), the response, the refresh rules and the secrecy rules are those
-  of the access token (section 1.6.4). Each token is refreshed on its own.
-- Use the **IopToken**, not the access token, as the role api-key `client_api_key` on every `/iop`
-  call to a Connected-AA (section 1.7.4).
-- **Receiving.** The api-key `x-conn_aa_api_key` that the Connected-AA sends on an `/iop` call to
-  the FIU is the Connected-AA's IopToken. The FIU must verify that it is a hop token (an IopToken).
-  **Verification procedure:** *To be published.* Until then, the api-key is checked as in section
-  1.11.3.
+**Rule.** An IopToken is accepted only on `/iop` calls. A Direct API call accepts only a regular
+token, and refuses an IopToken.
+
+**Receiving.** The FIU checks the kind of token in the api-key it receives:
+
+| Call received | Header | Must be |
+|---|---|---|
+| `/iop` call from a Connected-AA | `x-conn_aa_api_key` | An IopToken: `token_use` is `iop` |
+| Direct API from a directly connected AA, for example a notification | `aa_api_key` | A regular token: no `token_use: iop` claim |
+
+An IopToken is a JWT whose claims include `token_use` with the value `iop`. A regular token does
+not have this claim. Example claims of an IopToken:
+
+```json
+{
+  "iss": "https://<auth host>/auth/realms/sahamati",
+  "azp": "aa-test-001",
+  "clientId": "aa-test-001",
+  "roles": "AA",
+  "token_use": "iop",
+  "exp": 1794907253
+}
+```
+
+On `/iop`, a key that is not an IopToken is refused with `400 InvalidSecurity` (section 1.11.3,
+check 4). On a Direct API, an IopToken is refused as an invalid api-key, under the FIU's existing
+Direct API rules.
 
 ### 1.7 Sending IOP requests (FIU as Initiator)
 
@@ -294,7 +320,7 @@ For each request, the FIU application:
 
 | Header | Mandatory | Value |
 |---|---|---|
-| `client_api_key` | Yes | The FIU's IopToken (section 1.6.5). It is the FIU's role api-key towards a Connected-AA. Send **no other** role api-key header. |
+| `client_api_key` | Yes | The FIU's access token, the regular token (sections 1.6.4 and 1.6.5). It is the FIU's role api-key towards a Connected-AA. Send **no other** role api-key header. |
 | `x-jws-signature` | Yes | The detached JWS over the envelope (step 5). |
 | `Content-Type` | Yes | `application/json` |
 
@@ -302,7 +328,7 @@ For each request, the FIU application:
 
 ```http
 POST /iop/FI/request
-client_api_key: <the FIU's IopToken>
+client_api_key: <the FIU's access token>
 x-jws-signature: <detached JWS over the body>
 Content-Type: application/json
 
@@ -406,7 +432,7 @@ If no AA is eligible, the request cannot be sent.
 | The Customer-AA's error (`encryptedPayload` with a `4xx`/`5xx` status) | The Customer-AA's Direct API error payload, its status and its inner JWS. |
 | The Customer-AA's error without a payload (`IopDownstreamError` without `encryptedPayload`) | The status only. |
 | Every route failed | "All routes unavailable" (section 1.9.1). |
-| Not sent | The Customer-AA is not registered or not interop ready; no eligible Connected-AA; reference data, keys or the IopToken not available; the payload has no `txnid`; signing or encryption failed. |
+| Not sent | The Customer-AA is not registered or not interop ready; no eligible Connected-AA; reference data, keys or the access token not available; the payload has no `txnid`; signing or encryption failed. |
 | The reply cannot be trusted | The Connected-AA's signature does not verify; `encryptedPayload` cannot be decrypted; the decrypted content is not a compact JWS; the Customer-AA's signature does not verify. The reply is **not used**, and the event is logged. |
 
 A reply that cannot be trusted is not retried automatically: the message may already have been
@@ -441,15 +467,15 @@ Any other `/iop/*` path is answered `404 InvalidURI`; another method, `405`. The
 |---|---|---|
 | 1 | The path is one of section 1.11.1, with `POST` | `404 InvalidURI` / `405 InvalidRequest` |
 | 2 | The body is within the size limit (2 MiB by default) | `413 InvalidRequest` |
-| 3 | Exactly one role api-key header is present, and it is `x-conn_aa_api_key` | None or more than one: `401 InvalidSecurity`. Another key: `403 InvalidSecurity` |
-| 4 | The api-key is a valid token: signature (RS256) with the issuer's public keys (from its JWKS URL) | `401 InvalidSecurity` |
-| 5 | The sender is an AA registered in the Central Registry | `401 InvalidSecurity` / `403 InvalidSecurity` |
-| 6 | `x-jws-signature` is present and verifies over the exact received bytes with the sender's signature keys, matched by `kid` | `401 InvalidSecurity` (missing) / `401 SignatureDoesNotMatch` |
+| 3 | Exactly one role api-key header is present, and it is `x-conn_aa_api_key` | None or more than one: `400 InvalidSecurity`. Another key: `403 InvalidSecurity` |
+| 4 | The api-key is a valid token: signature (RS256) with the issuer's public keys (from its JWKS URL). It is an IopToken: `token_use` is `iop` (section 1.6.5) | `400 InvalidSecurity` |
+| 5 | The sender is an AA registered in the Central Registry | `400 InvalidSecurity` / `403 InvalidSecurity` |
+| 6 | `x-jws-signature` is present and verifies over the exact received bytes with the sender's signature keys, matched by `kid` | `400 InvalidSecurity` (missing) / `400 SignatureDoesNotMatch` |
 | 7 | The body is a JSON object with `txnid` and a `correlationId` in standard UUID format | `400 InvalidRequest` |
 | 8 | The envelope has `Initiator` (a `Target`, if present, is ignored); `Initiator.type` is `AA`, and the Initiator is registered | `400 InvalidRequest` |
 | 9 | The Initiator has an encryption key in the Central Registry (needed for the reply) | `500 InternalError` |
 | 10 | `encryptedPayload` is a compact JWE that decrypts with one of the FIU's usable decryption keys, matched by `kid`, and contains a compact JWS | `400 InvalidRequest` |
-| 11 | The inner JWS verifies with the Initiator's signature keys | `401 SignatureDoesNotMatch`; the notification is **not** processed |
+| 11 | The inner JWS verifies with the Initiator's signature keys | `400 SignatureDoesNotMatch`; the notification is **not** processed |
 
 Only then is the payload passed to the FIU's existing notification logic. Refresh the issuer's
 public keys at start-up, every hour, and when a token names an unknown `kid` (at most once a
@@ -460,7 +486,8 @@ minute).
 The same notification can arrive more than once, because Connected-AAs and Customer-AAs retry and
 use other routes. The envelope `txnid` can differ between copies; the payload's `txnid` does not.
 The FIU **must** de-duplicate on the **payload's** `txnid`: a repeated payload `txnid` is not
-processed again, and the earlier response is returned.
+processed again: it is answered `409` with `errorCode` `IdempotencyError` (as in the ReBIT specification). The
+Initiator then receives this answer, not the response to the first copy.
 
 The FIU may also de-duplicate on the combination of `timestamp` and `txnid`, both from the inner
 payload (not the envelope). Both stay the same on every copy of a notification, because the
@@ -507,14 +534,15 @@ Errors from the checks in section 1.11.3 are not encrypted: they are a plain
 | Status | `errorCode` | When |
 |---|---|---|
 | `400` | `InvalidRequest` | Body not a valid envelope (no `txnid`, no or non-UUID `correlationId`, `Initiator` missing); Initiator not an AA or not registered; `encryptedPayload` not a compact JWE, not decryptable, or without a compact JWS inside |
-| `401` | `InvalidSecurity` | No role api-key header or more than one; invalid api-key; sender not registered; `x-jws-signature` missing |
-| `401` | `SignatureDoesNotMatch` | `x-jws-signature` or the Initiator's inner signature does not verify |
+| `400` | `InvalidSecurity` | No role api-key header or more than one; invalid api-key; sender not registered; `x-jws-signature` missing |
+| `400` | `SignatureDoesNotMatch` | `x-jws-signature` or the Initiator's inner signature does not verify |
 | `403` | `InvalidSecurity` | A role api-key other than `x-conn_aa_api_key`, or the sender is not an AA |
 | `404` | `InvalidURI` | Unknown `/iop` path |
 | `405` | `InvalidRequest` | Wrong HTTP method |
 | `413` | `InvalidRequest` | Body too large |
+| `429` | `TooManyRequests` | Optional: a rate limit is applied and the caller is over it; try again later |
 | `500` | `InternalError` | No encryption key for the Initiator; unable to sign or encrypt the reply |
-| `503` | `InternalError` | Central Registry data, decryption keys or issuer keys not loaded yet |
+| `503` | `ServiceUnavailable` | Central Registry data, decryption keys or issuer keys not loaded yet |
 
 ### 1.12 Keys
 
@@ -583,9 +611,9 @@ required by its regulatory or internal policy mandates.
 | Area | Requirement |
 |---|---|
 | Data protection | Request and response bodies are never logged. Logs carry only ids, paths, status, lengths and latency. Test data uses synthetic ids and generated keys only. |
-| Secrets | The entity secret, the access token, the IopToken and private keys are kept in secure storage, never in code, configuration files or version control, and never logged. |
+| Secrets | The entity secret, the access token and private keys are kept in secure storage, never in code, configuration files or version control, and never logged. |
 | Fail closed | Unknown paths, wrong roles, unregistered or not interop-ready participants, and anything outside the cryptographic profile are refused. |
-| Availability of reference data | Cached Central Registry AA list, AIG, access token and IopToken let the FIU keep working while a source is down. |
+| Availability of reference data | Cached Central Registry AA list, AIG and access token let the FIU keep working while a source is down. |
 | Performance | Targets to be agreed. |
 
 ### 1.16 Production and testing
@@ -598,7 +626,7 @@ Production uses the live sources. Local alternatives are **for testing only**.
 | Which AAs are linked to which | AIG API | A local graph |
 | The FIU's signing and decryption keys | The FIU's secure key storage | Key files |
 | Api-key checking of Connected-AAs | Token issuer's JWKS | Fixed test api-keys |
-| The FIU's role api-key (IopToken) and access token | Sahamati token service | A fixed test api-key |
+| The FIU's access token (also its role api-key) | Sahamati token service | A fixed test api-key |
 
 ### 1.17 User discovery
 
@@ -681,7 +709,7 @@ The FIU goes through the AAs in its Central Registry AA list (the cached copy, s
 
   | Header | Value |
   |---|---|
-  | `client_api_key` | The FIU's access token (section 1.6.4), not the IopToken |
+  | `client_api_key` | The FIU's access token (section 1.6.4) |
   | `x-jws-signature` | A detached JWS over the exact body, with one of the FIU's usable signing keys |
   | `Content-Type` | `application/json` |
 
@@ -731,7 +759,44 @@ error codes the FIU returns on `/iop/*`.)
 
 ### 1.21 AA Interoperability Graph (AIG) APIs to look up
 
-*To be written.* (See section 1.6.2 for how the FIU reads the AIG.)
+The AIG shows the links between AAs and the FIUs, FIPs and other AAs they are connected to. The
+FIU uses it to find the Connected-AAs that can reach an AA. The AIG APIs are hosted on the Central
+Registry: `https://cr.sahamati.org.in` (production) or `https://uatcr.sahamati.org.in` (UAT).
+
+- Call `GET /v1/aig/aa` with `Authorization: Bearer <the FIU's access token>` (section 1.6.2).
+- Response: `{"ver", "timestamp", "txnid", "aa": [{"id": "<AA id>", "peer-AA": [<linked AA>, …]}]}`.
+
+Each linked AA in the lists is:
+
+| Field | Mandatory | Meaning |
+|---|---|---|
+| `id` | Yes | Entity id of the linked AA |
+| `verified` | Yes | `true`: traffic over this link has been verified (through SLA data). `false`: the link is published, but traffic over it is not yet verified |
+| `attr` | No | For future use: values that show the health of the route. Not used |
+
+Example response (synthetic values):
+
+```json
+{
+  "ver": "1.0.0",
+  "timestamp": "2026-10-07T07:35:00.000Z",
+  "txnid": "1a4adbbe-29ae-11e8-a8d7-0289437bf331",
+  "aa": [
+    {
+      "id": "aa-test-001",
+      "peer-AA": [
+        { "id": "aa-test-002", "verified": true, "attr": { "key1": "value1" } }
+      ]
+    }
+  ]
+}
+```
+
+Errors: `400`, `401`, `403`, `429`, `500`, `501` or `503`. On any of them, keep the graph already
+loaded and try again after 5 minutes (section 1.6).
+
+The FIU only looks up the AIG. Links are published by AAs (`PUT /v1/aig/<AA entity id>`); the FIU
+does not publish.
 
 ### 1.22 VUA attestation verification procedure
 
@@ -752,14 +817,14 @@ Each item must be covered by automated tests with synthetic participants.
 | AC-7 | Heartbeat: sent as a `POST` with `Target` and no `encryptedPayload`; the reply is decrypted and verified. |
 | AC-8 | Notifications: `/iop/Consent/Notification` and `/iop/FI/Notification` from a Connected-AA are processed, and the reply decrypts and verifies at the Customer-AA. |
 | AC-9 | Notification rejections: tampered body, missing signature, unknown or invalid api-key, a role key other than `x-conn_aa_api_key`, two role keys, sender not an AA, `Initiator` missing from the envelope, missing or non-UUID `correlationId`, unknown path, wrong method, oversized body. |
-| AC-10 | A spoofed Initiator (inner JWS not from the Initiator) is refused with `401 SignatureDoesNotMatch` and the notification is not processed. |
-| AC-11 | A repeated payload `txnid` (or, where the FIU uses it, a repeated combination of payload `timestamp` and `txnid`) is not processed again and gets the earlier response, even when the envelope `txnid` differs. |
+| AC-10 | A spoofed Initiator (inner JWS not from the Initiator) is refused with `400 SignatureDoesNotMatch` and the notification is not processed. |
+| AC-11 | A repeated payload `txnid` (or, where the FIU uses it, a repeated combination of payload `timestamp` and `txnid`) is not processed again and is answered `409 IdempotencyError`, even when the envelope `txnid` differs. |
 | AC-12 | Keys: signatures use only usable keys, at random; keys join at `applied` and drop at `expiry`; decryption tries keys by `kid`; key material never appears in logs or errors. |
 | AC-13 | Cryptographic profile: RS256 round trips work, and a `PS256` signature is refused; `x-jws-signature` is accepted only as RFC 7797 (`b64: false`, `crit: ["b64"]`), and a standard detached JWS there is refused; `alg: none`, HMAC, `b64: false` or `crit` in the inner JWS, `zip` and a `kid` mismatch are refused. |
 | AC-14 | Reference data: lookups make no calls to the Central Registry or the AIG; a failed refresh keeps the previous data; a cached copy is served after a restart with the source down. |
 | AC-15 | User discovery: each linked AA gets the Direct API `/User/discover` with `client_api_key` and `x-jws-signature`; each other interop-ready AA gets `/iop/User/discover` through a Connected-AA; AAs that are not interop ready are not asked. The requests go in parallel, each with its own `txnid` and the same `correlationId`. The `customerDiscoveryResponse` entries of the `User Found` answers received within the wait time are merged; a Direct API answer that is not `200` or whose signature does not verify is not used; no successful answer gives "all routes unavailable". |
 | AC-16 | Central Registry key windows: a key is used only between its `validFrom` and `validTo`, both included; `validFrom` and `validTo` are RFC 3339 timestamps, and a date alone is skipped; a key whose `validTo` has passed is used neither to verify nor to encrypt; a key with a future `validFrom` comes into use at its `validFrom` without a refresh; a key with `validTo` before `validFrom` is skipped. |
-| AC-17 | IopToken: every `/iop` call the FIU sends carries the IopToken from `/entity/iopToken/generate` as `client_api_key`; the Direct API `/User/discover` carries the access token; the Central Registry and the AIG are called with the access token. The FIU verifies that `x-conn_aa_api_key` received on `/iop/*` is an IopToken, once the verification procedure is published. |
+| AC-17 | Tokens: every `/iop` call the FIU sends carries the FIU's access token (from `/v1/entity/token/generate`, without `use=iop`) as `client_api_key`; the Direct API `/User/discover` carries the access token; the Central Registry and the AIG are called with the access token. A received `x-conn_aa_api_key` that is a valid token without `token_use: iop` is refused with `400 InvalidSecurity`; an `aa_api_key` on a Direct API with `token_use: iop` is refused. |
 
 ### 1.24 Items to be confirmed
 
@@ -768,7 +833,6 @@ Each item must be covered by automated tests with synthetic participants.
 | Role api-key header names (`client_api_key`, `x-conn_aa_api_key`) and `Initiator{type: AA}` on the Connected-AA → FIU leg | Subject to the final ReBIT specification for role api-key names |
 | User discovery APIs (Direct API `/User/discover`, `/iop/User/discover`) and their payloads (`CustDiscoveryRequest`, `CustDiscoveryResponse`) | Proposed by Sahamati in the AA_Interop_1_0_0 "Proposed-1" draft; subject to ReBIT approval |
 | `ver` of the Heartbeat envelope, which has no payload to take it from | `1.0.0` used; subject to the final ReBIT specification |
-| IopToken verification procedure (how a received role api-key is checked to be an IopToken, a hop token) | To be published |
 
 ---
 

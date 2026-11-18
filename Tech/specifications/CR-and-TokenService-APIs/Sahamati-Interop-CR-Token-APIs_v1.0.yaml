@@ -1,0 +1,367 @@
+openapi: 3.0.3
+info:
+  title: Sahamati Interoperability CR and Token-service APIs
+  version: "1.0"
+  description: |
+    Generated from "Interoperability APIs - Interop, Encryption keys, IopToken" v1.0
+    (17-Nov-2026, Jithesh Kumar).
+    Document Classification: Restricted.
+
+    Specifications and usage of Sahamati's APIs for marking an entity as interop-ready,
+    uploading and deleting encryption public keys, and fetching an IopToken.
+
+    The APIs are hosted on two services:
+
+    | Service | APIs |
+    |---|---|
+    | Central Registry (CR) | `PUT /v1/interop/{entity-id}` |
+    | Token service | `POST /v2/enc/entity/certs`, `DELETE /v2/enc/entity/certs/{kid}`, `POST /v1/entity/token/generate` |
+
+    ### Revision history
+    | Version | Date | Remarks |
+    |---|---|---|
+    | 1.0 | 17-Nov-2026 | Added Interop, Public key add/delete, Iop Token fetch |
+
+    All sample values in this file are synthetic.
+servers:
+  - url: https://{token-service-host-url}
+    description: Token service. Used by the Encryption Public Keys and IopToken APIs.
+    variables:
+      token-service-host-url:
+        default: api.sahamati.org.in/iam
+        enum: [api.sahamati.org.in/iam, api.uat.sahamati.org.in/iam]
+        description: api.sahamati.org.in/iam (Production) or api.uat.sahamati.org.in/iam (UAT).
+  - url: https://{cr-host-url}
+    description: Central Registry (CR). Used by the Interop-readiness API.
+    variables:
+      cr-host-url:
+        default: cr.sahamati.org.in
+        enum: [cr.sahamati.org.in, uatcr.sahamati.org.in]
+        description: cr.sahamati.org.in (CR-Production) or uatcr.sahamati.org.in (CR-UAT).
+tags:
+  - name: Interop-readiness
+    description: Mark an entity as interop-ready.
+  - name: Encryption Public Keys
+    description: Register and delete an entity's encryption public keys.
+  - name: IopToken
+    description: |
+      Generate an IopToken. To be used by AAs only.
+
+paths:
+  /v1/interop/{entity-id}:
+    servers:
+      - url: https://{cr-host-url}
+        description: Central Registry (CR).
+        variables:
+          cr-host-url:
+            default: cr.sahamati.org.in
+            enum: [cr.sahamati.org.in, uatcr.sahamati.org.in]
+            description: cr.sahamati.org.in (CR-Production) or uatcr.sahamati.org.in (CR-UAT).
+    put:
+      tags: [Interop-readiness]
+      summary: Set Interop flag
+      description: |
+        Marks the entity as interop-ready (or not). Hosted on the CR.
+        Called with the bearer token of a **user associated with the calling entity**.
+      operationId: setInteropFlag
+      security:
+        - userBearerAuth: []
+      parameters:
+        - name: entity-id
+          in: path
+          required: true
+          description: Entity ID of the calling entity.
+          schema: { type: string }
+          example: aa-test-001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InteropRequest"
+            example:
+              ver: "1.0.0"
+              timestamp: "2026-11-11T08:00:00Z"
+              txnid: "0b1c7c1e-0000-4000-8000-000000000005"
+              enabled: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateResponse"
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-11-06T06:22:34.258596480Z"
+                txnid: "0b1c7c1e-0000-4000-8000-000000000005"
+                message: Updated successfully
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /v2/enc/entity/certs:
+    post:
+      tags: [Encryption Public Keys]
+      summary: Register entity encryption public keys
+      description: |
+        Registers an encryption public key (JWK) for an entity. Hosted on the token service.
+        Called with the bearer token of a **user associated with the calling entity**.
+      operationId: registerEncryptionKey
+      security:
+        - userBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EncKeyRegisterRequest"
+            example:
+              entityId: fip-test-001
+              validFrom: "2026-12-01T00:00:00Z"
+              validTo: "2027-12-01T00:00:00Z"
+              key:
+                kid: k-enc-1
+                kty: RSA
+                use: enc
+                alg: RSA-OAEP-256
+                n: "<base64url-encoded-modulus>"
+                e: AQAB
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EncKeyRegisterResponse"
+              example:
+                ver: "2.0.0"
+                timestamp: "2026-11-16T08:00:00Z"
+                txnId: "<txn-id>"
+                message: Encryption certificate registered successfully
+                kid: k-enc-1
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /v2/enc/entity/certs/{kid}:
+    delete:
+      tags: [Encryption Public Keys]
+      summary: Delete a specific public key
+      description: |
+        Deletes the encryption public key identified by `kid`. Hosted on the token service.
+        Called with the bearer token of a **user associated with the calling entity**.
+      operationId: deleteEncryptionKey
+      security:
+        - userBearerAuth: []
+      parameters:
+        - name: kid
+          in: path
+          required: true
+          description: Key ID of the public key to delete.
+          schema: { type: string }
+          example: k-enc-1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenServiceMessageResponse"
+              example:
+                ver: "2.0.0"
+                timestamp: "2026-11-16T08:00:00Z"
+                txnId: "<txn-id>"
+                message: Encryption certificate deleted successfully
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /v1/entity/token/generate:
+    post:
+      tags: [IopToken]
+      summary: Generate an Iop Token
+      description: |
+        Generates an access token for the entity. Set `use=iop` to receive an IopToken
+        (to be used by AAs only); omit it for a regular token. Hosted on the token service.
+        Authenticated with the entity `id` and `secret` in the form body; no bearer token.
+
+        #### How to verify if it's an iopToken?
+        IopToken claims contain an extra parameter, `token_use: iop`, compared to the regular token.
+        ```json
+        {
+          "iss": "https://<auth-host>/auth/realms/sahamati",
+          "azp": "aa-test-001",
+          "clientId": "aa-test-001",
+          "roles": "AA",
+          "token_use": "iop",
+          "exp": 1794907253
+        }
+        ```
+
+        #### Action for AAs
+        | Purpose | Header name | Token type |
+        |---|---|---|
+        | Sending Direct API | `aa_api_key` | Use regular token |
+        | Sending IOP API | `x-conn_aa_api_key`, `x-cust_aa_api_key`, `x-orig_aa_api_key`, `x-inter_aa_api_key` | Use IOP Token |
+
+        #### Action for FIUs, FIPs and AAs
+        | Purpose | Header name | Token type verification |
+        |---|---|---|
+        | Receiving Direct API | `aa_api_key` | Verify it is a regular token |
+        | Receiving IOP API | `x-conn_aa_api_key`, `x-cust_aa_api_key`, `x-orig_aa_api_key`, `x-inter_aa_api_key` | Verify it is an IOP token, with `token_use` = `iop` |
+
+      operationId: generateToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/TokenGenerateRequest"
+            example:
+              id: aa-test-001
+              secret: "<secret>"
+              use: iop
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenGenerateResponse"
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-11-17T15:30:04.532395832Z"
+                txnId: "03c6a3ce-c41f-414b-9185-fc9a417182f4"
+                accessToken: "<access-token-jwt>"
+                expiresIn: 86400
+                refreshExpiresIn: 0
+                tokenType: Bearer
+                notBeforePolicy: 0
+                scope: email profile
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+components:
+  securitySchemes:
+    userBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token of a user associated with the calling entity.
+
+  schemas:
+    Envelope:
+      type: object
+      required: [ver, timestamp, txnid]
+      properties:
+        ver: { type: string, example: "1.0.0" }
+        timestamp: { type: string, format: date-time }
+        txnid: { type: string }
+
+    InteropRequest:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [enabled]
+          properties:
+            enabled:
+              type: boolean
+              description: "`true` marks the entity as interop-ready; `false` clears the flag."
+
+    UpdateResponse:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            message: { type: string }
+
+    TokenServiceMessageResponse:
+      type: object
+      description: Response envelope used by the token service (note `txnId` in camelCase).
+      required: [ver, timestamp, txnId]
+      properties:
+        ver: { type: string, example: "2.0.0" }
+        timestamp: { type: string, format: date-time }
+        txnId: { type: string }
+        message: { type: string }
+
+    Jwk:
+      type: object
+      description: Encryption public key in JWK format.
+      required: [kid, kty, use, alg, n, e]
+      properties:
+        kid: { type: string, description: Key ID, example: k-enc-1 }
+        kty: { type: string, description: Key type, example: RSA }
+        use: { type: string, description: Public key use, example: enc }
+        alg: { type: string, description: Algorithm, example: RSA-OAEP-256 }
+        n: { type: string, description: RSA modulus (base64url) }
+        e: { type: string, description: RSA public exponent (base64url), example: AQAB }
+
+    EncKeyRegisterRequest:
+      type: object
+      required: [entityId, validFrom, validTo, key]
+      properties:
+        entityId: { type: string, description: Entity ID owning the key, example: fip-test-001 }
+        validFrom: { type: string, format: date-time }
+        validTo: { type: string, format: date-time }
+        key: { $ref: "#/components/schemas/Jwk" }
+
+    EncKeyRegisterResponse:
+      allOf:
+        - $ref: "#/components/schemas/TokenServiceMessageResponse"
+        - type: object
+          properties:
+            kid: { type: string, description: Key ID of the registered key }
+
+    TokenGenerateRequest:
+      type: object
+      required: [id, secret]
+      properties:
+        id: { type: string, description: Entity ID, example: aa-test-001 }
+        secret: { type: string, format: password, description: Entity secret }
+        use:
+          type: string
+          enum: [iop]
+          description: Optional. Set to `iop` to receive an IopToken.
+
+    TokenGenerateResponse:
+      type: object
+      required: [ver, timestamp, txnId, accessToken, expiresIn, tokenType]
+      properties:
+        ver: { type: string, example: "1.0.0" }
+        timestamp: { type: string, format: date-time }
+        txnId: { type: string }
+        accessToken: { type: string, description: JWT access token }
+        expiresIn: { type: integer, description: Token validity in seconds, example: 86400 }
+        refreshExpiresIn: { type: integer, example: 0 }
+        tokenType: { type: string, example: Bearer }
+        notBeforePolicy: { type: integer, example: 0 }
+        scope: { type: string, example: email profile }
+
+  responses:
+    BadRequest: { description: Bad Request }
+    Unauthorized: { description: Unauthorized }
+    Forbidden: { description: Forbidden }
+    TooManyRequests: { description: Too Many Requests }
+    InternalServerError: { description: Internal Server Error }
+    NotImplemented: { description: Not Implemented }
+    ServiceUnavailable: { description: Service Unavailable }

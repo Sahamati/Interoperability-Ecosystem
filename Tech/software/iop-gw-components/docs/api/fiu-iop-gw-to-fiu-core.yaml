@@ -1,0 +1,318 @@
+swagger: '2.0'
+info:
+  title: fiu-iop-gw to fiu-core
+  version: 1.0.0-draft.1
+  description: |
+    **Disclaimer:** Please review and verify the contents of this document against the applicable system requirements and specifications.
+
+    Kindly note that this document is subject to change as development, integration, and testing progress.
+
+    ---
+
+    # Summary
+
+    The APIs that the **fiu-core** exposes for the **fiu-iop-gw**. The fiu-iop-gw calls them to deliver messages
+    from participants that are **not directly connected** to the FIU, and to pull the
+    FIU's keys and its list of linked AAs.
+
+    For each IOP call addressed to the FIU, the fiu-iop-gw checks the calling AA (api-key and
+    signature), decrypts the payload, checks the Initiator's signature, and calls the fiu-core with the
+    plaintext payload. It then signs and encrypts the fiu-core's response for the Initiator.
+
+    The request and response bodies are **exactly the payloads of the matching Direct API call** in the
+    ReBIT specifications. They are not redefined here: they are shown as `DirectApiRequest` and `DirectApiResponse`.
+
+    Initiators: The customer's AA (delivered by one of the FIU's Connected-AAs): `{"type":"AA","id":"<customer AA id>"}`.
+
+    Source: IOP Gateway — Integration Guide for the fiu-core (iop-gateway-fiu-core-prd.md), sections 4, 5.1 and 6.1. Where this file and the guide differ, the guide applies.
+
+    All identifiers in examples are synthetic.
+
+    # Transport
+
+    - Message APIs and linkedAAs: `<fiu-core base URL>/fiu-core/<api>`, HTTPS or plain HTTP, as set in the
+      fiu-iop-gw configuration. Expose them only to the fiu-iop-gw.
+    - Key APIs: **HTTPS only**, at the key base URL set in the fiu-iop-gw configuration (it can differ from the
+      other endpoints). The fiu-iop-gw refuses an `http://` key URL at start-up.
+    - The role api-key header of the calling AA and `Content-Type` are not sent to the fiu-core.
+      `Content-Type` is not required on responses.
+
+    # Rules for the fiu-core
+
+    - **De-duplicate on the payload's `txnid`.** Gateways retry and try other routes, so the same
+      message can arrive more than once. A repeated `txnid` must not be processed again: answer it
+      with `409` and `errorCode` `IdempotencyError` (as in the ReBIT specification).
+    - **Return `Correlation-Id` unchanged** on every message response.
+    - Respond within the fiu-iop-gw's core timeout (30 seconds by default).
+    - A status of 300 or above reaches the Initiator as an error. On an error reply (`400` or above) the
+      fiu-iop-gw adds `errorSource` `{"type":"FIU","id":"<the FIU's id>"}` to the reply envelope;
+      the fiu-core does not set it.
+    - The FIU does not receive IOP heartbeats.
+
+    # When the fiu-iop-gw cannot use the response
+
+    The Initiator receives instead: `500 InternalError` when the fiu-core is unreachable, its response is
+    unreadable or too large, has no or a different `Correlation-Id`, or carries an `x-jws-signature` that
+    does not verify with the FIU's signing keys; `500 InternalError` when the gateway cannot sign
+    or encrypt the response.
+  x-custom-tags:
+    x-generated: '2026-11-13'
+    x-caller: fiu-iop-gw
+    x-callee: fiu-core
+host: fiu-core.example.internal
+basePath: /
+schemes:
+- https
+- http
+consumes:
+- application/json
+produces:
+- application/json
+securityDefinitions:
+  coreToken:
+    type: apiKey
+    in: header
+    name: Authorization
+    description: '`Bearer <token>`, set in the fiu-iop-gw configuration for calls to the core. When it is configured, the fiu-core should reject calls without it or with a different value.'
+  keyFetchToken:
+    type: apiKey
+    in: header
+    name: Authorization
+    description: '`Bearer <key-fetch token>`, set in the fiu-iop-gw configuration. The fiu-core must reject key requests without it.'
+security:
+- coreToken: []
+tags:
+- name: Messages
+  description: Messages for the FIU. Same payloads as the Direct APIs.
+- name: Keys
+  description: Key pull. Called at start-up, then every hour by default, and every 30 seconds while the fiu-iop-gw has no keys of that type. HTTPS only; the only request header is `Authorization` with the key-fetch token. Serve these only to the fiu-iop-gw and never log key material.
+- name: Linked AAs
+  description: Linked AAs pull. Called at start-up, then every hour by default, and every 30 seconds while the fiu-iop-gw has no list. The fiu-iop-gw keeps the list in memory and in its persistent cache. HTTP or HTTPS.
+parameters:
+  InitiatorEntity:
+    name: Initiator-Entity
+    in: header
+    required: true
+    type: string
+    x-example: '{"type":"AA","id":"aa-test-002"}'
+    description: 'The Initiator, as compact JSON `{"type":"…","id":"…"}`. The customer''s AA (delivered by one of the FIU''s Connected-AAs): `{"type":"AA","id":"<customer AA id>"}`.'
+  CorrelationId:
+    name: Correlation-Id
+    in: header
+    required: true
+    type: string
+    format: uuid
+    x-example: 9a1c6e2f-4b7d-4e8a-a3c5-1f0b2d7e6c94
+    description: The flow's correlation id, copied unchanged from the IOP message (the gateway never creates one). Return it unchanged.
+  ForwardingHop:
+    name: Forwarding-Hop
+    in: header
+    required: true
+    type: string
+    x-example: aa-test-003
+    description: The entity id of the AA that delivered the call.
+  InitiatorSignature:
+    name: x-jws-signature
+    in: header
+    required: true
+    type: string
+    description: 'The Initiator''s detached JWS over the body, taken from the Initiator''s signed payload: a standard detached JWS (RFC 7515, base64url-encoded payload), **not** RFC 7797. Already checked by the gateway; the core may store it as proof of what the Initiator sent. To check it again, verify RS256 over `BASE64URL(header) + "." + BASE64URL(body)` with the Initiator''s signing key from the Central Registry.'
+  Body:
+    name: body
+    in: body
+    required: true
+    schema:
+      $ref: '#/definitions/DirectApiRequest'
+    description: 'Exactly the payload the Initiator sent in the matching Direct API call: the exact bytes the Initiator signed.'
+paths:
+  /fiu-core/Consent/Notification:
+    post:
+      tags:
+      - Messages
+      summary: Consent status notification from a customer's AA
+      operationId: post_fiu_core_Consent_Notification
+      description: 'Same payload as the Direct API `/Consent/Notification`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
+      parameters:
+      - $ref: '#/parameters/InitiatorEntity'
+      - $ref: '#/parameters/CorrelationId'
+      - $ref: '#/parameters/ForwardingHop'
+      - $ref: '#/parameters/InitiatorSignature'
+      - $ref: '#/parameters/Body'
+      responses:
+        '200':
+          description: Exactly the payload the FIU returns in the Direct API `/Consent/Notification` response.
+          headers: &id001
+            Correlation-Id:
+              type: string
+              description: Mandatory. The value received in the request, unchanged.
+            x-jws-signature:
+              type: string
+              description: 'Optional. The fiu-core''s own detached JWS over the response body: RFC 7797 unencoded payload, protected header `{"alg":"RS256","kid","b64":false,"crit":["b64"]}`, signed over the raw body, with one of the FIU''s registered signing keys. If sent and it does not verify, the Initiator receives `500 InternalError`. The gateway signs the response either way.'
+          schema:
+            $ref: '#/definitions/DirectApiResponse'
+        '409':
+          description: 'Duplicate: a message with the same payload `txnid` was already received. Not processed again. The error payload of the Direct API, with `errorCode` `IdempotencyError`.'
+          headers: *id001
+          schema:
+            $ref: '#/definitions/DirectApiResponse'
+        default:
+          description: An error, as the FIU returns it in the Direct API `/Consent/Notification` call. A status of 300 or above reaches the Initiator as an error.
+          headers: *id001
+          schema:
+            $ref: '#/definitions/DirectApiResponse'
+  /fiu-core/FI/Notification:
+    post:
+      tags:
+      - Messages
+      summary: FI status notification from a customer's AA
+      operationId: post_fiu_core_FI_Notification
+      description: 'Same payload as the Direct API `/FI/Notification`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
+      parameters:
+      - $ref: '#/parameters/InitiatorEntity'
+      - $ref: '#/parameters/CorrelationId'
+      - $ref: '#/parameters/ForwardingHop'
+      - $ref: '#/parameters/InitiatorSignature'
+      - $ref: '#/parameters/Body'
+      responses:
+        '200':
+          description: Exactly the payload the FIU returns in the Direct API `/FI/Notification` response.
+          headers: *id001
+          schema:
+            $ref: '#/definitions/DirectApiResponse'
+        '409':
+          description: 'Duplicate: a message with the same payload `txnid` was already received. Not processed again. The error payload of the Direct API, with `errorCode` `IdempotencyError`.'
+          headers: *id001
+          schema:
+            $ref: '#/definitions/DirectApiResponse'
+        default:
+          description: An error, as the FIU returns it in the Direct API `/FI/Notification` call. A status of 300 or above reaches the Initiator as an error.
+          headers: *id001
+          schema:
+            $ref: '#/definitions/DirectApiResponse'
+  /fiu-core/keys/signing:
+    get:
+      tags:
+      - Keys
+      summary: The signing key set
+      operationId: get_fiu_core_signing_keys
+      description: 'The fiu-iop-gw reads only the status and the body. The set is accepted only as a whole: if any entry is invalid, or the status is not `200`, the fiu-iop-gw keeps its current keys.'
+      schemes:
+      - https
+      security:
+      - keyFetchToken: []
+      responses:
+        '200':
+          description: The signing key set.
+          schema:
+            $ref: '#/definitions/KeySet'
+        '401':
+          description: The key-fetch token is missing or wrong. The gateway keeps its current keys.
+        default:
+          description: 'Any status other than `200`: the gateway keeps its current keys.'
+  /fiu-core/keys/decryption:
+    get:
+      tags:
+      - Keys
+      summary: The decryption key set
+      operationId: get_fiu_core_decryption_keys
+      description: 'The fiu-iop-gw reads only the status and the body. The set is accepted only as a whole: if any entry is invalid, or the status is not `200`, the fiu-iop-gw keeps its current keys.'
+      schemes:
+      - https
+      security:
+      - keyFetchToken: []
+      responses:
+        '200':
+          description: The decryption key set.
+          schema:
+            $ref: '#/definitions/KeySet'
+        '401':
+          description: The key-fetch token is missing or wrong. The gateway keeps its current keys.
+        default:
+          description: 'Any status other than `200`: the gateway keeps its current keys.'
+  /fiu-core/linkedAAs:
+    get:
+      tags:
+      - Linked AAs
+      summary: The list of linked AAs
+      operationId: get_fiu_core_linkedAAs
+      description: The only request header is `Authorization` (set in the gateway configuration). No response headers are needed.
+      responses:
+        '200':
+          description: The list of linked AAs.
+          schema:
+            $ref: '#/definitions/LinkedAAs'
+        default:
+          description: 'Any status other than `200`: the gateway keeps its current list.'
+definitions:
+  DirectApiRequest:
+    type: object
+    description: The existing payload of the matching Direct API request, exactly as defined in the ReBIT specifications, without any change. It must be a JSON object with `txnid`; `ver` is taken from it. Retries and other routes resend the same payload with the same `txnid`, so Targets must de-duplicate on it.
+    example: |-
+      {
+        // existing payload of Direct API.
+      }
+  DirectApiResponse:
+    type: object
+    description: The existing payload of the matching Direct API response (success or error), exactly as defined in the ReBIT specifications, without any change.
+    example: |-
+      {
+        // existing payload of Direct API response
+      }
+  KeySet:
+    type: object
+    description: 'A complete key set. It is accepted only as a whole: if any entry is invalid, the gateway keeps its current set.'
+    required:
+    - keys
+    properties:
+      keys:
+        type: array
+        minItems: 1
+        items:
+          $ref: '#/definitions/KeyEntry'
+  KeyEntry:
+    type: object
+    required:
+    - kid
+    - privateKey
+    - active
+    - applied
+    properties:
+      kid:
+        type: string
+        example: entity-test-001-sig-2026-10
+        description: 'Key id, unique in the set: the kid under which the public key is published in the Central Registry.'
+      privateKey:
+        type: string
+        example: |
+          -----BEGIN PRIVATE KEY-----
+          <base64 key data>
+          -----END PRIVATE KEY-----
+        description: PEM, PKCS#8 or PKCS#1, RSA of at least 2048 bits. Never log it.
+      active:
+        type: boolean
+        example: true
+        description: '`true` to allow use; `false` to keep the key listed but unused.'
+      applied:
+        type: string
+        example: '2026-10-01T00:00:00Z'
+        description: 'From when the key may be used: RFC 3339 timestamp, or `YYYY-MM-DD` (00:00 UTC).'
+      expiry:
+        type: string
+        x-nullable: true
+        example: '2026-12-01T00:00:00Z'
+        description: Until when the key may be used (same formats), after `applied`; `null` or absent for no expiry.
+  LinkedAAs:
+    type: object
+    description: The AAs the participant is linked to. Must not be empty and must not repeat an id; otherwise the gateway keeps its current list.
+    required:
+    - linkedAAs
+    properties:
+      linkedAAs:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+        example:
+        - aa-test-002
+        - aa-test-003

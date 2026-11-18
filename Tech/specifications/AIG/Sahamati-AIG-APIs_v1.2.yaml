@@ -1,0 +1,312 @@
+openapi: 3.0.3
+info:
+  title: Sahamati AA Interoperability Graph (AIG) APIs
+  version: "1.2"
+  description: |
+    Generated from "AA Interoperability Graph APIs" v1.2 (17-Nov-2026, Jithesh Kumar).
+    Document Classification: Restricted.
+
+    AIG stands for AA-Interoperability-Graph. The graph provides information on the
+    connectivity links that exist between entities in the AA ecosystem. The links may be
+    between an FIP and AA, an FIU and AA, or an AA and another AA supporting interoperability.
+    Entities use this to identify routes to target entities.
+
+    | Entity | Purpose |
+    |---|---|
+    | AA  | Identify a list of connected-AAs towards an FIU, and inter-AAs towards an FIP. |
+    | FIU | Identify a list of connected-AAs towards a customer-AA. In the long run all AAs will be interconnected; FIUs will not need this graph. |
+    | FIP | Identify a list of inter-AAs towards an origin-AA. In the long run all AAs will be interconnected; FIPs will not need this graph. |
+
+    ### Revision history
+    | Version | Date | Remarks |
+    |---|---|---|
+    | 0.1 | 13-Oct-2026 | Proposed AIG APIs (partial) |
+    | 1.0 | 08-Nov-2026 | AIG APIs, Read and Write, applicability to AAs, FIUs and FIPs |
+    | 1.1 | 12-Nov-2026 | Updated API path and token for Publish API |
+    | 1.2 | 17-Nov-2026 | Updated AIG PUT API |
+
+    All sample values in this file are synthetic.
+servers:
+  - url: https://cr.sahamati.org.in
+    description: CR-Production
+  - url: https://uatcr.sahamati.org.in
+    description: CR-UAT
+tags:
+  - name: AIG Read
+    description: Lookup the AA Interoperability Graph.
+  - name: AIG Write
+    description: Publish the AA Interoperability Graph.
+
+paths:
+  /v1/aig/fip:
+    get:
+      tags: [AIG Read]
+      summary: Lookup AIG for all FIPs
+      description: |
+        Called with the bearer token of an AA. Returns the inter-AAs linked to each FIP.
+      operationId: lookupAigFip
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AigFipResponse"
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-10-07T07:35:00.000Z"
+                txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+                fip:
+                  - id: fip-1
+                    inter-AA:
+                      - id: aa-1
+                        verified: true
+                        attr: { key1: value1, key2: value2 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /v1/aig/fiu:
+    get:
+      tags: [AIG Read]
+      summary: Lookup AIG for all FIUs
+      description: |
+        Called only by AAs, with the bearer token of the AA. Returns the connected-AAs linked to each FIU.
+      operationId: lookupAigFiu
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AigFiuResponse"
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-10-07T07:35:00.000Z"
+                txnid: "3a4adbbe-29ae-11e8-a8d7-0289437bf331"
+                fiu:
+                  - id: fiu-4
+                    connected-AA:
+                      - id: aa-4
+                        verified: true
+                        attr: { key1: value1, key2: value2 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /v1/aig/aa:
+    get:
+      tags: [AIG Read]
+      summary: Lookup AIG for all AAs
+      description: |
+        Called with the bearer token of an FIU or FIP. Returns the peer-AAs linked to each AA.
+      operationId: lookupAigAa
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AigAaResponse"
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-10-07T07:35:00.000Z"
+                txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+                aa:
+                  - id: aa-1
+                    peer-AA:
+                      - id: aa-2
+                        verified: true
+                        attr: { key1: value1, key2: value2 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /v1/aig/{aa-entity-id}:
+    put:
+      tags: [AIG Write]
+      summary: Publish AIG graph by AA
+      description: |
+        Publishes the FIPs, FIUs and AAs that the calling AA is linked to.
+        Called with the bearer token of a **user associated with the calling AA**
+        (not the AA entity token).
+      operationId: publishAig
+      security:
+        - userBearerAuth: []
+      parameters:
+        - name: aa-entity-id
+          in: path
+          required: true
+          description: Entity ID of the AA publishing its graph.
+          schema: { type: string }
+          example: aa-entity-00
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AigPublishRequest"
+            example:
+              ver: "1.0.0"
+              timestamp: "2026-11-03T10:00:00.000Z"
+              txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+              fip: [fip-entity-01]
+              fiu: [fiu-entity-02]
+              aa: [aa-entity-03]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateResponse"
+              example:
+                ver: "1.0.0"
+                timestamp: "2026-11-06T06:22:34.258596480Z"
+                txnid: "1a4adbbe-29ae-11e8-a8d7-0289437bf331"
+                message: Updated successfully
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Bearer token of the calling entity: an AA for `/v1/aig/fip` and `/v1/aig/fiu`,
+        an FIU or FIP for `/v1/aig/aa`.
+    userBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token of a user associated with the calling AA.
+
+  schemas:
+    RouteLink:
+      type: object
+      required: [id, verified]
+      properties:
+        id:
+          type: string
+          description: Entity ID of the linked AA.
+        verified:
+          type: boolean
+          description: |
+            `true` — flow through this interface has been verified (through SLA data).
+            `false` — the interface is published, but traffic flow is yet to be verified.
+        attr:
+          type: object
+          description: For future use; parameters indicating the health of the route.
+          additionalProperties: { type: string }
+
+    Envelope:
+      type: object
+      required: [ver, timestamp, txnid]
+      properties:
+        ver: { type: string, example: "1.0.0" }
+        timestamp: { type: string, format: date-time }
+        txnid: { type: string }
+
+    AigFipResponse:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            fip:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, description: FIP entity ID }
+                  inter-AA:
+                    type: array
+                    items: { $ref: "#/components/schemas/RouteLink" }
+
+    AigFiuResponse:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            fiu:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, description: FIU entity ID }
+                  connected-AA:
+                    type: array
+                    items: { $ref: "#/components/schemas/RouteLink" }
+
+    AigAaResponse:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            aa:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, description: AA entity ID }
+                  peer-AA:
+                    type: array
+                    items: { $ref: "#/components/schemas/RouteLink" }
+
+    AigPublishRequest:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            fip:
+              type: array
+              description: FIP entity IDs this AA is linked to.
+              items: { type: string }
+            fiu:
+              type: array
+              description: FIU entity IDs this AA is linked to.
+              items: { type: string }
+            aa:
+              type: array
+              description: AA entity IDs this AA is linked to.
+              items: { type: string }
+
+    UpdateResponse:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            message: { type: string }
+
+  responses:
+    BadRequest: { description: Bad Request }
+    Unauthorized: { description: Unauthorized }
+    Forbidden: { description: Forbidden }
+    TooManyRequests: { description: Too Many Requests }
+    InternalServerError: { description: Internal Server Error }
+    NotImplemented: { description: Not Implemented }
+    ServiceUnavailable: { description: Service Unavailable }

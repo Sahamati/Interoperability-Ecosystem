@@ -86,11 +86,31 @@ The participant's type is the list it came from (`<type>` in the path), not a fi
 | Field | Type | Needed for | Use |
 |---|---|---|---|
 | `id` | string | Every participant | The participant's entity id. An element without `id` is skipped. |
-| `baseurl` | string | Participants that receive `/iop/*` calls | Absolute URL. A trailing `/` is removed and `/iop/<api>` is added. A value that is not an absolute URL is ignored. |
+| `baseurl` | string | Participants that receive `/iop/*` calls | One absolute URL, or a comma-separated list of URLs, each with an optional version prefix: `v1:<url>`, `v2:<url>`. Example: `v1:https://aa.example.invalid/v1, v2:https://aa.example.invalid/v2`. The URL used is the `v2` one if present, else the `v1` one, else a URL without a prefix (section 5.3.1). A trailing `/` is removed and `/iop/<api>` is added. If no usable absolute URL is found, the value is ignored. |
 | `interop` | boolean | Every participant | `true` = interop ready. **Absent or `false` = not interop ready.** Must be a JSON boolean, not a string. |
 | `keys.signature` | array of key items (section 5.4) | Every participant that signs | Public keys that verify the participant's signatures, matched by the JWS `kid`. |
 | `certificate` | JWK | Optional | Used as the only signature key when `keys.signature` is empty or absent. Ignored otherwise. It has no `validFrom` or `validTo`. |
 | `keys.encryption` | array of key items (section 5.4) | Participants that receive encrypted messages | Public keys to encrypt for the participant. One is chosen at random per message. |
+
+#### 5.3.1 Choosing the URL from `baseurl`
+
+| Step | Rule |
+|---|---|
+| 1 | Split the value at `,` and trim spaces from each entry. |
+| 2 | An entry that starts with `v` and digits, then `:`, has a version prefix, for example `v2:`. The URL is the text after the `:`. Any other entry is a URL without a prefix. |
+| 3 | Use the first `v2` URL that is an absolute http(s) URL. |
+| 4 | If there is none, use the first such `v1` URL. |
+| 5 | If there is none, use the first such URL without a prefix. |
+| 6 | Entries with any other prefix (for example `v3:`) are ignored. If no URL is found, the participant has no base URL. |
+
+| `baseurl` value | URL used |
+|---|---|
+| `https://aa.example.invalid/v2` | `https://aa.example.invalid/v2` |
+| `v2:https://aa.example.invalid/v2` | `https://aa.example.invalid/v2` |
+| `v1:https://aa.example.invalid/v1, v2:https://aa.example.invalid/v2` | `https://aa.example.invalid/v2` |
+| `v1:https://aa.example.invalid/v1` | `https://aa.example.invalid/v1` |
+| `https://aa.example.invalid, v1:https://aa.example.invalid/v1` | `https://aa.example.invalid/v1` |
+| `v3:https://aa.example.invalid/v3` | None |
 
 ### 5.4 Key items
 
@@ -156,7 +176,7 @@ Accept: application/json
     "requester": { },
     "entityinfo": {
       "id": "aa-test-002",
-      "baseurl": "https://aa-test-002.example.invalid/v2",
+      "baseurl": "v2:https://aa-test-002.example.invalid/v2",
       "interop": true,
       "certificate": {
         "kty": "RSA", "kid": "aa-test-002-cert", "use": "sig", "alg": "RS256",
@@ -191,8 +211,8 @@ Accept: application/json
 
 Here `certificate` is not used, because `keys.signature` is not empty. The signature key has no
 end. The first encryption key is used until 30 November 2026, 23:59:59 IST; the second from
-15 November 2026, 00:00 UTC. Between those times either may be chosen. `/iop/<api>` calls to this
-AA go to `https://aa-test-002.example.invalid/v2/iop/<api>`.
+15 November 2026, 00:00 UTC. Between those times either may be chosen. `baseurl` has a `v2:` prefix, so the URL after it is used
+(section 5.3.1): `/iop/<api>` calls to this AA go to `https://aa-test-002.example.invalid/v2/iop/<api>`.
 
 ## 7. Failures
 
@@ -219,7 +239,7 @@ These cases do **not** fail the fetch; only the affected item is skipped:
 | Case | Result |
 |---|---|
 | Element without `entityinfo.id` | That element is skipped. |
-| `baseurl` that is not an absolute URL | The participant has no base URL; calls cannot be sent to it. |
+| `baseurl` with no usable absolute URL (section 5.3.1) | The participant has no base URL; calls cannot be sent to it. |
 | A key that breaks the rules in section 5.5 | That key is skipped. |
 | A key item whose `validFrom` or `validTo` is not an RFC 3339 timestamp, or `validTo` before `validFrom` (section 5.4) | That key is skipped. |
 
@@ -230,6 +250,6 @@ For a participant to take part in AA Interoperability, its entry must have:
 | Item | Why |
 |---|---|
 | `interop: true` | Others send to, route through, and accept messages from interop-ready participants only. |
-| `baseurl` | Others send `/iop/*` calls to `<baseurl>/iop/<api>`. |
+| `baseurl` | Others send `/iop/*` calls to `<URL>/iop/<api>`, where `<URL>` is chosen from `baseurl` as in section 5.3.1. |
 | `keys.signature` | Others verify its signatures. It must list the public key of **every** signing key the participant may use, with a window that covers every time that key may sign. |
 | `keys.encryption` | Others encrypt requests and replies for it. A key's `validTo` must come before the participant stops being able to decrypt with it. |

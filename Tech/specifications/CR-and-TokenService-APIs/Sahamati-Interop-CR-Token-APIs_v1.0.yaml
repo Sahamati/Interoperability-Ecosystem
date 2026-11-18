@@ -14,8 +14,8 @@ info:
 
     | Service | APIs |
     |---|---|
-    | Central Registry (CR) | `PUT /v1/interop/{entity-id}` |
-    | Token service | `POST /v2/enc/entity/certs`, `DELETE /v2/enc/entity/certs/{kid}`, `POST /v1/entity/token/generate` |
+    | Central Registry (CR) | `PUT /v1/interop/{entity-id}`, `POST /v2/enc/entity/certs`, `GET /v2/enc/entity/certs/{entity-id}`, `DELETE /v2/enc/entity/certs/{kid}` |
+    | Token service | `POST /v1/entity/token/generate` |
 
     ### Revision history
     | Version | Date | Remarks |
@@ -25,14 +25,14 @@ info:
     All sample values in this file are synthetic.
 servers:
   - url: https://{token-service-host-url}
-    description: Token service. Used by the Encryption Public Keys and IopToken APIs.
+    description: Token service. Used by the IopToken API.
     variables:
       token-service-host-url:
         default: api.sahamati.org.in/iam
         enum: [api.sahamati.org.in/iam, api.uat.sahamati.org.in/iam]
         description: api.sahamati.org.in/iam (Production) or api.uat.sahamati.org.in/iam (UAT).
   - url: https://{cr-host-url}
-    description: Central Registry (CR). Used by the Interop-readiness API.
+    description: Central Registry (CR). Used by the Interop-readiness and Encryption Public Keys APIs.
     variables:
       cr-host-url:
         default: cr.sahamati.org.in
@@ -42,7 +42,7 @@ tags:
   - name: Interop-readiness
     description: Mark an entity as interop-ready.
   - name: Encryption Public Keys
-    description: Register and delete an entity's encryption public keys.
+    description: Register, fetch and delete an entity's encryption public keys.
   - name: IopToken
     description: |
       Generate an IopToken. To be used by AAs only.
@@ -105,11 +105,19 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /v2/enc/entity/certs:
+    servers:
+      - url: https://{cr-host-url}
+        description: Central Registry (CR).
+        variables:
+          cr-host-url:
+            default: cr.sahamati.org.in
+            enum: [cr.sahamati.org.in, uatcr.sahamati.org.in]
+            description: cr.sahamati.org.in (CR-Production) or uatcr.sahamati.org.in (CR-UAT).
     post:
       tags: [Encryption Public Keys]
       summary: Register entity encryption public keys
       description: |
-        Registers an encryption public key (JWK) for an entity. Hosted on the token service.
+        Registers an encryption public key (JWK) for an entity. Hosted on the CR.
         Called with the bearer token of a **user associated with the calling entity**.
       operationId: registerEncryptionKey
       security:
@@ -141,7 +149,7 @@ paths:
               example:
                 ver: "2.0.0"
                 timestamp: "2026-11-16T08:00:00Z"
-                txnId: "<txn-id>"
+                txnid: "<txn-id>"
                 message: Encryption certificate registered successfully
                 kid: k-enc-1
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -152,21 +160,77 @@ paths:
         "501": { $ref: "#/components/responses/NotImplemented" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
-  /v2/enc/entity/certs/{kid}:
+  /v2/enc/entity/certs/{id}:
+    servers:
+      - url: https://{cr-host-url}
+        description: Central Registry (CR).
+        variables:
+          cr-host-url:
+            default: cr.sahamati.org.in
+            enum: [cr.sahamati.org.in, uatcr.sahamati.org.in]
+            description: cr.sahamati.org.in (CR-Production) or uatcr.sahamati.org.in (CR-UAT).
+    get:
+      tags: [Encryption Public Keys]
+      summary: Fetch entity encryption public keys
+      description: |
+        Fetches the encryption public keys registered for an entity. Hosted on the CR.
+        Called with the bearer token of a **user associated with the calling entity**.
+
+        **Path parameter:** for this operation, `{id}` is the **entity ID**
+        (shown as `/v2/enc/entity/certs/{entity-id}` in the source document).
+      operationId: fetchEncryptionKeys
+      security:
+        - userBearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Entity ID whose encryption public keys are fetched.
+          schema: { type: string }
+          example: fip-test-001
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EncKeyFetchResponse"
+              example:
+                keys:
+                  - validFrom: "2026-11-10T11:34:03.846152Z"
+                    validTo: null
+                    key:
+                      kty: RSA
+                      e: AQAB
+                      use: enc
+                      kid: k-enc-1
+                      alg: RSA-OAEP-256
+                      n: "<base64url-encoded-modulus>"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
     delete:
       tags: [Encryption Public Keys]
       summary: Delete a specific public key
       description: |
-        Deletes the encryption public key identified by `kid`. Hosted on the token service.
+        Deletes the encryption public key identified by `kid`. Hosted on the CR.
         Called with the bearer token of a **user associated with the calling entity**.
+
+        **Path parameter:** for this operation, `{id}` is the **key ID (`kid`)**
+        (shown as `/v2/enc/entity/certs/{kid}` in the source document).
       operationId: deleteEncryptionKey
       security:
         - userBearerAuth: []
       parameters:
-        - name: kid
+        - name: id
           in: path
           required: true
-          description: Key ID of the public key to delete.
+          description: Key ID (`kid`) of the public key to delete.
           schema: { type: string }
           example: k-enc-1
       responses:
@@ -175,11 +239,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TokenServiceMessageResponse"
+                $ref: "#/components/schemas/UpdateResponse"
               example:
                 ver: "2.0.0"
                 timestamp: "2026-11-16T08:00:00Z"
-                txnId: "<txn-id>"
+                txnid: "<txn-id>"
                 message: Encryption certificate deleted successfully
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -294,16 +358,6 @@ components:
           properties:
             message: { type: string }
 
-    TokenServiceMessageResponse:
-      type: object
-      description: Response envelope used by the token service (note `txnId` in camelCase).
-      required: [ver, timestamp, txnId]
-      properties:
-        ver: { type: string, example: "2.0.0" }
-        timestamp: { type: string, format: date-time }
-        txnId: { type: string }
-        message: { type: string }
-
     Jwk:
       type: object
       description: Encryption public key in JWK format.
@@ -327,10 +381,28 @@ components:
 
     EncKeyRegisterResponse:
       allOf:
-        - $ref: "#/components/schemas/TokenServiceMessageResponse"
+        - $ref: "#/components/schemas/UpdateResponse"
         - type: object
           properties:
             kid: { type: string, description: Key ID of the registered key }
+
+    EncKeyFetchResponse:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            required: [validFrom, key]
+            properties:
+              validFrom: { type: string, format: date-time }
+              validTo:
+                type: string
+                format: date-time
+                nullable: true
+                description: "`null` when the key has no expiry."
+              key: { $ref: "#/components/schemas/Jwk" }
 
     TokenGenerateRequest:
       type: object

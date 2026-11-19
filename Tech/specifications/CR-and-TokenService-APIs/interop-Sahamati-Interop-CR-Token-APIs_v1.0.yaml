@@ -14,7 +14,7 @@ info:
 
     | Service | APIs |
     |---|---|
-    | Central Registry (CR) | `PUT /v1/interop/{entity-id}`, `POST /v2/enc/entity/certs`, `GET /v2/enc/entity/certs/{entity-id}`, `DELETE /v2/enc/entity/certs/{kid}` |
+    | Central Registry (CR) | `PUT /v1/interop/{entity-id}`, `POST /v1/enc/entity/certs`, `GET /v1/enc/entity/certs/{entity-id}`, `DELETE /v1/enc/entity/certs/{kid}` |
     | Token service | `POST /v1/entity/token/generate` |
 
     ### Revision history
@@ -104,7 +104,7 @@ paths:
         "501": { $ref: "#/components/responses/NotImplemented" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
-  /v2/enc/entity/certs:
+  /v1/enc/entity/certs:
     servers:
       - url: https://{cr-host-url}
         description: Central Registry (CR).
@@ -147,7 +147,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/EncKeyRegisterResponse"
               example:
-                ver: "2.0.0"
+                ver: "1.0.0"
                 timestamp: "2026-11-16T08:00:00Z"
                 txnid: "<txn-id>"
                 message: Encryption certificate registered successfully
@@ -160,7 +160,7 @@ paths:
         "501": { $ref: "#/components/responses/NotImplemented" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
-  /v2/enc/entity/certs/{id}:
+  /v1/enc/entity/certs/{id}:
     servers:
       - url: https://{cr-host-url}
         description: Central Registry (CR).
@@ -177,7 +177,7 @@ paths:
         Called with the bearer token of a **user associated with the calling entity**.
 
         **Path parameter:** for this operation, `{id}` is the **entity ID**
-        (shown as `/v2/enc/entity/certs/{entity-id}` in the source document).
+        (shown as `/v1/enc/entity/certs/{entity-id}` in the source document).
       operationId: fetchEncryptionKeys
       security:
         - userBearerAuth: []
@@ -196,6 +196,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/EncKeyFetchResponse"
               example:
+                ver: "1.0.0"
+                timestamp: "2026-11-16T08:00:00Z"
+                txnid: "<txn-id>"
                 keys:
                   - validFrom: "2026-11-10T11:34:03.846152Z"
                     validTo: null
@@ -222,7 +225,7 @@ paths:
         Called with the bearer token of a **user associated with the calling entity**.
 
         **Path parameter:** for this operation, `{id}` is the **key ID (`kid`)**
-        (shown as `/v2/enc/entity/certs/{kid}` in the source document).
+        (shown as `/v1/enc/entity/certs/{kid}` in the source document).
       operationId: deleteEncryptionKey
       security:
         - userBearerAuth: []
@@ -241,7 +244,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/UpdateResponse"
               example:
-                ver: "2.0.0"
+                ver: "1.0.0"
                 timestamp: "2026-11-16T08:00:00Z"
                 txnid: "<txn-id>"
                 message: Encryption certificate deleted successfully
@@ -387,22 +390,24 @@ components:
             kid: { type: string, description: Key ID of the registered key }
 
     EncKeyFetchResponse:
-      type: object
-      required: [keys]
-      properties:
-        keys:
-          type: array
-          items:
-            type: object
-            required: [validFrom, key]
-            properties:
-              validFrom: { type: string, format: date-time }
-              validTo:
-                type: string
-                format: date-time
-                nullable: true
-                description: "`null` when the key has no expiry."
-              key: { $ref: "#/components/schemas/Jwk" }
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [keys]
+          properties:
+            keys:
+              type: array
+              items:
+                type: object
+                required: [validFrom, key]
+                properties:
+                  validFrom: { type: string, format: date-time }
+                  validTo:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: "`null` when the key has no expiry."
+                  key: { $ref: "#/components/schemas/Jwk" }
 
     TokenGenerateRequest:
       type: object

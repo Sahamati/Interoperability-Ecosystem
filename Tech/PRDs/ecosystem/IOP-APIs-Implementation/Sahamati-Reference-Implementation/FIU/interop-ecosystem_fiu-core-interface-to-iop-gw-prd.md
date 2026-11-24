@@ -7,7 +7,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIU core application teams (AA ecosystem participants) |
-| **Version** | Draft 3.6, 2026-11-16 |
+| **Version** | Draft 5.0, 2026-11-23. Combined edition: single-tenant (default) and multi-tenant (`multiTenant: on`). The single-tenant-only edition is kept in `archive/` for reference |
 | **Covers** | How the fiu-core sends and receives messages through the fiu-iop-gw, when to call it, how the fiu-core gives it keys and its list of linked AAs, and how the fiu-iop-gw is configured |
 
 All identifiers in examples are illustrative.
@@ -19,7 +19,7 @@ To work with the fiu-iop-gw, the fiu-core needs the changes below. "Yes" means n
 | # | Change in the fiu-core | Needed | Section |
 |---|---|---|---|
 | 1 | Call the fiu-iop-gw's internal APIs (`/fiu-dgw/*`) instead of the Direct APIs when the customer's AA (Customer-AA) is not directly connected to the FIU. Keep using the Direct APIs for directly connected participants. | Yes | 2, 3.3 |
-| 2 | Send `Target-Entity` and `Correlation-Id` on every call, and `Authorization` with the internal API token. Optionally send `Preferred-Hop`, `Http-Retries`, `Route-Retries` and the fiu-core's own `x-jws-signature`. | Yes | 3.4 |
+| 2 | Send `Target-Entity` and `Correlation-Id` on every message call (section 3.3), `Core-Entity-Id` in multi-tenant mode, when the fiu-iop-gw serves more than one FIU, and `Authorization` with the internal API token when one is configured. Optionally send `Preferred-Hop`, `Http-Retries`, `Route-Retries` and the fiu-core's own `x-jws-signature`. | Yes | 3.4 |
 | 3 | Create a non-empty correlation id for each new flow, and keep it on every message of that flow. | Yes | 2 |
 | 4 | Handle the responses: the Target's payload and signature; Target errors (with a payload, or a status with an empty body); errors from the fiu-iop-gw (`IOP-Gw-Error: true`, for example `503 AllRoutesUnavailable`). | Yes | 3.6 – 3.10 |
 | 5 | To find which AAs know a customer, call `POST /fiu-dgw/broadcast/User/discover` (one call asks every AA) and handle its merged answer. | Optional | 3.13 |
@@ -32,6 +32,36 @@ To work with the fiu-iop-gw, the fiu-core needs the changes below. "Yes" means n
 | 12 | Serve `GET /fiu-core/linkedAAs` with the AAs the FIU is linked to. | Yes | 6.1 |
 | 13 | Push the list to `/fiu-dgw/linkedAAs` when it changes. | Recommended | 6.2 |
 | 14 | Set the fiu-iop-gw's configuration and provide its tokens, certificates and credentials before starting it. | Yes | 8 |
+| 15 | Read `Core-Entity-Id` on every call from the fiu-iop-gw (messages, key pull, linkedAAs pull) and act for that entity. | Multi-tenant mode, when more than one FIU | Single-tenant and multi-tenant mode, 4.4, 5, 6 |
+| 16 | When one fiu-iop-gw serves more than one FIU: give each FIU its own entity file, keys (with `kid`s not used by any other entity on the gateway), tokens and credentials. | Multi-tenant mode only | Single-tenant and multi-tenant mode, 8.6 |
+
+## Single-tenant and multi-tenant mode
+
+The fiu-iop-gw runs in one of two modes, chosen with `multiTenant` in the main configuration file
+(section 8). Changing the mode needs a restart.
+
+| Item | Single-tenant mode (default) | Multi-tenant mode |
+|---|---|---|
+| Switch | `multiTenant: off` (or `false`, or not set) | `multiTenant: on` (or `true`) |
+| Number of FIUs | One FIU per fiu-iop-gw | One or more FIUs per fiu-iop-gw |
+| Where the FIU's settings live | All settings in the main configuration file (`self`, `core`, `gwApi`, `linkedAAs`, ...; section 8.2) | Common settings in the main file; one **entity file** per FIU (sections 8.2.1 and 8.6) |
+| `Core-Entity-Id` | Never sent to the fiu-core; ignored if the fiu-core sends it | Always sent to the fiu-core; from the fiu-core required while more than one FIU is loaded (see below) |
+| A received message without a `kid` in the encrypted payload's header | Refused with `400 InvalidRequest` | Refused with `400 InvalidRequest` |
+
+### Multi-tenant mode only
+
+One fiu-iop-gw can serve **more than one FIU**. One or more fiu-cores can connect to the same fiu-iop-gw, and one
+fiu-core can send for several FIUs.
+
+| Item | How it works |
+|---|---|
+| Configuration | Settings common to all FIUs are in the main configuration file. Each FIU has its own **entity file** with its entity id, keys, token service credentials, fiu-core settings, internal API token, linked AAs and route preference (section 8.6). Only entity files with `enable: true` are loaded. |
+| Adding or removing a FIU | The fiu-iop-gw reads the entity files again every minute (`entityRescanSeconds`, default 60): a new file adds a FIU, a changed file reloads it, and a removed file or `enable: false` removes it. No restart is needed. Changes to the main file need a restart. |
+| Calls from the fiu-core | A request names the FIU it is sent for with `Core-Entity-Id: <FIU entity id>`. The fiu-iop-gw signs, sends and opens the reply as that FIU, and checks the internal API token against that FIU's token. **While more than one FIU is loaded, `Core-Entity-Id` is required**; without it, or with one that names no FIU loaded on the fiu-iop-gw, the call is refused with `400 InvalidRequest`. With only one FIU loaded it is optional: a call without it is for that FIU, and a call with another id is refused. A fiu-core that may later serve more than one FIU should always send it. |
+| Calls to the fiu-core | Every request (messages, key pull, linkedAAs pull) carries `Core-Entity-Id`: the FIU the call is for, even when only one FIU is loaded (a fiu-core serving one FIU may ignore it). Each FIU can have its own fiu-core URL and token. Responses carry no `Core-Entity-Id`. |
+| Which FIU a received message is for | The fiu-iop-gw reads the `kid` in the encrypted payload's header and finds the FIU whose decryption key has that `kid`. A message without a `kid` is refused with `400 InvalidRequest`. A decryption key `kid` must therefore be used by **one FIU only** on a fiu-iop-gw: a FIU whose `kid` is already used by another is not loaded. A reply to a call from the fiu-core is opened only if its `kid` is one of that FIU's decryption keys; a reply without a `kid`, or with another FIU's `kid`, gives the fiu-core `502 BadGateway`. |
+| Error replies to other participants | Some errors on `/iop` are found before the fiu-iop-gw knows which FIU a call is for (for example a wrong api-key, a message without a `kid`, or no FIU loaded). With only one FIU loaded, these errors are signed by that FIU. With no FIU, or more than one, loaded, they are sent unsigned and without `errorSource`. Every other error is signed by the FIU the call is for. |
+| No FIU loaded | The fiu-iop-gw still starts. `/iop` calls get `503 ServiceUnavailable` and calls from the fiu-core `400 InvalidRequest`. |
 
 ## 1. Terminology
 
@@ -131,13 +161,14 @@ To ask **every** AA at once whether it knows a customer, the fiu-core calls `POS
 
 | Header | Mandatory | Value |
 |---|---|---|
-| `Authorization` | Yes, if the fiu-iop-gw is configured with an internal API token | `Bearer <internal API token>`. Without it (or with a wrong one) the call is refused with `400`. |
+| `Authorization` | Yes, if the fiu-iop-gw is configured with an internal API token for this FIU | `Bearer <internal API token>` (in multi-tenant mode, of the FIU named in `Core-Entity-Id`, or the only FIU loaded). Without it (or with a wrong one) the call is refused with `400`. |
+| `Core-Entity-Id` | Multi-tenant mode only: yes, while the fiu-iop-gw has more than one FIU loaded; otherwise optional. Ignored in single-tenant mode | The entity id of the FIU the call is sent for. Missing (with more than one FIU loaded), empty, or not an entity loaded on the fiu-iop-gw: refused with `400 InvalidRequest`. With one FIU loaded, a call without it is for that FIU. |
 | `Target-Entity` | Yes | The final recipient, as compact JSON: `{"type":"<AA\|FIU\|FIP>","id":"<entity id>"}`. The type must match the API (section 3.3). The Target must be marked interop ready in the Central Registry. |
 | `Correlation-Id` | Yes | The flow's correlation id, in standard UUID format (see section 1). It is carried in the IOP message and returned on every response. A missing value, or one that is not a UUID, is refused with `400 InvalidRequest`. |
 | `x-jws-signature` | No | The fiu-core's own detached JWS over the request body (RFC 7797 unencoded payload: protected header `{"alg": "RS256", "kid", "b64": false, "crit": ["b64"]}`, signed over the raw body), made with one of the FIU's registered signing keys. The fiu-iop-gw checks it: if it does not verify, the call is refused with `400`. The fiu-iop-gw signs the payload either way (section 3.2). |
 | `Preferred-Hop` | No | The entity id of the AA the core prefers as the route. Used first only if it is an eligible route (section 3.11); otherwise ignored. |
-| `Http-Retries` | No | How many times to retry the same route when it does not answer (no connection, or a timeout). An error answer from the route, `502`/`503`/`504` included, is not retried on that route. **`0` means: do not retry.** Default `2`; capped by the gateway (by default at `3`). Waits 200 ms, doubling up to 2 s, between retries. |
-| `Route-Retries` | No | How many **other** routes to try after the first route fails (section 3.7). **`0` means: do not try another route.** Default `2`; capped by the gateway (by default at `2`). |
+| `Http-Retries` | No | How many times to retry the same route when it does not answer (no connection, or a timeout). An error answer from the route, `502`/`503`/`504` included, is not retried on that route. **`0` means: do not retry.** Default `2`; capped by the gateway (by default at `3`; a lower cap also lowers the default). Waits 200 ms, doubling up to 2 s, between retries. |
+| `Route-Retries` | No | How many **other** routes to try after the first route fails (section 3.11). **`0` means: do not try another route.** Default `2`; capped by the gateway (by default at `2`; a lower cap also lowers the default). |
 
 No other header is needed. `Content-Type` is not required.
 
@@ -213,7 +244,7 @@ Errors generated by the fiu-iop-gw itself carry `IOP-Gw-Error: true` and have th
 ```
 
 - `ver` and `txnid` come from the request body. `ver` defaults to the gateway's configured
-  version. For a Heartbeat, `txnid` is the one the gateway created for the call.
+  version (`gwApi.ver`, default `1.1.0`). For a Heartbeat, `txnid` is the one the gateway created for the call.
 - `errorMsg` explains the specific cause.
 
 | Status | `errorCode` | When |
@@ -224,10 +255,11 @@ Errors generated by the fiu-iop-gw itself carry `IOP-Gw-Error: true` and have th
 | `405` | `InvalidRequest` | Wrong HTTP method (see `Allow`) |
 | `413` | `InvalidRequest` | The request body is too large |
 | `500` | `InternalError` | The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target) |
-| `502` | `BadGateway` | The AIG is not available; the answer of the Connected-AA has an invalid signature, cannot be decrypted, or is malformed |
+| `502` | `BadGateway` | The AIG is not available; the answer of the Connected-AA has an invalid signature, cannot be decrypted, or is malformed (in multi-tenant mode, a reply whose `kid` is missing or is not that FIU's cannot be decrypted) |
 | `400` | `SignatureDoesNotMatch` | The Target's signature on the reply does not verify |
 | `503` | `AllRoutesUnavailable` | Every route failed: no Connected-AA answered, or each answered an error that is not from the Target (section 3.7) |
-| `503` | `ServiceUnavailable` | The gateway is not ready yet: registry, keys or linkedAAs not loaded, or IopToken unavailable |
+| `400` | `InvalidRequest` | Multi-tenant mode only: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw |
+| `503` | `ServiceUnavailable` | The gateway is not ready yet: registry, keys or linkedAAs not loaded, or access token unavailable |
 | `504` | `GatewayTimeout` | The core's request was cancelled while the gateway waited to retry |
 
 ### 3.10 Error examples
@@ -307,7 +339,7 @@ The fiu-core does not need to choose a route. The fiu-iop-gw does it as follows.
 
 - It is in the FIU's **linkedAAs** (section 6).
 - The **AIG** says it can reach the Target. The fiu-iop-gw uses the AA graph (`GET /v1/aig/aa`). It lists only AAs and the AAs each is linked to (no FIUs or FIPs); an AA qualifies if the AIG links it to the Target AA, in either direction. It loads the AIG from the
-  Central Registry at start-up and every 12 hours, with its own access token, and keeps a copy.
+  Central Registry at start-up and every 6 hours by default, with its own access token, and keeps a copy.
 - It is marked interop ready in the Central Registry.
 - It is not the Target itself, Heartbeat included.
 
@@ -407,6 +439,7 @@ whether that AA is directly connected to the FIU.
 
 | Header | Mandatory | Value |
 |---|---|---|
+| `Core-Entity-Id` | Multi-tenant mode only, as in section 3.4 | The entity id of the FIU the broadcast is sent for. |
 | `Authorization` | Yes, if the fiu-iop-gw is configured with an internal API token | `Bearer <internal API token>`, as in section 3.4. |
 | `Correlation-Id` | Yes | The flow's correlation id, in standard UUID format. It is copied as `correlationId` into every request the fiu-iop-gw sends for this call, and returned on the response. A missing value, or one that is not a UUID, is refused with `400 InvalidRequest`. |
 | `Http-Retries` | No | As in section 3.4. Applies to the `/iop/User/discover` requests sent through a Connected-AA. |
@@ -469,6 +502,7 @@ Errors carry `IOP-Gw-Error: true` and the `ErrorResponse` body of section 3.9.
 | Status | `errorCode` | When |
 |---|---|---|
 | `400` | `InvalidRequest` | `Correlation-Id` missing or not in standard UUID format; the body is not a JSON object with `txnid`; `Http-Retries` or `Route-Retries` not a non-negative number |
+| `400` | `InvalidRequest` | Multi-tenant mode only: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw |
 | `400` | `InvalidSecurity` | The internal API token is missing or wrong (when one is configured) |
 | `405` | `InvalidRequest` | Wrong HTTP method (see `Allow`) |
 | `413` | `InvalidRequest` | The request body is too large |
@@ -479,7 +513,7 @@ Errors carry `IOP-Gw-Error: true` and the `ErrorResponse` body of section 3.9.
 
 All values are synthetic.
 
-Request:
+Request (single-tenant mode; in multi-tenant mode the request also carries `Core-Entity-Id: fiu-test-001`):
 
 ```http
 POST /fiu-dgw/broadcast/User/discover HTTP/1.1
@@ -571,6 +605,7 @@ For IOP calls addressed to the FIU, the fiu-iop-gw:
 | Header | Mandatory | Value |
 |---|---|---|
 | `Authorization` | Yes, if the gateway is configured with a token for calls to the core | `Bearer <token>`. If a token is configured, the fiu-core should reject calls without it or with a different value. |
+| `Core-Entity-Id` | Multi-tenant mode only: yes. Not sent in single-tenant mode | The entity id of the FIU the call is for. |
 | `Initiator-Entity` | Yes | The Initiator, as compact JSON `{"type":"…","id":"…"}`. |
 | `Correlation-Id` | Yes | The flow's correlation id, copied unchanged from the IOP message (the gateway never creates one). |
 | `Forwarding-Hop` | Yes | The entity id of the AA that delivered the call. |
@@ -591,7 +626,7 @@ The role api-key header of the calling AA and `Content-Type` are **not** sent to
 ### 4.6 Response
 
 - The response body is **exactly the same payload** the FIU returns in the matching Direct API call.
-- Use the appropriate HTTP status. A status of 300 or above reaches the Initiator as an error.
+- Use the appropriate HTTP status. A `2xx` or `3xx` status is treated as success and passed on; a status of `400` or above reaches the Initiator as an error.
 - Respond within the gateway's configured core timeout (30 seconds by default).
 - The FIU does not receive IOP heartbeats.
 
@@ -639,7 +674,8 @@ configuration separately for each key type:
 | `GET` | `/fiu-core/keys/decryption` | fiu-iop-gw | fiu-core | The decryption key set |
 
 - **Request headers:** only `Authorization: Bearer <key-fetch token>` (set in the gateway
-  configuration). The fiu-core must reject requests without it.
+  configuration; in multi-tenant mode, in that FIU's entity file) and, in multi-tenant mode only,
+  `Core-Entity-Id` (the FIU whose keys are asked for). The fiu-core must reject requests without the token.
 - **When:** at start-up, then every hour by default, and every 30 seconds while the gateway has
   no keys of that type.
 - **Response headers:** none are needed. The gateway reads only the status and the body.
@@ -681,25 +717,27 @@ configuration separately for each key type:
 | `POST` | `/fiu-dgw/keys/decryption` | fiu-core | fiu-iop-gw | Replace the decryption key set |
 
 - The fiu-core can replace a key set at once, without waiting for the next pull.
-- **Request headers:** only `Authorization: Bearer <internal API token>`, when one is configured.
+- **Request headers:** only `Authorization: Bearer <internal API token>`, when one is configured for
+  the FIU, and, in multi-tenant mode only, `Core-Entity-Id` (the FIU whose keys these are; optional with one FIU loaded).
 - **Request body:** the same as the pull response (section 5.1).
 - **Response headers:** none. Replies, success or error, are not signed.
-- These endpoints exist only for a key type the gateway takes from the fiu-core (otherwise `404`).
+- These endpoints exist only for a key type the gateway takes from the fiu-core for the FIU (in multi-tenant mode, the FIU named in `Core-Entity-Id`) (otherwise `404`).
 - The next scheduled pull replaces the set again, so the fiu-core's `GET` endpoints must return the
   same set.
 
 | Status | `errorCode` | When |
 |---|---|---|
-| `400` | `InvalidRequest` | The key set is invalid (empty, duplicate or missing `kid`, a key that is not RSA of at least 2048 bits, missing or invalid `active` / `applied` / `expiry`); the current set is kept |
+| `400` | `InvalidRequest` | Multi-tenant mode only: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not loaded, or a decryption key `kid` already used by another entity on the fiu-iop-gw. Both modes: the key set is invalid (empty, duplicate or missing `kid`, a key that is not RSA of at least 2048 bits, missing or invalid `active` / `applied` / `expiry`); the current set is kept |
 | `400` | `InvalidSecurity` | The internal API token is missing or wrong (when one is configured) |
 | `403` | `InvalidSecurity` | Sent over plain HTTP: key push is accepted only over HTTPS |
-| `404` | `InvalidURI` | The gateway does not take this key type from the fiu-core, or the path is not for the FIU |
+| `404` | `InvalidURI` | The gateway does not take this key type from the fiu-core for the FIU (in multi-tenant mode, the FIU named in `Core-Entity-Id`), or the path is for a gateway running in another `mode` (AA, FIU or FIP) |
 | `405` | `InvalidRequest` | Not `POST` |
 | `413` | `InvalidRequest` | The request body is too large |
 
 **Examples**
 
-Request: `POST /fiu-dgw/keys/signing` with a current key and the next one.
+Request: `POST /fiu-dgw/keys/signing` with a current key and the next one (single-tenant mode; in
+multi-tenant mode the request also carries `Core-Entity-Id: fiu-test-001`).
 
 ```http
 POST /fiu-dgw/keys/signing
@@ -744,7 +782,7 @@ Error — an invalid set (the same `kid` twice). The current set is kept. (`ver`
 HTTP/1.1 400 Bad Request
 
 {
-  "ver": "1.0.0",
+  "ver": "1.1.0",
   "txnid": "",
   "timestamp": "2026-11-07T11:33:34.509Z",
   "errorCode": "InvalidRequest",
@@ -758,7 +796,7 @@ Error — missing or wrong internal API token.
 HTTP/1.1 400 Bad Request
 
 {
-  "ver": "1.0.0",
+  "ver": "1.1.0",
   "txnid": "",
   "timestamp": "2026-11-07T11:33:34.509Z",
   "errorCode": "InvalidSecurity",
@@ -788,8 +826,9 @@ HTTP/1.1 400 Bad Request
 
 - The fiu-iop-gw keeps the keys **in memory only**. They are never written to its persistent cache,
   to disk, or to any temporary storage. After a restart it pulls them again.
-- **Key pull and key push work only over HTTPS.** The gateway refuses an `http://` key URL at
-  start-up, and its plain-HTTP listener refuses key push.
+- **Key pull and key push work only over HTTPS.** In single-tenant mode the gateway refuses an
+  `http://` key URL at start-up. In multi-tenant mode an `http://` key URL makes that FIU's entity file
+  invalid: the FIU is not loaded and the error is logged. The plain-HTTP listener refuses key push.
 - The fiu-core must check the key-fetch token, serve the key endpoints only to the fiu-iop-gw, and never
   log key material.
 
@@ -808,7 +847,9 @@ of two ways, chosen in the gateway configuration:
 |---|---|---|---|---|
 | `GET` | `/fiu-core/linkedAAs` | fiu-iop-gw | fiu-core | The list of linked AAs |
 
-- **Request headers:** only `Authorization: Bearer <token>` (set in the gateway configuration).
+- **Request headers:** only `Authorization: Bearer <token>` (set in the gateway configuration; in
+  multi-tenant mode, in that FIU's entity file) and, in multi-tenant mode only, `Core-Entity-Id` (the
+  FIU whose list is asked for).
 - **When:** at start-up, then every hour by default, and every 30 seconds while the gateway has
   no list. The gateway keeps the list in memory and in its persistent cache, so a restart can
   use the last list even if the fiu-core is down.
@@ -831,11 +872,21 @@ of two ways, chosen in the gateway configuration:
 |---|---|---|---|---|
 | `POST` | `/fiu-dgw/linkedAAs` | fiu-core | fiu-iop-gw | Replace the list |
 
-- **Request headers:** only `Authorization: Bearer <internal API token>`, when one is configured.
+- **Request headers:** only `Authorization: Bearer <internal API token>`, when one is configured for
+  the FIU, and, in multi-tenant mode only, `Core-Entity-Id` (the FIU whose list this is; optional with one FIU loaded).
 - **Request body:** the same as the pull response.
-- **Response:** `200` with the new list, no response headers. Errors: `400` (empty list or
-  repeated id, and the current list is kept; or a missing or wrong token), `405` (not `POST`), `413` (too large).
-- The endpoint exists only when the gateway takes the list from the fiu-core (otherwise `404`).
+- **Response:** `200` with the new list, no response headers. Replies, success or error, are not signed.
+- The endpoint exists only when the gateway takes the list from the fiu-core for the FIU (in multi-tenant mode, the FIU named in `Core-Entity-Id`) (otherwise `404`).
+
+| Status | `errorCode` | When |
+|---|---|---|
+| `400` | `InvalidRequest` | The list is empty or repeats an id; or, in multi-tenant mode only, `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not loaded. The current list is kept |
+| `400` | `InvalidSecurity` | The internal API token is missing or wrong (when one is configured) |
+| `404` | `InvalidURI` | The gateway does not take the list from the fiu-core for the FIU (in multi-tenant mode, the FIU named in `Core-Entity-Id`), or the path is for a gateway running in another `mode` (AA, FIU or FIP) |
+| `405` | `InvalidRequest` | Not `POST` |
+| `413` | `InvalidRequest` | The request body is too large |
+
+In single-tenant mode (in multi-tenant mode the request also carries `Core-Entity-Id: fiu-test-001`):
 
 ```http
 POST /fiu-dgw/linkedAAs
@@ -861,6 +912,8 @@ Authorization: Bearer <internal API token>
   so the fiu-core can check `Authorization` on every call.
 - Key endpoints: HTTPS only, check the key-fetch token, serve them only to the fiu-iop-gw, never log
   key material.
+- Multi-tenant mode only: with more than one FIU on one fiu-iop-gw, give each FIU its own internal
+  API token, key-fetch token and credentials file, so that one FIU's token cannot be used to send as another.
 
 ## 8. Configuring the fiu-iop-gw before start-up
 
@@ -876,16 +929,18 @@ API in production**. The configuration alternative is **for testing only**.
 | Linked AAs | The fiu-core (section 6) | A list in the configuration |
 | The FIU's signing and decryption keys | The fiu-core (section 5) | Key files mounted on the gateway |
 | Public keys of the api-key token issuer | The issuer's key URL (JWKS) | Public key files |
-| The FIU's IopToken (api-key on `/iop` calls) and access token | The Sahamati token service | A fixed api-key |
+| The FIU's access token (api-key on `/iop` calls, bearer token for the Central Registry and AIG) | The Sahamati token service | A fixed api-key |
 
 ### 8.2 Production configuration
 
-This is a production configuration for the fiu-iop-gw: everything comes from the APIs. Replace the
-ids, URLs and file paths with the FIU's own; the Central Registry, token service and issuer URLs
-are provided by Sahamati. All values shown are illustrative.
+This is a production configuration for the fiu-iop-gw in single-tenant mode (the default): one FIU,
+all settings in one file, and everything comes from the APIs. Replace the ids, URLs and file paths
+with the FIU's own; the Central Registry, token service and issuer URLs are provided by Sahamati.
+All values shown are illustrative. For more than one FIU on one fiu-iop-gw, see section 8.2.1.
 
 ```yaml
 mode: FIU
+multiTenant: off                       # default; single-tenant
 logging:
   level: INFO
   audit: true                          # IOPGW_AUDIT record per request and response (no bodies)
@@ -906,11 +961,10 @@ self:
     source: api
     token: "${IOPGW_KEYS_TOKEN}"
 
-# Access token and IopToken from the Sahamati token service (section 8.5)
+# Access token from the Sahamati token service (section 8.5)
 tokenService:
   baseUrl: https://iam.example.invalid/iam/v1
   path: /entity/token/generate        # access token
-  iopPath: /entity/iopToken/generate  # IopToken
   credentialsFile: /etc/iopgw/secrets/credentials.json
 
 # The fiu-core
@@ -951,6 +1005,7 @@ gwApi:
   token: "${IOPGW_GWAPI_TOKEN}"      # the fiu-core sends it as Authorization: Bearer
   maxRetries: 3                        # cap on Http-Retries
   maxRouteRetries: 2                   # cap on Route-Retries
+  # ver: 1.1.0                        # ver in the gateway's own error bodies when the request has none (default 1.1.0)
   broadcastTimeoutSeconds: 10          # how long /fiu-dgw/broadcast/User/discover waits for the AAs (section 3.13)
 
 # Linked AAs: from the fiu-core (section 6)
@@ -966,6 +1021,113 @@ forwarding:
 
 cache:
   dir: /var/lib/iopgw/cache
+```
+
+#### 8.2.1 Multi-tenant production configuration
+
+In multi-tenant mode (`multiTenant: on`), the main file holds only the settings common to all FIUs,
+and each FIU has its own entity file (section 8.6). Compared with section 8.2, `self` (as
+`entityId`, `signingKey` and `decryptionKeys`), `tokenService.credentialsFile`, `gwApi.token`, `core`,
+`linkedAAs` and `hopPreference` move to the entity file.
+
+Main file:
+
+```yaml
+mode: FIU
+multiTenant: on                        # one or more FIUs, each in its own entity file
+logging:
+  level: INFO
+  audit: true                          # IOPGW_AUDIT record per request and response (no bodies)
+  statsIntervalSeconds: 60             # IOPGW_STATS record with "|"-separated counts
+
+# Public listener for /iop calls from other AAs (HTTPS)
+listenAddr: ":8443"
+tls:
+  certFile: /etc/iopgw/tls/server.crt
+  keyFile: /etc/iopgw/tls/server.key
+
+# Entity files: one file per FIU entity (section 8.6)
+entityConfigPath: /etc/iopgw/entities
+entityRescanSeconds: 60              # new, changed and removed entity files are picked up
+
+# Access token from the Sahamati token service (section 8.5)
+tokenService:
+  baseUrl: https://iam.example.invalid/iam/v1
+  path: /entity/token/generate        # access token
+
+# Checking the api-key of calling AAs
+apiKey:
+  mode: jwt
+  senderIdClaim: azp
+  issuer: https://token.example.invalid/auth/realms/sahamati
+  issuerKeysUrl: https://token.example.invalid/auth/realms/sahamati/protocol/openid-connect/certs
+
+jws:
+  algorithm: RS256
+
+# Participants, keys and interop flags: from the Central Registry
+cr:
+  source: api
+  baseUrl: https://cr.example.invalid
+  entityInfoPath: /v2/entityInfo
+
+# AA Interoperability Graph: from the Central Registry
+aigSource: api
+aigBaseUrl: https://cr.example.invalid
+aaAigPath: /v1/aig/aa                   # an AA's peer-AAs
+
+# Internal APIs (/fiu-dgw) for the fiu-core
+gwApi:
+  listenAddr: "10.0.0.10:9443"         # internal interface only; always HTTPS
+  tls:
+    certFile: /etc/iopgw/tls/internal.crt
+    keyFile: /etc/iopgw/tls/internal.key
+  maxRetries: 3                        # cap on Http-Retries
+  maxRouteRetries: 2                   # cap on Route-Retries
+  # ver: 1.1.0                        # ver in the gateway's own error bodies when the request has none (default 1.1.0)
+  broadcastTimeoutSeconds: 10          # how long /fiu-dgw/broadcast/User/discover waits for the AAs (section 3.13)
+
+forwarding:
+  timeoutSeconds: 30
+
+cache:
+  dir: /var/lib/iopgw/cache
+```
+
+Entity file `/etc/iopgw/entities/fiu-test-001.yaml`:
+
+```yaml
+entityId: fiu-test-001                    # the FIU's entity id in the Central Registry
+enable: true                         # only true loads the entity
+signingKey:                          # from the fiu-core (section 5)
+  source: api
+  token: "${IOPGW_KEYS_TOKEN}"
+decryptionKeys:                      # from the fiu-core (section 5)
+  source: api
+  token: "${IOPGW_KEYS_TOKEN}"
+
+# Credentials for the Sahamati token service (section 8.5)
+tokenService:
+  credentialsFile: /etc/iopgw/secrets/fiu-test-001/credentials.json
+
+gwApi:
+  token: "${IOPGW_GWAPI_TOKEN}"      # the fiu-core sends it as Authorization: Bearer
+
+# The fiu-core
+core:
+  baseUrl: http://fiu-core.internal:8080        # message calls (http or https)
+  keysBaseUrl: https://fiu-core.internal:8443   # key pull (https only)
+  pathPrefix: /fiu-core
+  token: "${IOPGW_CORE_TOKEN}"                   # sent to the fiu-core on every call
+  timeoutSeconds: 30
+
+# Linked AAs: from the fiu-core (section 6)
+linkedAAs:
+  source: api
+  token: "${IOPGW_LINKED_TOKEN}"
+
+hopPreference:
+  connectedAAs: [aa-test-002]          # tried first, in this order
 ```
 
 ### 8.3 Local testing configuration
@@ -985,10 +1147,12 @@ configuration file instead (section 8.1):
 Key files, peer public keys and TLS files are read from `./local/`. The api-keys and the internal
 API token are environment variables: `IOPGW_OUTBOUND_API_KEY`, `IOPGW_GWAPI_TOKEN` and one
 `IOPGW_TEST_..._API_KEY` per calling participant. All ids, addresses and values are illustrative.
+This example is in single-tenant mode; section 8.3.1 shows the multi-tenant split.
 
 ```yaml
 # LOCAL TESTING ONLY: everything below comes from this file, not from the APIs.
 mode: FIU
+multiTenant: off                       # default; single-tenant
 logging:
   level: DEBUG
   audit: true
@@ -1074,6 +1238,46 @@ cache:
   dir: ./local/cache
 ```
 
+#### 8.3.1 Multi-tenant local testing configuration
+
+The split is the same as in production (section 8.2.1). In the main file of section 8.3, set
+`multiTenant: on`, add `entityConfigPath: ./local/entities` and `entityRescanSeconds: 60`, and remove
+`self`, `core`, `gwApi.token`, `linkedAAs` and `hopPreference`. These go into the entity file, where
+the contents of `self` (`id` as `entityId`, the keys and `outboundApiKey`) are top-level settings:
+
+Entity file `./local/entities/fiu-test-001.yaml`:
+
+```yaml
+entityId: fiu-test-001                    # the FIU's entity id in the Central Registry
+enable: true                         # only true loads the entity
+signingKey:                          # key file instead of the fiu-core's key API
+  source: file
+  kid: fiu-test-001-sig
+  file: ./local/keys/fiu-test-001-sig.pem
+  active: true
+  applied: "2026-11-01"
+decryptionKeys:                      # key files instead of the fiu-core's key API
+  source: file
+  keys:
+    - { kid: fiu-test-001-enc, file: ./local/keys/fiu-test-001-enc.pem, active: true, applied: "2026-11-01" }
+outboundApiKey: "${IOPGW_OUTBOUND_API_KEY}"   # fixed api-key towards other AAs (no token service)
+
+gwApi:
+  token: "${IOPGW_GWAPI_TOKEN}"
+
+core:
+  baseUrl: http://127.0.0.1:8080       # the fiu-core running locally
+  pathPrefix: /fiu-core
+  timeoutSeconds: 30
+
+linkedAAs:
+  source: config                       # list from this file, not the fiu-core's API
+  aas: [aa-test-002]
+
+hopPreference:
+  connectedAAs: [aa-test-002]
+```
+
 ### 8.4 What the FIU provides (production)
 
 | Item | What it is | Who uses it |
@@ -1084,12 +1288,20 @@ cache:
 | `IOPGW_LINKED_TOKEN` | Linked-AAs token | The fiu-iop-gw sends it on `GET /fiu-core/linkedAAs`; the fiu-core checks it |
 | TLS certificate and key (public) | For the `/iop` listener | Other AAs calling the fiu-iop-gw |
 | TLS certificate and key (internal) | For the internal APIs | The fiu-core |
-| Credentials file | The FIU's entity credentials for the Sahamati token service | The fiu-iop-gw, to get its access token and IopToken |
+| Credentials file | The FIU's entity credentials for the Sahamati token service | The fiu-iop-gw, to get the FIU's access token |
 
-- The four tokens are given to the fiu-iop-gw as environment variables; it does not start if one is
-  empty. Keep them secret, and give each the same value on the fiu-core's side.
+- **Single-tenant mode:** each token is an environment variable referenced from the main file. If a
+  referenced variable is empty, the fiu-iop-gw does not start.
+- **Multi-tenant mode:** each token is an environment variable referenced from the FIU's entity
+  file. If a referenced variable is empty, that entity file is invalid: the FIU is not loaded and
+  the error is logged (the gateway still starts). The tokens and the credentials file are per
+  entity. With more than one FIU, use different environment variable names for each FIU, for
+  example `IOPGW_GWAPI_TOKEN_FIU_TEST_002`.
+- `gwApi.token` and `core.token` are optional but recommended. Keep the tokens secret, and give each
+  the same value on the fiu-core's side.
 - `hopPreference` lists the FIU's preferred routes, tried first in that order (section 3.11).
-- `gwApi.maxRetries` and `gwApi.maxRouteRetries` cap `Http-Retries` and `Route-Retries`.
+- `gwApi.maxRetries` and `gwApi.maxRouteRetries` cap `Http-Retries` and `Route-Retries`; a lower cap also lowers the default.
+- `gwApi.ver` is the `ver` in the gateway's own error bodies when the request has none. Default `1.1.0`.
 - `gwApi.broadcastTimeoutSeconds` is how long `POST /fiu-dgw/broadcast/User/discover` waits for
   the AAs' answers (section 3.13). Default `10`; it must not be negative.
 - `logging.audit` writes one JSON log record tagged `IOPGW_AUDIT` per request and per response
@@ -1097,22 +1309,51 @@ cache:
   `logging.statsIntervalSeconds` one record tagged `IOPGW_STATS` per interval with
   `|`-separated counts. Both can be fetched from the gateway's logs by their tag.
 
-### 8.5 IopToken
+### 8.5 Tokens
 
-The fiu-iop-gw holds two tokens from the Sahamati token service, both got with the FIU's credentials
-file (section 8.4):
+The fiu-iop-gw gets the FIU's **access token** (the regular token) from the Sahamati token service
+with the FIU's credentials file (section 8.4; in multi-tenant mode, one token per FIU, each with
+that FIU's credentials file): `POST <tokenService.baseUrl><tokenService.path>`
+(default `/entity/token/generate`; with `baseUrl` `https://api.sahamati.org.in/iam/v1`, production, or
+`https://api.uat.sahamati.org.in/iam/v1`, UAT), with the form fields `id` and `secret`.
 
-| Token | Got from | Used by the fiu-iop-gw for |
-|---|---|---|
-| Access token | `POST <tokenService.baseUrl><tokenService.path>`, default `/entity/token/generate` | Direct API calls (the user discovery broadcast, section 3.13); the bearer token for the Central Registry and the AIG |
-| IopToken | `POST <tokenService.baseUrl><tokenService.iopPath>`, default `/entity/iopToken/generate` | The role api-key `client_api_key` on every `/iop` call the fiu-iop-gw sends |
+| Token | Used by the fiu-iop-gw for |
+|---|---|
+| Access token | The role api-key `client_api_key` on every `/iop` call the fiu-iop-gw sends; Direct API calls (the user discovery broadcast, section 3.13); the bearer token for the Central Registry and the AIG |
 
-- With `tokenService.baseUrl` set to, for example, `https://token-generation-url/iam/v1`, the
-  IopToken comes from `https://token-generation-url/iam/v1/entity/iopToken/generate`.
+- FIUs do not get an IopToken: only AAs use it.
 - Each token is cached, kept in the persistent cache, and refreshed on its own before it expires. If
-  the IopToken is not available, `/iop` calls fail with `503 ServiceUnavailable` ("IopToken
-  unavailable").
-- **Received tokens.** The fiu-iop-gw checks that the token on a received `/iop` call
-  (`x-conn_aa_api_key`, from the Connected-AA) is a hop token (an IopToken). **Verification
-  procedure:** *To be published.* The fiu-core needs no change for this: the token is not passed to
-  it (section 4.4).
+  the access token is not available, `/iop` calls fail with `503 ServiceUnavailable`.
+- **Received tokens.** The fiu-iop-gw checks that the token on a received `/iop` call (`x-conn_aa_api_key`, from the Connected-AA)
+  is an IopToken (claim `token_use: iop`) (only when api-keys are checked as JWTs, `apiKey.mode: jwt`, the production setting; static test api-keys are not checked); otherwise the call is refused with `400 InvalidSecurity`.
+  The fiu-core needs no change for this: the token is not passed to it (section 4.4). On the Direct
+  APIs, which the fiu-core serves itself, the fiu-core must accept only a regular token as `aa_api_key` and
+  refuse a token with `token_use: iop`.
+
+### 8.6 Entity files (multi-tenant mode only)
+
+In single-tenant mode there are no entity files: all settings are in the main file (sections 8.2
+and 8.3). With `multiTenant: off`, `entityConfigPath` and
+`entityRescanSeconds` are ignored (a warning is logged).
+
+In multi-tenant mode, each FIU served by the fiu-iop-gw has one entity file in the folder named by
+`entityConfigPath` (sections 8.2.1 and 8.3.1). The fiu-iop-gw reads every file ending in `.yaml` or
+`.yml` there (not sub-folders), loads only those with `enable: true`, and reads the folder again
+every `entityRescanSeconds` (default 60). An invalid file is skipped with an error in the log; a FIU
+already loaded keeps its previous settings. Two files with the same `entityId`: only the one whose
+name sorts first is used.
+
+| Entity file setting | What it is |
+|---|---|
+| `entityId`, `enable` | The FIU's entity id in the Central Registry; `true` to load it |
+| `signingKey`, `decryptionKeys` | Where the FIU's keys come from (section 5). Decryption key `kid`s must not be used by another FIU on the fiu-iop-gw |
+| `tokenService.credentialsFile` | The FIU's credentials for the token service (section 8.5) |
+| `outboundApiKey` | Testing only: a fixed api-key instead of the token service |
+| `aigToken` | Testing only: a fixed AIG token instead of the access token |
+| `core` | The fiu-core's URLs, path prefix, token and timeout for this FIU |
+| `gwApi.token` | The internal API token the fiu-core sends for this FIU |
+| `linkedAAs`, `hopPreference` | The AAs this FIU is linked to (section 6) and its preferred routes (section 3.11) |
+
+Every other setting, `mode` and `multiTenant` included, is in the main file and applies to every
+FIU. To add a second FIU, add a second entity file, for example `fiu-test-002.yaml`, with its own
+id, keys, tokens and credentials file.

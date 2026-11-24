@@ -7,7 +7,7 @@
 |  |  |
 |---|---|
 | **Audience** | FIP core application teams (AA ecosystem participants) |
-| **Version** | Draft 3.6, 2026-11-16 |
+| **Version** | Draft 5.0, 2026-11-23. Combined edition: single-tenant (default) and multi-tenant (`multiTenant: on`). The single-tenant-only edition is kept in `archive/` for reference |
 | **Covers** | How the fip-core sends and receives messages through the fip-iop-gw, when to call it, how the fip-core gives it keys and its list of linked AAs, and how the fip-iop-gw is configured |
 
 All identifiers in examples are illustrative.
@@ -19,12 +19,12 @@ To work with the fip-iop-gw, the fip-core needs the changes below. "Yes" means n
 | # | Change in the fip-core | Needed | Section |
 |---|---|---|---|
 | 1 | Call the fip-iop-gw's internal APIs (`/fip-sgw/*`) instead of the Direct APIs when the AA that sent the request (Origin-AA) is not directly connected to the FIP. Keep using the Direct APIs for directly connected participants. | Yes | 2, 3.3 |
-| 2 | Send `Target-Entity` and `Correlation-Id` on every call, and `Authorization` with the internal API token. Optionally send `Preferred-Hop`, `Http-Retries`, `Route-Retries` and the fip-core's own `x-jws-signature`. | Yes | 3.4 |
+| 2 | Send `Target-Entity` and `Correlation-Id` on every message call (section 3.3), `Core-Entity-Id` in multi-tenant mode while the fip-iop-gw serves more than one FIP, and `Authorization` with the internal API token when configured. Optionally send `Preferred-Hop`, `Http-Retries`, `Route-Retries` and the fip-core's own `x-jws-signature`. | Yes | 3.4 |
 | 3 | Create a non-empty correlation id for each new flow, and keep it on every message of that flow. | Yes | 2 |
 | 4 | Handle the responses: the Target's payload and signature; Target errors (with a payload, or a status with an empty body); errors from the fip-iop-gw (`IOP-Gw-Error: true`, for example `503 AllRoutesUnavailable`). | Yes | 3.6 – 3.10 |
 | 5 | Implement the Direct API `POST /Accounts/link/reverify`, used by directly connected AAs. | Yes | 4.7 |
 | 6 | Expose the `/fip-core/*` APIs (including `POST /fip-core/Accounts/link/reverify`) to receive messages from participants that are not directly connected. The payloads are those of the Direct APIs. | Yes | 4.3 – 4.5, 4.7 |
-| 7 | Return `Correlation-Id` unchanged on every `/fip-core/*` response. | Yes | 4.6 |
+| 7 | Return `Correlation-Id` unchanged on every `/fip-core/*` message and Heartbeat response. | Yes | 4.6 |
 | 8 | Check `Authorization` on every `/fip-core/*` call (the token the fip-iop-gw sends to the fip-core). | Recommended | 4.4, 7 |
 | 9 | De-duplicate incoming messages on `txnid`: retries can deliver a message twice, and the fip-core must not process it twice; answer a repeat with `409 IdempotencyError`. | Yes | 4.5 |
 | 10 | Serve the key endpoints `GET /fip-core/keys/signing` and `GET /fip-core/keys/decryption` over HTTPS, checking the key-fetch token. | Yes | 5.1 |
@@ -32,6 +32,56 @@ To work with the fip-iop-gw, the fip-core needs the changes below. "Yes" means n
 | 12 | Serve `GET /fip-core/linkedAAs` with the AAs the FIP is linked to. | Yes | 6.1 |
 | 13 | Push the list to `/fip-sgw/linkedAAs` when it changes. | Recommended | 6.2 |
 | 14 | Set the fip-iop-gw's configuration and provide its tokens, certificates and credentials before starting it. | Yes | 8 |
+| 15 | Read `Core-Entity-Id` on every call from the fip-iop-gw (messages, Heartbeat, key pull, linkedAAs pull) and act for that entity. | Multi-tenant mode, when more than one FIP | Single-tenant and multi-tenant mode, 4.4, 5, 6 |
+| 16 | In multi-tenant mode: give each FIP its own entity file, keys (with decryption key `kid`s not used by any other entity on the gateway), tokens and credentials. | Multi-tenant mode only | Single-tenant and multi-tenant mode, 8.6 |
+| 17 | In multi-tenant mode, when the fip-iop-gw serves more than one FIP: put an application gateway in front of it that sets `Target-Id` from the URL on `/iop/Heartbeat` calls only (and removes any `Target-Id` sent by the caller), so that the heartbeat reaches the right FIP. | Multi-tenant mode, when more than one FIP | Single-tenant and multi-tenant mode |
+
+## Single-tenant and multi-tenant mode
+
+The fip-iop-gw runs in one of two modes, chosen with `multiTenant` in the main configuration file
+(section 8). Changing the mode needs a restart.
+
+| Item | Single-tenant mode (default) | Multi-tenant mode |
+|---|---|---|
+| Switch in the main file | `multiTenant: off` (or `false`), or not set | `multiTenant: on` (or `true`) |
+| FIPs per fip-iop-gw | One | One or more |
+| Where the FIP's settings are | All in the main file (sections 8.2, 8.3) | Common settings in the main file; each FIP's own settings in its entity file (sections 8.2, 8.3, 8.6) |
+| `Core-Entity-Id` | Never sent to the fip-core; ignored if the fip-core sends it | Always sent to the fip-core; from the fip-core required while more than one FIP is loaded |
+| `Target-Id` and application gateway | `Target-Id` is ignored; no application gateway is needed to set it | `Target-Id` used only on `/iop/Heartbeat`, set by the FIP's application gateway; needed while more than one FIP is loaded |
+
+In both modes, an encrypted message received on `/iop` without a `kid` in the encrypted payload's
+header is refused with `400 InvalidRequest`.
+
+### Multi-tenant mode only
+
+In multi-tenant mode one fip-iop-gw can serve **more than one FIP**. One or more fip-cores can connect
+to the same fip-iop-gw, and one fip-core can send for several FIPs.
+
+| Item | How it works |
+|---|---|
+| Configuration | Settings common to all FIPs are in the main configuration file. Each FIP has its own **entity file** with its entity id, keys, token service credentials, fip-core settings, internal API token, linked AAs and route preference (sections 8.2 and 8.6). Only entity files with `enable: true` are loaded. |
+| Adding or removing a FIP | The fip-iop-gw reads the entity files again every minute (`entityRescanSeconds`, default 60): a new file adds a FIP, a changed file reloads it, and a removed file or `enable: false` removes it. No restart is needed. Changes to the main file need a restart. |
+| Calls from the fip-core | A request names the FIP it is sent for with `Core-Entity-Id: <FIP entity id>`. The fip-iop-gw signs, sends and opens the reply as that FIP, and checks the internal API token against that FIP's token. **While more than one FIP is loaded, `Core-Entity-Id` is required**; without it, or with one that names no FIP loaded on the fip-iop-gw, the call is refused with `400 InvalidRequest`. With only one FIP loaded it is optional: a call without it is for that FIP, and a call with another id is refused. A fip-core that may later serve more than one FIP should always send it. |
+| Calls to the fip-core | Every request (messages, Heartbeat, key pull, linkedAAs pull) carries `Core-Entity-Id`: the FIP the call is for, even when only one FIP is loaded (a fip-core serving one FIP may ignore it). Each FIP can have its own fip-core URL and token. Responses carry no `Core-Entity-Id`. |
+| Which FIP a received message is for | The fip-iop-gw reads the `kid` in the encrypted payload's header and finds the FIP whose decryption key has that `kid`. A message without a `kid` is refused with `400 InvalidRequest`. A decryption key `kid` must therefore be used by **one FIP only** on a fip-iop-gw: a FIP whose `kid` is already used by another is not loaded. A reply to a call from the fip-core is opened only if its `kid` is one of that FIP's decryption keys; a reply without a `kid`, or with another FIP's `kid`, gives the fip-core `502 BadGateway`. |
+| Error replies to other participants | Some errors on `/iop` are found before the fip-iop-gw knows which FIP a call is for (for example a wrong api-key, a message without a `kid`, or no FIP loaded). With only one FIP loaded, these errors are signed by that FIP. With no FIP, or more than one, loaded, they are sent unsigned and without `errorSource`. Every other error is signed by the FIP the call is for. |
+| No FIP loaded | The fip-iop-gw still starts. `/iop` calls get `503 ServiceUnavailable` and calls from the fip-core `400 InvalidRequest`. |
+
+**`/iop/Heartbeat` and `Target-Id`.** A heartbeat has no encrypted payload, so the fip-iop-gw cannot find
+the FIP from a `kid`. `Target-Id` is used only on a `/iop/Heartbeat` addressed to the FIP. When the
+fip-iop-gw serves more than one FIP, the FIP's own application gateway (for example a reverse proxy)
+in front of the fip-iop-gw must, for `/iop/Heartbeat` only, set `Target-Id: <FIP entity id>` from the
+URL the call arrived on, for example one URL per FIP, published as that FIP's `baseurl` in the
+Central Registry. It must remove any `Target-Id` sent by the caller first.
+
+| Case | Result |
+|---|---|
+| More than one FIP loaded, heartbeat without `Target-Id` | `400 InvalidRequest` |
+| More than one FIP loaded, `Target-Id` names no FIP loaded on the fip-iop-gw | `400 InvalidRequest` |
+| Only one FIP loaded | `Target-Id` is not needed: the heartbeat is for that FIP, and the fip-iop-gw calls its fip-core with that FIP's `Core-Entity-Id` |
+| Any other `/iop` call | The fip-iop-gw ignores `Target-Id`: it finds the FIP from the `kid` |
+
+Other participants never send this header.
 
 ## 1. Terminology
 
@@ -124,13 +174,14 @@ The Target (`Target-Entity`) is the **Origin-AA** (the AA that sent the original
 
 | Header | Mandatory | Value |
 |---|---|---|
-| `Authorization` | Yes, if the fip-iop-gw is configured with an internal API token | `Bearer <internal API token>`. Without it (or with a wrong one) the call is refused with `400`. |
+| `Authorization` | Yes, if the fip-iop-gw is configured with an internal API token for this FIP | `Bearer <internal API token>` (in multi-tenant mode, the token of the FIP named in `Core-Entity-Id`, or of the only FIP loaded). Without it (or with a wrong one) the call is refused with `400`. |
+| `Core-Entity-Id` | Multi-tenant mode only: yes, while the fip-iop-gw has more than one FIP loaded; otherwise optional | Multi-tenant mode only; ignored in single-tenant mode. The entity id of the FIP the call is sent for. Missing (with more than one FIP loaded), empty, or not an entity loaded on the fip-iop-gw: refused with `400 InvalidRequest`. With one FIP loaded, a call without it is for that FIP, and a call with another id is refused. |
 | `Target-Entity` | Yes | The final recipient, as compact JSON: `{"type":"<AA\|FIU\|FIP>","id":"<entity id>"}`. The type must match the API (section 3.3). The Target must be marked interop ready in the Central Registry. |
 | `Correlation-Id` | Yes | The flow's correlation id, in standard UUID format (see section 1). It is carried in the IOP message and returned on every response. A missing value, or one that is not a UUID, is refused with `400 InvalidRequest`. |
 | `x-jws-signature` | No | The fip-core's own detached JWS over the request body (RFC 7797 unencoded payload: protected header `{"alg": "RS256", "kid", "b64": false, "crit": ["b64"]}`, signed over the raw body), made with one of the FIP's registered signing keys. The fip-iop-gw checks it: if it does not verify, the call is refused with `400`. The fip-iop-gw signs the payload either way (section 3.2). |
 | `Preferred-Hop` | No | The entity id of the AA the core prefers as the route. Used first only if it is an eligible route (section 3.11); otherwise ignored. |
-| `Http-Retries` | No | How many times to retry the same route when it does not answer (no connection, or a timeout). An error answer from the route, `502`/`503`/`504` included, is not retried on that route. **`0` means: do not retry.** Default `2`; capped by the gateway (by default at `3`). Waits 200 ms, doubling up to 2 s, between retries. |
-| `Route-Retries` | No | How many **other** routes to try after the first route fails (section 3.7). **`0` means: do not try another route.** Default `2`; capped by the gateway (by default at `2`). |
+| `Http-Retries` | No | How many times to retry the same route when it does not answer (no connection, or a timeout). An error answer from the route, `502`/`503`/`504` included, is not retried on that route. **`0` means: do not retry.** Default `2`; capped by the gateway (by default at `3`; a lower cap also lowers the default). Waits 200 ms, doubling up to 2 s, between retries. |
+| `Route-Retries` | No | How many **other** routes to try after the first route fails (section 3.7). **`0` means: do not try another route.** Default `2`; capped by the gateway (by default at `2`; a lower cap also lowers the default). |
 
 No other header is needed. `Content-Type` is not required.
 
@@ -216,10 +267,11 @@ Errors generated by the fip-iop-gw itself carry `IOP-Gw-Error: true` and have th
 | `405` | `InvalidRequest` | Wrong HTTP method (see `Allow`) |
 | `413` | `InvalidRequest` | The request body is too large |
 | `500` | `InternalError` | The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target) |
-| `502` | `BadGateway` | The AIG is not available; the answer of the Inter-AA has an invalid signature, cannot be decrypted, or is malformed |
+| `502` | `BadGateway` | The AIG is not available; the answer of the Inter-AA has an invalid signature, cannot be decrypted, or is malformed (in multi-tenant mode, a reply whose `kid` is missing or is not that FIP's cannot be decrypted) |
 | `400` | `SignatureDoesNotMatch` | The Target's signature on the reply does not verify |
 | `503` | `AllRoutesUnavailable` | Every route failed: no Inter-AA answered, or each answered an error that is not from the Target (section 3.7) |
-| `503` | `ServiceUnavailable` | The gateway is not ready yet: registry, keys or linkedAAs not loaded, or IopToken unavailable |
+| `400` | `InvalidRequest` | Multi-tenant mode only: `Core-Entity-Id` missing while more than one FIP is loaded, empty, or not an entity loaded on the fip-iop-gw |
+| `503` | `ServiceUnavailable` | The gateway is not ready yet: registry, keys or linkedAAs not loaded, or access token unavailable |
 | `504` | `GatewayTimeout` | The core's request was cancelled while the gateway waited to retry |
 
 ### 3.10 Error examples
@@ -299,8 +351,9 @@ The fip-core does not need to choose a route. The fip-iop-gw does it as follows.
 
 - It is in the FIP's **linkedAAs** (section 6).
 - The **AIG** says it can reach the Target. The fip-iop-gw uses the AA graph (`GET /v1/aig/aa`). It lists only AAs and the AAs each is linked to (no FIUs or FIPs); an AA qualifies if the AIG links it to the Target AA, in either direction. It loads the AIG from the
-  Central Registry at start-up and every 12 hours, with its own access token, and keeps a copy.
+  Central Registry at start-up and every 6 hours by default, with its own access token, and keeps a copy.
 - It is marked interop ready in the Central Registry.
+- It has a base URL (`baseurl`) in the Central Registry, and the fip-iop-gw has an api-key to send to it.
 - It is not the Target itself, Heartbeat included.
 
 The **Target** must also be marked interop ready in the Central Registry; otherwise the call is
@@ -333,9 +386,9 @@ The fip-iop-gw retries a call from the fip-core as follows.
 | | |
 |---|---|
 | Sends to | A Inter-AA (`/iop`), chosen as in section 3.11 |
-| Retries the same route | `Http-Retries` header: default 2, capped by the gateway (by default at 3) |
+| Retries the same route | `Http-Retries` header: default 2, capped by the gateway (by default at 3; a lower cap also lowers the default) |
 | … when | The Inter-AA does not answer (no connection, or a timeout). An error answer from the Inter-AA, `502`/`503`/`504` included, is never retried on the same route |
-| Tries another route | `Route-Retries` header: default 2, capped by the gateway (by default at 2). After the retries when the Inter-AA does not answer; at once on any error from the Inter-AA that is not from the Target (for example `503` or `400 InvalidRoute`) |
+| Tries another route | `Route-Retries` header: default 2, capped by the gateway (by default at 2; a lower cap also lowers the default). After the retries when the Inter-AA does not answer; at once on any error from the Inter-AA that is not from the Target (for example `503` or `400 InvalidRoute`) |
 | Never retries | Success; an answer with `encryptedPayload` (the Target's error); `IopDownstreamError` without `encryptedPayload` |
 | Wait between attempts | 200 ms, doubling, at most 2 s |
 | Most sends per call (defaults) | (1 + 2 routes) × (1 + 2 retries) = 9 |
@@ -420,6 +473,7 @@ For IOP calls addressed to the FIP, the fip-iop-gw:
 | Header | Mandatory | Value |
 |---|---|---|
 | `Authorization` | Yes, if the gateway is configured with a token for calls to the core | `Bearer <token>`. If a token is configured, the fip-core should reject calls without it or with a different value. |
+| `Core-Entity-Id` | Multi-tenant mode only (always sent there) | The entity id of the FIP the call is for. Not sent in single-tenant mode. A fip-core serving one FIP may ignore it. |
 | `Initiator-Entity` | Yes | The Initiator, as compact JSON `{"type":"…","id":"…"}`. |
 | `Correlation-Id` | Yes | The flow's correlation id, copied unchanged from the IOP message (the gateway never creates one). |
 | `Forwarding-Hop` | Yes | The entity id of the AA that delivered the call. |
@@ -441,7 +495,7 @@ The role api-key header of the calling AA and `Content-Type` are **not** sent to
 ### 4.6 Response
 
 - The response body is **exactly the same payload** the FIP returns in the matching Direct API call.
-- Use the appropriate HTTP status. A status of 300 or above reaches the Initiator as an error.
+- Use the appropriate HTTP status. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
 - Respond within the gateway's configured core timeout (30 seconds by default).
 - Heartbeat: return the status as JSON (for example `{"status":"UP"}`).
 
@@ -509,8 +563,9 @@ configuration separately for each key type:
 | `GET` | `/fip-core/keys/signing` | fip-iop-gw | fip-core | The signing key set |
 | `GET` | `/fip-core/keys/decryption` | fip-iop-gw | fip-core | The decryption key set |
 
-- **Request headers:** only `Authorization: Bearer <key-fetch token>` (set in the gateway
-  configuration). The fip-core must reject requests without it.
+- **Request headers:** only `Authorization: Bearer <key-fetch token>` (set in the gateway configuration;
+  in multi-tenant mode, in that FIP's entity file). The fip-core must reject requests without it. In
+  multi-tenant mode the request also carries `Core-Entity-Id` (the FIP whose keys are asked for).
 - **When:** at start-up, then every hour by default, and every 30 seconds while the gateway has
   no keys of that type.
 - **Response headers:** none are needed. The gateway reads only the status and the body.
@@ -552,25 +607,28 @@ configuration separately for each key type:
 | `POST` | `/fip-sgw/keys/decryption` | fip-core | fip-iop-gw | Replace the decryption key set |
 
 - The fip-core can replace a key set at once, without waiting for the next pull.
-- **Request headers:** only `Authorization: Bearer <internal API token>`, when one is configured.
+- **Request headers:** only `Authorization: Bearer <internal API token>`, when one is configured for the
+  FIP. In multi-tenant mode also `Core-Entity-Id` (the FIP whose keys these are; optional with one FIP
+  loaded).
 - **Request body:** the same as the pull response (section 5.1).
 - **Response headers:** none. Replies, success or error, are not signed.
-- These endpoints exist only for a key type the gateway takes from the fip-core (otherwise `404`).
+- These endpoints exist only for a key type the gateway takes from the fip-core (in multi-tenant mode, for the FIP named in `Core-Entity-Id`); otherwise `404`.
 - The next scheduled pull replaces the set again, so the fip-core's `GET` endpoints must return the
   same set.
 
 | Status | `errorCode` | When |
 |---|---|---|
-| `400` | `InvalidRequest` | The key set is invalid (empty, duplicate or missing `kid`, a key that is not RSA of at least 2048 bits, missing or invalid `active` / `applied` / `expiry`); the current set is kept |
+| `400` | `InvalidRequest` | The key set is invalid (empty, duplicate or missing `kid`, a key that is not RSA of at least 2048 bits, missing or invalid `active` / `applied` / `expiry`). Multi-tenant mode only: `Core-Entity-Id` missing while more than one FIP is loaded, empty, or not loaded; or a decryption key `kid` already used by another entity on the fip-iop-gw. The current set is kept |
 | `400` | `InvalidSecurity` | The internal API token is missing or wrong (when one is configured) |
 | `403` | `InvalidSecurity` | Sent over plain HTTP: key push is accepted only over HTTPS |
-| `404` | `InvalidURI` | The gateway does not take this key type from the fip-core, or the path is not for the FIP |
+| `404` | `InvalidURI` | The gateway does not take this key type from the fip-core (in multi-tenant mode, for the FIP named in `Core-Entity-Id`), or the path is for a gateway running in another `mode` (AA, FIU or FIP) |
 | `405` | `InvalidRequest` | Not `POST` |
 | `413` | `InvalidRequest` | The request body is too large |
 
 **Examples**
 
-Request: `POST /fip-sgw/keys/signing` with a current key and the next one.
+Request: `POST /fip-sgw/keys/signing` with a current key and the next one. In multi-tenant mode the
+request also carries `Core-Entity-Id: fip-test-001`.
 
 ```http
 POST /fip-sgw/keys/signing
@@ -615,7 +673,7 @@ Error — an invalid set (the same `kid` twice). The current set is kept. (`ver`
 HTTP/1.1 400 Bad Request
 
 {
-  "ver": "1.0.0",
+  "ver": "1.1.0",
   "txnid": "",
   "timestamp": "2026-11-07T11:33:34.509Z",
   "errorCode": "InvalidRequest",
@@ -629,7 +687,7 @@ Error — missing or wrong internal API token.
 HTTP/1.1 400 Bad Request
 
 {
-  "ver": "1.0.0",
+  "ver": "1.1.0",
   "txnid": "",
   "timestamp": "2026-11-07T11:33:34.509Z",
   "errorCode": "InvalidSecurity",
@@ -659,8 +717,9 @@ HTTP/1.1 400 Bad Request
 
 - The fip-iop-gw keeps the keys **in memory only**. They are never written to its persistent cache,
   to disk, or to any temporary storage. After a restart it pulls them again.
-- **Key pull and key push work only over HTTPS.** The gateway refuses an `http://` key URL at
-  start-up, and its plain-HTTP listener refuses key push.
+- **Key pull and key push work only over HTTPS.** In single-tenant mode the gateway refuses an
+  `http://` key URL at start-up; in multi-tenant mode it makes that FIP's entity file invalid (the FIP
+  is not loaded and the error is logged). The plain-HTTP listener refuses key push.
 - The fip-core must check the key-fetch token, serve the key endpoints only to the fip-iop-gw, and never
   log key material.
 
@@ -679,7 +738,9 @@ of two ways, chosen in the gateway configuration:
 |---|---|---|---|---|
 | `GET` | `/fip-core/linkedAAs` | fip-iop-gw | fip-core | The list of linked AAs |
 
-- **Request headers:** only `Authorization: Bearer <token>` (set in the gateway configuration).
+- **Request headers:** only `Authorization: Bearer <token>` (set in the gateway configuration; in
+  multi-tenant mode, in that FIP's entity file). In multi-tenant mode the request also carries
+  `Core-Entity-Id` (the FIP whose list is asked for).
 - **When:** at start-up, then every hour by default, and every 30 seconds while the gateway has
   no list. The gateway keeps the list in memory and in its persistent cache, so a restart can
   use the last list even if the fip-core is down.
@@ -702,11 +763,21 @@ of two ways, chosen in the gateway configuration:
 |---|---|---|---|---|
 | `POST` | `/fip-sgw/linkedAAs` | fip-core | fip-iop-gw | Replace the list |
 
-- **Request headers:** only `Authorization: Bearer <internal API token>`, when one is configured.
+- **Request headers:** only `Authorization: Bearer <internal API token>`, when one is configured for the
+  FIP. In multi-tenant mode also `Core-Entity-Id` (the FIP whose list this is; optional with one FIP
+  loaded).
 - **Request body:** the same as the pull response.
-- **Response:** `200` with the new list, no response headers. Errors: `400` (empty list or
-  repeated id, and the current list is kept; or a missing or wrong token), `405` (not `POST`), `413` (too large).
-- The endpoint exists only when the gateway takes the list from the fip-core (otherwise `404`).
+- **Response:** `200` with the new list, no response headers. Errors:
+
+| Status | `errorCode` | When |
+|---|---|---|
+| `400` | `InvalidRequest` | The list is empty or repeats an id. Multi-tenant mode only: `Core-Entity-Id` missing while more than one FIP is loaded, empty, or not loaded. The current list is kept |
+| `400` | `InvalidSecurity` | The internal API token is missing or wrong (when one is configured) |
+| `404` | `InvalidURI` | The gateway does not take the list from the fip-core (in multi-tenant mode, for the FIP named in `Core-Entity-Id`), or the path is for a gateway running in another `mode` (AA, FIU or FIP) |
+| `405` | `InvalidRequest` | Not `POST` |
+| `413` | `InvalidRequest` | The request body is too large |
+
+In multi-tenant mode the request below also carries `Core-Entity-Id: fip-test-001`.
 
 ```http
 POST /fip-sgw/linkedAAs
@@ -732,8 +803,17 @@ Authorization: Bearer <internal API token>
   so the fip-core can check `Authorization` on every call.
 - Key endpoints: HTTPS only, check the key-fetch token, serve them only to the fip-iop-gw, never log
   key material.
+- Multi-tenant mode only: with more than one FIP on one fip-iop-gw, give each FIP its own internal API token, key-fetch
+  token and credentials file, so that one FIP's token cannot be used to send as another.
+- Multi-tenant mode only: the application gateway in front of the fip-iop-gw must remove any `Target-Id` a caller
+  sends, and set its own from the URL on `/iop/Heartbeat` only. The fip-iop-gw ignores `Target-Id` on every other `/iop` call,
+  and on every call in single-tenant mode.
 
 ## 8. Configuring the fip-iop-gw before start-up
+
+The fip-iop-gw runs in single-tenant mode unless the main configuration file sets `multiTenant: on`
+(section "Single-tenant and multi-tenant mode"). Sections 8.2 and 8.3 show the single-tenant
+configuration first, then the multi-tenant one.
 
 ### 8.1 Production and testing
 
@@ -747,16 +827,18 @@ API in production**. The configuration alternative is **for testing only**.
 | Linked AAs | The fip-core (section 6) | A list in the configuration |
 | The FIP's signing and decryption keys | The fip-core (section 5) | Key files mounted on the gateway |
 | Public keys of the api-key token issuer | The issuer's key URL (JWKS) | Public key files |
-| The FIP's IopToken (api-key on `/iop` calls) and access token | The Sahamati token service | A fixed api-key |
+| The FIP's access token (api-key on `/iop` calls, bearer token for the Central Registry and AIG) | The Sahamati token service | A fixed api-key |
 
 ### 8.2 Production configuration
 
-This is a production configuration for the fip-iop-gw: everything comes from the APIs. Replace the
-ids, URLs and file paths with the FIP's own; the Central Registry, token service and issuer URLs
-are provided by Sahamati. All values shown are illustrative.
+This is a production configuration for the fip-iop-gw in single-tenant mode (the default): one FIP,
+all settings in one file, everything from the APIs. Replace the ids, URLs and file paths with the
+FIP's own; the Central Registry, token service and issuer URLs are provided by Sahamati. All values
+shown are illustrative.
 
 ```yaml
 mode: FIP
+multiTenant: off                       # default; single-tenant
 logging:
   level: INFO
   audit: true                          # IOPGW_AUDIT record per request and response (no bodies)
@@ -777,11 +859,10 @@ self:
     source: api
     token: "${IOPGW_KEYS_TOKEN}"
 
-# Access token and IopToken from the Sahamati token service (section 8.5)
+# Access token from the Sahamati token service (section 8.5)
 tokenService:
   baseUrl: https://iam.example.invalid/iam/v1
   path: /entity/token/generate        # access token
-  iopPath: /entity/iopToken/generate  # IopToken
   credentialsFile: /etc/iopgw/secrets/credentials.json
 
 # The fip-core
@@ -838,10 +919,114 @@ cache:
   dir: /var/lib/iopgw/cache
 ```
 
+#### Multi-tenant production configuration
+
+In multi-tenant mode the main file holds the settings common to all FIPs, and each FIP has its own
+entity file (section 8.6). Compared with the single-tenant file above, the main file adds
+`multiTenant: on`, `entityConfigPath` and `entityRescanSeconds`. The FIP's own settings move to the
+entity file: `self` (as `entityId`, `signingKey` and `decryptionKeys`), `core`, `gwApi.token`,
+`linkedAAs`, `hopPreference` and `tokenService.credentialsFile`. All values shown are illustrative.
+
+```yaml
+mode: FIP
+multiTenant: on                        # multi-tenant: FIP settings in entity files
+logging:
+  level: INFO
+  audit: true                          # IOPGW_AUDIT record per request and response (no bodies)
+  statsIntervalSeconds: 60             # IOPGW_STATS record with "|"-separated counts
+
+# Public listener for /iop calls from other AAs (HTTPS)
+listenAddr: ":8443"
+tls:
+  certFile: /etc/iopgw/tls/server.crt
+  keyFile: /etc/iopgw/tls/server.key
+
+# Entity files: one file per FIP entity (section 8.6)
+entityConfigPath: /etc/iopgw/entities
+entityRescanSeconds: 60              # new, changed and removed entity files are picked up
+
+# Access token from the Sahamati token service (section 8.5)
+tokenService:
+  baseUrl: https://iam.example.invalid/iam/v1
+  path: /entity/token/generate        # access token
+
+# Checking the api-key of calling AAs
+apiKey:
+  mode: jwt
+  senderIdClaim: azp
+  issuer: https://token.example.invalid/auth/realms/sahamati
+  issuerKeysUrl: https://token.example.invalid/auth/realms/sahamati/protocol/openid-connect/certs
+
+jws:
+  algorithm: RS256
+
+# Participants, keys and interop flags: from the Central Registry
+cr:
+  source: api
+  baseUrl: https://cr.example.invalid
+  entityInfoPath: /v2/entityInfo
+
+# AA Interoperability Graph: from the Central Registry
+aigSource: api
+aigBaseUrl: https://cr.example.invalid
+aaAigPath: /v1/aig/aa                   # an AA's peer-AAs
+
+# Internal APIs (/fip-sgw) for the fip-core
+gwApi:
+  listenAddr: "10.0.0.10:9443"         # internal interface only; always HTTPS
+  tls:
+    certFile: /etc/iopgw/tls/internal.crt
+    keyFile: /etc/iopgw/tls/internal.key
+  maxRetries: 3                        # cap on Http-Retries
+  maxRouteRetries: 2                   # cap on Route-Retries
+
+forwarding:
+  timeoutSeconds: 30
+
+cache:
+  dir: /var/lib/iopgw/cache
+```
+
+Entity file `/etc/iopgw/entities/fip-test-001.yaml` (one per FIP):
+
+```yaml
+entityId: fip-test-001                    # the FIP's entity id in the Central Registry
+enable: true                         # only true loads the entity
+signingKey:                          # from the fip-core (section 5)
+  source: api
+  token: "${IOPGW_KEYS_TOKEN}"
+decryptionKeys:                      # from the fip-core (section 5)
+  source: api
+  token: "${IOPGW_KEYS_TOKEN}"
+
+# Credentials for the Sahamati token service (section 8.5)
+tokenService:
+  credentialsFile: /etc/iopgw/secrets/fip-test-001/credentials.json
+
+gwApi:
+  token: "${IOPGW_GWAPI_TOKEN}"      # the fip-core sends it as Authorization: Bearer
+
+# The fip-core
+core:
+  baseUrl: http://fip-core.internal:8080        # message calls (http or https)
+  keysBaseUrl: https://fip-core.internal:8443   # key pull (https only)
+  pathPrefix: /fip-core
+  token: "${IOPGW_CORE_TOKEN}"                   # sent to the fip-core on every call
+  timeoutSeconds: 30
+
+# Linked AAs: from the fip-core (section 6)
+linkedAAs:
+  source: api
+  token: "${IOPGW_LINKED_TOKEN}"
+
+hopPreference:
+  interAAs: [aa-test-002]              # tried first, in this order
+```
+
 ### 8.3 Local testing configuration
 
-**For local testing only.** Here every item that production takes from an API is set in the
-configuration file instead (section 8.1):
+**For local testing only.** This is the single-tenant file (the default). Here every item that
+production takes from an API is set in the configuration file instead (section 8.1):
 
 - **Participants and their public keys** (`cr.source: config`, `entities`) instead of the Central
   Registry.
@@ -859,6 +1044,7 @@ API token are environment variables: `IOPGW_OUTBOUND_API_KEY`, `IOPGW_GWAPI_TOKE
 ```yaml
 # LOCAL TESTING ONLY: everything below comes from this file, not from the APIs.
 mode: FIP
+multiTenant: off                       # default; single-tenant
 logging:
   level: DEBUG
   audit: true
@@ -943,6 +1129,47 @@ cache:
   dir: ./local/cache
 ```
 
+#### Multi-tenant local testing configuration
+
+In multi-tenant mode the local test file is split in the same way as in production (section 8.2):
+the main file is the single-tenant file above with `multiTenant: on`,
+`entityConfigPath: ./local/entities` and `entityRescanSeconds: 60` added, and without `self`, `core`,
+`gwApi.token`, `linkedAAs` and `hopPreference`. These move to the entity file, with
+`outboundApiKey` at the top level of the entity file instead of `self.outboundApiKey`.
+
+Entity file `./local/entities/fip-test-001.yaml`:
+
+```yaml
+entityId: fip-test-001                    # the FIP's entity id in the Central Registry
+enable: true                         # only true loads the entity
+signingKey:                          # key file instead of the fip-core's key API
+  source: file
+  kid: fip-test-001-sig
+  file: ./local/keys/fip-test-001-sig.pem
+  active: true
+  applied: "2026-11-01"
+decryptionKeys:                      # key files instead of the fip-core's key API
+  source: file
+  keys:
+    - { kid: fip-test-001-enc, file: ./local/keys/fip-test-001-enc.pem, active: true, applied: "2026-11-01" }
+outboundApiKey: "${IOPGW_OUTBOUND_API_KEY}"   # fixed api-key towards other AAs (no token service)
+
+gwApi:
+  token: "${IOPGW_GWAPI_TOKEN}"
+
+core:
+  baseUrl: http://127.0.0.1:8080       # the fip-core running locally
+  pathPrefix: /fip-core
+  timeoutSeconds: 30
+
+linkedAAs:
+  source: config                       # list from this file, not the fip-core's API
+  aas: [aa-test-002]
+
+hopPreference:
+  interAAs: [aa-test-002]
+```
+
 ### 8.4 What the FIP provides (production)
 
 | Item | What it is | Who uses it |
@@ -953,33 +1180,68 @@ cache:
 | `IOPGW_LINKED_TOKEN` | Linked-AAs token | The fip-iop-gw sends it on `GET /fip-core/linkedAAs`; the fip-core checks it |
 | TLS certificate and key (public) | For the `/iop` listener | Other AAs calling the fip-iop-gw |
 | TLS certificate and key (internal) | For the internal APIs | The fip-core |
-| Credentials file | The FIP's entity credentials for the Sahamati token service | The fip-iop-gw, to get its access token and IopToken |
+| Credentials file | The FIP's entity credentials for the Sahamati token service | The fip-iop-gw, to get the FIP's access token |
 
-- The four tokens are given to the fip-iop-gw as environment variables; it does not start if one is
-  empty. Keep them secret, and give each the same value on the fip-core's side.
+- **Single-tenant mode:** each token is an environment variable referenced from the main file. The
+  fip-iop-gw does not start if a referenced variable is empty.
+- **Multi-tenant mode:** each token is an environment variable referenced from the FIP's entity file.
+  An empty referenced variable makes that entity file invalid: the FIP is not loaded and the error is
+  logged (the gateway still starts). The tokens and the credentials file are per entity. With more
+  than one FIP, use different environment variable names for each FIP, for example
+  `IOPGW_GWAPI_TOKEN_FIP_TEST_002`.
+- In both modes, `gwApi.token` and `core.token` are optional but recommended. Keep the tokens
+  secret, and give each the same value on the fip-core's side.
 - `hopPreference` lists the FIP's preferred routes, tried first in that order (section 3.11).
-- `gwApi.maxRetries` and `gwApi.maxRouteRetries` cap `Http-Retries` and `Route-Retries`.
+- `gwApi.maxRetries` and `gwApi.maxRouteRetries` cap `Http-Retries` and `Route-Retries`; a lower cap also lowers the default.
 - `logging.audit` writes one JSON log record tagged `IOPGW_AUDIT` per request and per response
   (headers, lengths, ids, status and error code; never the body), and
   `logging.statsIntervalSeconds` one record tagged `IOPGW_STATS` per interval with
   `|`-separated counts. Both can be fetched from the gateway's logs by their tag.
 
-### 8.5 IopToken
+### 8.5 Tokens
 
-The fip-iop-gw holds two tokens from the Sahamati token service, both got with the FIP's credentials
-file (section 8.4):
+For the FIP (in multi-tenant mode, for each FIP), the fip-iop-gw gets the FIP's **access token** (the
+regular token) from the Sahamati token service with the FIP's credentials file (section 8.4): `POST <tokenService.baseUrl><tokenService.path>`
+(default `/entity/token/generate`; with `baseUrl` `https://api.sahamati.org.in/iam/v1`, production, or
+`https://api.uat.sahamati.org.in/iam/v1`, UAT), with the form fields `id` and `secret`.
 
-| Token | Got from | Used by the fip-iop-gw for |
-|---|---|---|
-| Access token | `POST <tokenService.baseUrl><tokenService.path>`, default `/entity/token/generate` | The bearer token for the Central Registry and the AIG |
-| IopToken | `POST <tokenService.baseUrl><tokenService.iopPath>`, default `/entity/iopToken/generate` | The role api-key `fip_api_key` on every `/iop` call the fip-iop-gw sends |
+| Token | Used by the fip-iop-gw for |
+|---|---|
+| Access token | The role api-key `fip_api_key` on every `/iop` call the fip-iop-gw sends; the bearer token for the Central Registry and the AIG |
 
-- With `tokenService.baseUrl` set to, for example, `https://token-generation-url/iam/v1`, the
-  IopToken comes from `https://token-generation-url/iam/v1/entity/iopToken/generate`.
+- FIPs do not get an IopToken: only AAs use it.
 - Each token is cached, kept in the persistent cache, and refreshed on its own before it expires. If
-  the IopToken is not available, `/iop` calls fail with `503 ServiceUnavailable` ("IopToken
-  unavailable").
-- **Received tokens.** The fip-iop-gw checks that the token on a received `/iop` call
-  (`x-inter_aa_api_key`, from the Inter-AA) is a hop token (an IopToken). **Verification
-  procedure:** *To be published.* The fip-core needs no change for this: the token is not passed to
-  it (section 4.4).
+  the access token is not available, `/iop` calls fail with `503 ServiceUnavailable`.
+- **Received tokens.** The fip-iop-gw checks that the token on a received `/iop` call (`x-inter_aa_api_key`, from the Inter-AA)
+  is an IopToken (claim `token_use: iop`) (only when api-keys are checked as JWTs, `apiKey.mode: jwt`, the production setting; static test api-keys are not checked); otherwise the call is refused with `400 InvalidSecurity`.
+  The fip-core needs no change for this: the token is not passed to it (section 4.4). On the Direct
+  APIs, which the fip-core serves itself, the fip-core must accept only a regular token as `aa_api_key` and
+  refuse a token with `token_use: iop`.
+
+### 8.6 Entity files (multi-tenant mode only)
+
+This section applies only with `multiTenant: on`. In single-tenant mode there are no entity files: all
+settings are in the main file (sections 8.2 and 8.3). With `multiTenant: off`, `entityConfigPath` and
+`entityRescanSeconds` are ignored (a warning is logged).
+
+Each FIP served by the fip-iop-gw has one entity file in the folder named by `entityConfigPath`
+(sections 8.2 and 8.3). The fip-iop-gw reads every file ending in `.yaml` or `.yml` there (not
+sub-folders), loads only those with `enable: true`, and reads the folder again every
+`entityRescanSeconds` (default 60). An invalid file is skipped with an error in the log; a FIP
+already loaded keeps its previous settings. Two files with the same `entityId`: only the one whose
+name sorts first is used.
+
+| Entity file setting | What it is |
+|---|---|
+| `entityId`, `enable` | The FIP's entity id in the Central Registry; `true` to load it |
+| `signingKey`, `decryptionKeys` | Where the FIP's keys come from (section 5). Decryption key `kid`s must not be used by another FIP on the fip-iop-gw |
+| `tokenService.credentialsFile` | The FIP's credentials for the token service (section 8.5) |
+| `outboundApiKey` | Testing only: a fixed api-key instead of the token service |
+| `aigToken` | Testing only: a fixed AIG token instead of the access token |
+| `core` | The fip-core's URLs, path prefix, token and timeout for this FIP |
+| `gwApi.token` | The internal API token the fip-core sends for this FIP |
+| `linkedAAs`, `hopPreference` | The AAs this FIP is linked to (section 6) and its preferred routes (section 3.11) |
+
+Every other setting, `mode` and `multiTenant` included, is in the main file and applies to every FIP. To add a
+second FIP, add a second entity file, for example `fip-test-002.yaml`, with its own id, keys,
+tokens and credentials file.

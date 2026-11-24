@@ -7,7 +7,7 @@
 |  |  |
 |---|---|
 | **Audience** | AA core application teams (AA ecosystem participants) |
-| **Version** | Draft 4.6, 2026-11-16 |
+| **Version** | Draft 6.0, 2026-11-23. Single-tenant: one AA per aa-iop-gw (`multiTenant` must be `off`, the default; `on` is refused in AA mode) |
 | **Covers** | How the aa-core sends and receives messages through the aa-iop-gw, when to call it, how the aa-core gives it keys and its list of linked AAs, and how the aa-iop-gw is configured |
 
 All identifiers in examples are illustrative.
@@ -19,7 +19,7 @@ To work with the aa-iop-gw, the aa-core needs the changes below. "Yes" means nee
 | # | Change in the aa-core | Needed | Section |
 |---|---|---|---|
 | 1 | Call the aa-iop-gw's internal APIs (`/aa-dgw/*` and `/aa-sgw/*`) instead of the Direct APIs when the FIU or FIP is not directly connected to the AA. Keep using the Direct APIs for directly connected participants. | Yes | 2, 3.3 |
-| 2 | Send `Target-Entity` and `Correlation-Id` on every call, and `Authorization` with the internal API token. Optionally send `Preferred-Hop`, `Http-Retries`, `Route-Retries` and the aa-core's own `x-jws-signature`. | Yes | 3.4 |
+| 2 | Send `Target-Entity` and `Correlation-Id` on every message and Heartbeat call (section 3.3), and `Authorization` with the internal API token. Optionally send `Preferred-Hop`, `Http-Retries`, `Route-Retries` and the aa-core's own `x-jws-signature`. | Yes | 3.4 |
 | 3 | Create a non-empty correlation id for each new flow, and keep it on every message of that flow. | Yes | 2 |
 | 4 | Handle the responses: the Target's payload and signature; Target errors (with a payload, or a status with an empty body); errors from the aa-iop-gw (`IOP-Gw-Error: true`, for example `503 AllRoutesUnavailable`). | Yes | 3.6 – 3.10 |
 | 5 | Expose the `/aa-core/*` APIs to receive messages from participants that are not directly connected. The payloads are those of the Direct APIs. | Yes | 4.3 – 4.5 |
@@ -33,6 +33,18 @@ To work with the aa-iop-gw, the aa-core needs the changes below. "Yes" means nee
 | 13 | Push the list to `/aa-dgw/linkedAAs` or `/aa-sgw/linkedAAs` when it changes. | Recommended | 6.2 |
 | 14 | Set the aa-iop-gw's configuration and provide its tokens, certificates and credentials before starting it. | Yes | 8 |
 | 15 | Keep the User Hash List, and answer user discovery (`/aa-core/User/discover` and the Direct API `/User/discover`) from it, with the VUA and attestation. | Yes | 4.8 |
+
+## Single-tenant mode
+
+The aa-iop-gw serves **one AA**. All its settings are in the main configuration file (section 8);
+AA mode has no entity file. The main-file switch `multiTenant` must be `off`, the default:
+`multiTenant: on` is refused in AA mode, and the aa-iop-gw then does not start.
+
+| Item | Rule |
+|---|---|
+| `Core-Entity-Id` and `Target-Id` headers | Not used in AA mode. The aa-iop-gw never sends `Core-Entity-Id` to the aa-core, and ignores both headers if received. |
+| Received `/iop` message addressed to the AA (the aa-iop-gw is the Target) | Refused with `400 InvalidRequest` if its encrypted payload has no `kid` in its header. |
+| `/iop` message for another Target (the aa-iop-gw is a hop) | The `kid` is not checked, and a message without one is not refused. The aa-iop-gw forwards it to the envelope's `Target`. |
 
 ## 1. Terminology
 
@@ -134,8 +146,8 @@ checked with the Direct API `GET /Heartbeat`.
 
 | Header | Mandatory | Value |
 |---|---|---|
-| `Authorization` | Yes, if the aa-iop-gw is configured with an internal API token | `Bearer <internal API token>`. Without it (or with a wrong one) the call is refused with `400`. |
-| `Target-Entity` | Yes | The final recipient, as compact JSON: `{"type":"<AA\|FIU\|FIP>","id":"<entity id>"}`. The type must match the API (section 3.3). The Target must be marked interop ready in the Central Registry. |
+| `Authorization` | Yes, if the aa-iop-gw is configured with an internal API token | `Bearer <internal API token>`: the AA's internal API token (`gwApi.token`). Without it (or with a wrong one) the call is refused with `400`. |
+| `Target-Entity` | Yes | The final recipient, as compact JSON: `{"type":"<FIU\|FIP>","id":"<entity id>"}`. The type must match the API (section 3.3): `FIU` for `/aa-dgw/*`, `FIP` for `/aa-sgw/*`. The Target must be marked interop ready in the Central Registry. |
 | `Correlation-Id` | Yes | The flow's correlation id, in standard UUID format (see section 1). It is carried in the IOP message and returned on every response. A missing value, or one that is not a UUID, is refused with `400 InvalidRequest`. |
 | `x-jws-signature` | No | The aa-core's own detached JWS over the request body (RFC 7797 unencoded payload: protected header `{"alg": "RS256", "kid", "b64": false, "crit": ["b64"]}`, signed over the raw body), made with one of the AA's registered signing keys. The aa-iop-gw checks it: if it does not verify, the call is refused with `400`. The aa-iop-gw signs the payload either way (section 3.2). |
 | `Preferred-Hop` | No | The entity id of the AA the core prefers as the route. Used first only if it is an eligible route (section 3.11); otherwise ignored. |
@@ -215,7 +227,7 @@ Errors generated by the aa-iop-gw itself carry `IOP-Gw-Error: true` and have thi
 ```
 
 - `ver` and `txnid` come from the request body. `ver` defaults to the gateway's configured
-  version. For a Heartbeat, `txnid` is the one the gateway created for the call.
+  version (`gwApi.ver`, default `1.1.0`). For a Heartbeat, `txnid` is the one the gateway created for the call.
 - `errorMsg` explains the specific cause.
 
 | Status | `errorCode` | When |
@@ -309,8 +321,9 @@ The aa-core does not need to choose a route. The aa-iop-gw does it as follows.
 
 - It is in the AA's **linkedAAs** (section 6).
 - The **AIG** says it can reach the Target. The aa-iop-gw uses the FIU graph (`GET /v1/aig/fiu`: an FIU's Connected-AAs) and the FIP graph (`GET /v1/aig/fip`: a FIP's Inter-AAs). It loads the AIG from the
-  Central Registry at start-up and every 12 hours, with its own access token, and keeps a copy.
+  Central Registry at start-up and every 6 hours by default, with its own access token, and keeps a copy.
 - It is marked interop ready in the Central Registry.
+- It has a base URL (`baseurl`) in the Central Registry.
 - It is not the Target itself, Heartbeat included.
 
 The **Target** must also be marked interop ready in the Central Registry; otherwise the call is
@@ -334,7 +347,7 @@ refused with `400 InvalidRequest` before any route is chosen.
 "Not from the Target" means: no `encryptedPayload` in the payload, and `errorCode` is not
 `IopDownstreamError` (section 3.7).
 
-\* `InvalidRoute` is the code the IOP Gateway uses when, as a hop, it cannot route to the Target: the Target is unknown to the hop, or is not linked to the hop AA. Linked means: an FIU Target lists the hop AA as a Connected-AA in the AIG; a FIP Target lists the hop AA as an Inter-AA in the AIG; an AA Target is in the hop AA's linkedAAs. The hop then does not call the Target. If the hop cannot check this (its AIG is not loaded), it answers `503 ServiceUnavailable`; both answers lead to the next route. **It is not yet confirmed as a ReBIT IOP error code.**
+\* `InvalidRoute` is the code the IOP Gateway uses when, as a hop, it cannot route to the Target: the Target is unknown to the hop, has no base URL (`baseurl`), or is not linked to the hop AA. Linked means: an FIU Target lists the hop AA as a Connected-AA in the AIG; a FIP Target lists the hop AA as an Inter-AA in the AIG; an AA Target is in the hop AA's linkedAAs. The hop then does not call the Target. If the hop cannot check this (its AIG is not loaded, for an FIU or FIP Target; or its linkedAAs list is not loaded, for an AA Target), it answers `503 ServiceUnavailable`; both answers lead to the next route. **It is not yet confirmed as a ReBIT IOP error code.**
 
 ### 3.12 Retries
 
@@ -453,7 +466,7 @@ The role api-key header of the calling AA and `Content-Type` are **not** sent to
 ### 4.6 Response
 
 - The response body is **exactly the same payload** the AA returns in the matching Direct API call.
-- Use the appropriate HTTP status. A status of 300 or above reaches the Initiator as an error.
+- Use the appropriate HTTP status. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
 - Respond within the gateway's configured core timeout (30 seconds by default).
 - Heartbeat: return the status as JSON (for example `{"status":"UP"}`).
 
@@ -493,7 +506,7 @@ Customer-AA (the call comes with `x-conn_aa_api_key`), it calls `POST /aa-core/U
 
 | Step | What the aa-iop-gw does |
 |---|---|
-| Checks the route | The Target must be linked to the AA: an FIU Target lists the AA as a Connected-AA in the AIG; a FIP Target lists the AA as an Inter-AA in the AIG; an AA Target is in the AA's linkedAAs (section 6). Otherwise it answers `400 InvalidRoute`\* without calling the Target. If the AIG is not loaded (FIU or FIP Target), or the linkedAAs list is not loaded (AA Target), it answers `503 ServiceUnavailable`. |
+| Checks the route | The Target must be linked to the AA: an FIU Target lists the AA as a Connected-AA in the AIG; a FIP Target lists the AA as an Inter-AA in the AIG; an AA Target is in the AA's linkedAAs (section 6). The Target must also be registered with a base URL (`baseurl`). Otherwise it answers `400 InvalidRoute`\* without calling the Target. If the AIG is not loaded (FIU or FIP Target), or the linkedAAs list is not loaded (AA Target), it answers `503 ServiceUnavailable`. |
 | Forwards | Replaces `Target` with `Initiator` (the calling participant) in the envelope, with a new `txnid`, signs the envelope and sends it to the Target. `encryptedPayload` is passed on unchanged. |
 | Returns the Target's answer | Success: the Target's answer (with its `encryptedPayload`), with the `txnid` of the caller's request, signed by the aa-iop-gw. Error: the Target's status, with an envelope that carries `errorCode` `IopDownstreamError`, the Target's `encryptedPayload` (if any) and the Target's `errorSource` object (if any), copied unchanged, for example `"errorSource": {"type": "FIP", "id": "fip-test-001"}`. |
 
@@ -622,7 +635,7 @@ configuration separately for each key type:
 | `400` | `InvalidRequest` | The key set is invalid (empty, duplicate or missing `kid`, a key that is not RSA of at least 2048 bits, missing or invalid `active` / `applied` / `expiry`); the current set is kept |
 | `400` | `InvalidSecurity` | The internal API token is missing or wrong (when one is configured) |
 | `403` | `InvalidSecurity` | Sent over plain HTTP: key push is accepted only over HTTPS |
-| `404` | `InvalidURI` | The gateway does not take this key type from the aa-core, or the path is not for the AA |
+| `404` | `InvalidURI` | The gateway does not take this key type from the aa-core, or the path is for a gateway running in another `mode` (AA, FIU or FIP) |
 | `405` | `InvalidRequest` | Not `POST` |
 | `413` | `InvalidRequest` | The request body is too large |
 
@@ -673,7 +686,7 @@ Error — an invalid set (the same `kid` twice). The current set is kept. (`ver`
 HTTP/1.1 400 Bad Request
 
 {
-  "ver": "1.0.0",
+  "ver": "1.1.0",
   "txnid": "",
   "timestamp": "2026-11-07T11:33:34.509Z",
   "errorCode": "InvalidRequest",
@@ -687,7 +700,7 @@ Error — missing or wrong internal API token.
 HTTP/1.1 400 Bad Request
 
 {
-  "ver": "1.0.0",
+  "ver": "1.1.0",
   "txnid": "",
   "timestamp": "2026-11-07T11:33:34.509Z",
   "errorCode": "InvalidSecurity",
@@ -764,9 +777,17 @@ The list reaches the gateway in one of two ways, chosen in the gateway configura
 
 - **Request headers:** only `Authorization: Bearer <internal API token>`, when one is configured.
 - **Request body:** the same as the pull response.
-- **Response:** `200` with the new list, no response headers. Errors: `400` (empty list or
-  repeated id, and the current list is kept; or a missing or wrong token), `405` (not `POST`), `413` (too large).
+- **Response:** `200` with the new list, no response headers. Replies, success or error, are not signed.
 - The endpoint exists only when the gateway takes the list from the aa-core (otherwise `404`).
+- Push is accepted over HTTPS and over the plain-HTTP listener, if any.
+
+| Status | `errorCode` | When |
+|---|---|---|
+| `400` | `InvalidRequest` | The list is empty or repeats an id; the current list is kept |
+| `400` | `InvalidSecurity` | The internal API token is missing or wrong (when one is configured) |
+| `404` | `InvalidURI` | The gateway does not take the list from the aa-core, or the path is for a gateway running in another `mode` (AA, FIU or FIP) |
+| `405` | `InvalidRequest` | Not `POST` |
+| `413` | `InvalidRequest` | The request body is too large |
 
 ```http
 POST /aa-dgw/linkedAAs
@@ -783,8 +804,8 @@ Authorization: Bearer <internal API token>
 ## 7. Security notes
 
 - The aa-iop-gw's internal APIs always run over HTTPS. A plain-HTTP listener can be added for the
-  message APIs; use it only on a trusted network segment, since messages then travel
-  unencrypted. Key push is never accepted there.
+  internal APIs except key push (messages, Heartbeat and linkedAAs push); use it only on a trusted
+  network segment, since messages then travel unencrypted. Key push is never accepted there.
 - If the aa-iop-gw is configured with an internal API token, the aa-core must send it on every call
   and keep it secret. Without a token, anyone who can reach the internal APIs can send messages
   as the AA: restrict network access to them.
@@ -792,6 +813,7 @@ Authorization: Bearer <internal API token>
   so the aa-core can check `Authorization` on every call.
 - Key endpoints: HTTPS only, check the key-fetch token, serve them only to the aa-iop-gw, never log
   key material.
+
 
 ## 8. Configuring the aa-iop-gw before start-up
 
@@ -817,6 +839,7 @@ are provided by Sahamati. All values shown are illustrative.
 
 ```yaml
 mode: AA
+multiTenant: off                       # default; on is refused in AA mode
 logging:
   level: INFO
   audit: true                          # IOPGW_AUDIT record per request and response (no bodies)
@@ -840,8 +863,7 @@ self:
 # Access token and IopToken from the Sahamati token service (section 8.5)
 tokenService:
   baseUrl: https://iam.example.invalid/iam/v1
-  path: /entity/token/generate        # access token
-  iopPath: /entity/iopToken/generate  # IopToken
+  path: /entity/token/generate        # access token; the IopToken adds use=iop
   credentialsFile: /etc/iopgw/secrets/credentials.json
 
 # The aa-core
@@ -922,6 +944,7 @@ API token are environment variables: `IOPGW_OUTBOUND_API_KEY`, `IOPGW_GWAPI_TOKE
 ```yaml
 # LOCAL TESTING ONLY: everything below comes from this file, not from the APIs.
 mode: AA
+multiTenant: off                       # default; on is refused in AA mode
 logging:
   level: DEBUG
   audit: true
@@ -1037,8 +1060,11 @@ cache:
 | TLS certificate and key (internal) | For the internal APIs | The aa-core |
 | Credentials file | The AA's entity credentials for the Sahamati token service | The aa-iop-gw, to get its access token and IopToken |
 
-- The four tokens are given to the aa-iop-gw as environment variables; it does not start if one is
-  empty. Keep them secret, and give each the same value on the aa-core's side.
+- Each token is an environment variable referenced from the main configuration file. If a
+  referenced variable is empty, the aa-iop-gw does not start. `gwApi.token` and `core.token` are
+  optional but recommended. Keep the tokens secret, and give each the same value on the aa-core's side.
+- All settings, the tokens and the credentials file included, are in the main configuration file.
+  AA mode has no entity file, and `multiTenant: on` is refused at start-up.
 - `hopPreference` lists the AA's preferred routes, tried first in that order (section 3.11).
 - `gwApi.maxRetries` and `gwApi.maxRouteRetries` cap `Http-Retries` and `Route-Retries`.
 - `logging.audit` writes one JSON log record tagged `IOPGW_AUDIT` per request and per response
@@ -1046,23 +1072,26 @@ cache:
   `logging.statsIntervalSeconds` one record tagged `IOPGW_STATS` per interval with
   `|`-separated counts. Both can be fetched from the gateway's logs by their tag.
 
-### 8.5 IopToken
+### 8.5 Tokens
 
-The aa-iop-gw holds two tokens from the Sahamati token service, both got with the AA's credentials
-file (section 8.4):
+The aa-iop-gw holds two tokens from the Sahamati token service, both got with the AA's credentials file
+(section 8.4) from the same call, `POST <tokenService.baseUrl><tokenService.path>` (default
+`/entity/token/generate`; with `baseUrl` `https://api.sahamati.org.in/iam/v1`, production, or
+`https://api.uat.sahamati.org.in/iam/v1`, UAT):
 
-| Token | Got from | Used by the aa-iop-gw for |
+| Token | Got with | Used by the aa-iop-gw for |
 |---|---|---|
-| Access token | `POST <tokenService.baseUrl><tokenService.path>`, default `/entity/token/generate` | Direct API calls; the bearer token for the Central Registry and the AIG |
-| IopToken | `POST <tokenService.baseUrl><tokenService.iopPath>`, default `/entity/iopToken/generate` | The role api-key on every `/iop` call the aa-iop-gw sends, when the AA acts as Connected-AA, Customer-AA, Origin-AA or Inter-AA |
+| Access token (regular token) | The form fields `id` and `secret` | The bearer token for the Central Registry and the AIG |
+| IopToken | The same form plus `use=iop` | The role api-key on every `/iop` call the aa-iop-gw sends, when the AA acts as Connected-AA, Customer-AA, Origin-AA or Inter-AA |
 
-- With `tokenService.baseUrl` set to, for example, `https://token-generation-url/iam/v1`, the
-  IopToken comes from `https://token-generation-url/iam/v1/entity/iopToken/generate`.
 - Each token is cached, kept in the persistent cache, and refreshed on its own before it expires. If
   the IopToken is not available, `/iop` calls fail with `503 ServiceUnavailable` ("IopToken
   unavailable").
-- **Verification procedure:** *To be published.* (How a received role api-key is checked to be an
-  IopToken.)
+- **Received tokens.** The aa-iop-gw checks that `x-conn_aa_api_key`, `x-cust_aa_api_key`,
+  `x-orig_aa_api_key` and `x-inter_aa_api_key` on a received `/iop` call are IopTokens (claim
+  `token_use: iop`) (only when api-keys are checked as JWTs, `apiKey.mode: jwt`, the production setting; static test api-keys are not checked); otherwise the call is refused with `400 InvalidSecurity`. An IopToken is
+  accepted only on `/iop` calls. On the Direct APIs, which the aa-core serves itself, the aa-core must
+  accept only a regular token as `aa_api_key` and refuse a token with `token_use: iop`.
 - The aa-core needs no change for the IopToken: the aa-iop-gw gets both tokens and chooses the right
   one for each call. The aa-core keeps using the AA's access token on the Direct API calls it makes
   itself.

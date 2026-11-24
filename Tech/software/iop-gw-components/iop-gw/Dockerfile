@@ -1,13 +1,13 @@
 # IOP Gateway container image. Builds the gateway from source; nothing but
 # Docker is needed (from iop-gw-components/iop-gw):
-#   docker build -t iop-gw:0.0.0.0 .
+#   docker build -t iop-gw:0.1.0.0 .
 #
 # Run: mount the configuration (and the key, certificate and credentials files
 # it names) read-only, give the cache a volume, and pass secrets as environment
 # variables (the configuration refers to them as ${NAME}):
 #   docker run --rm -p 8443:8443 -p 9443:9443 \
 #     -v "$PWD/config:/etc/iop-gw:ro" -v iop-gw-cache:/var/lib/iop-gw/cache \
-#     -e IOPGW_API_TOKEN=... iop-gw:0.0.0.0
+#     -e IOPGW_API_TOKEN=... iop-gw:0.1.0.0
 #
 # The ports are the ones in the configuration (listenAddr, gwApi.listenAddr,
 # gwApi.httpListenAddr). Readiness: GET /healthz on the public listener.

@@ -1,7 +1,7 @@
 swagger: '2.0'
 info:
   title: fiu-core to fiu-iop-gw (internal APIs)
-  version: 1.0.0-draft.1
+  version: 3.0.0-draft.1
   description: |
     **Disclaimer:** Please review and verify the contents of this document against the applicable system requirements and specifications.
 
@@ -26,9 +26,32 @@ info:
 
     Also covered: key push (`/fiu-dgw/keys/*`) and linked AAs push (`/fiu-dgw/linkedAAs`).
 
-    Source: IOP Gateway — Integration Guide for the fiu-core (iop-gateway-fiu-core-prd.md), sections 3, 5.2 and 6.2. Where this file and the guide differ, the guide applies.
+    Source: IOP Gateway — Integration Guide for the fiu-core (`Tech/PRDs/ecosystem/IOP-APIs-Implementation/Sahamati-Reference-Implementation/FIU/interop-ecosystem_fiu-core-interface-to-iop-gw-prd.md`), sections 3, 5.2 and 6.2. Where this file and the guide differ, the guide applies.
 
     All identifiers in examples are synthetic.
+
+    # Single-tenant and multi-tenant mode
+
+    The fiu-iop-gw runs in one of two modes, set with `multiTenant` in its main configuration file.
+
+    | Item | Single-tenant mode (default) | Multi-tenant mode |
+    |---|---|---|
+    | Switch | `multiTenant: off` (or not set) | `multiTenant: on` |
+    | Number of FIUs | One | One or more |
+    | Where the FIU's settings live | The main configuration file | One entity file per FIU |
+    | `Core-Entity-Id` on requests | Ignored if sent | Rules below |
+
+    Multi-tenant mode only: one fiu-iop-gw can serve more than one FIU. A request names the FIU it is sent for with
+    `Core-Entity-Id: <FIU entity id>`; the fiu-iop-gw signs, sends and opens the reply as that FIU, and
+    checks the internal API token against that FIU's token.
+
+    - **While more than one FIU is loaded, `Core-Entity-Id` is required.** Missing, empty, or naming no
+      FIU loaded on the fiu-iop-gw: `400 InvalidRequest`.
+    - With only one FIU loaded it is optional: a call without it is for that FIU; a call with another
+      id gets `400 InvalidRequest`.
+    - A fiu-core that may later serve more than one FIU should always send it.
+    - With no FIU loaded, every call gets `400 InvalidRequest`.
+    - Responses carry no `Core-Entity-Id`.
 
     # Transport
 
@@ -53,7 +76,7 @@ info:
 
     A status can therefore come from the Target or from the fiu-iop-gw: `IOP-Gw-Error: true` tells them apart.
   x-custom-tags:
-    x-generated: '2026-11-13'
+    x-generated: '2026-11-23'
     x-caller: fiu-core
     x-callee: fiu-iop-gw
 host: fiu-iop-gw.example.internal
@@ -70,7 +93,7 @@ securityDefinitions:
     type: apiKey
     in: header
     name: Authorization
-    description: '`Bearer <internal API token>`. Required when the fiu-iop-gw is configured with an internal API token (compared in constant time); otherwise `400 InvalidSecurity`. Without a configured token no `Authorization` is needed: restrict network access to these APIs.'
+    description: '`Bearer <internal API token>`. Required when the fiu-iop-gw is configured with an internal API token: the FIU''s `gwApi.token` (in multi-tenant mode, of the FIU named in `Core-Entity-Id`, or the only FIU loaded), compared in constant time; otherwise `400 InvalidSecurity`. Without a configured token no `Authorization` is needed: restrict network access to these APIs.'
 security:
 - internalApiToken: []
 tags:
@@ -93,6 +116,7 @@ paths:
       operationId: post_fiu_dgw_Consent
       description: 'Same payload as the Direct API `/Consent`. `Target-Entity` type: `AA`. Retries and other routes resend the same payload, with the same `txnid`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/TargetEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/CoreSignature'
@@ -119,8 +143,14 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         '400':
-          description: 'Gateway error `InvalidRequest`: `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -166,8 +196,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '500':
-          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -177,8 +213,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '502':
-          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted (multi-tenant mode: also when its `kid` is missing or is not the FIU''s) or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -188,8 +230,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '503':
-          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or IopToken unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or access token unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -234,6 +282,7 @@ paths:
       operationId: post_fiu_dgw_Consent_handle
       description: 'Same payload as the Direct API `/Consent/handle`. `Target-Entity` type: `AA`. Retries and other routes resend the same payload, with the same `txnid`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/TargetEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/CoreSignature'
@@ -260,8 +309,14 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         '400':
-          description: 'Gateway error `InvalidRequest`: `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -307,8 +362,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '500':
-          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -318,8 +379,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '502':
-          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted (multi-tenant mode: also when its `kid` is missing or is not the FIU''s) or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -329,8 +396,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '503':
-          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or IopToken unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or access token unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -375,6 +448,7 @@ paths:
       operationId: post_fiu_dgw_Consent_fetch
       description: 'Same payload as the Direct API `/Consent/fetch`. `Target-Entity` type: `AA`. Retries and other routes resend the same payload, with the same `txnid`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/TargetEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/CoreSignature'
@@ -401,8 +475,14 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         '400':
-          description: 'Gateway error `InvalidRequest`: `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -448,8 +528,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '500':
-          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -459,8 +545,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '502':
-          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted (multi-tenant mode: also when its `kid` is missing or is not the FIU''s) or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -470,8 +562,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '503':
-          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or IopToken unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or access token unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -516,6 +614,7 @@ paths:
       operationId: post_fiu_dgw_FI_request
       description: 'Same payload as the Direct API `/FI/request`. `Target-Entity` type: `AA`. Retries and other routes resend the same payload, with the same `txnid`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/TargetEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/CoreSignature'
@@ -542,8 +641,14 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         '400':
-          description: 'Gateway error `InvalidRequest`: `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -589,8 +694,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '500':
-          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -600,8 +711,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '502':
-          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted (multi-tenant mode: also when its `kid` is missing or is not the FIU''s) or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -611,8 +728,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '503':
-          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or IopToken unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or access token unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -657,6 +780,7 @@ paths:
       operationId: post_fiu_dgw_FI_fetch
       description: 'Same payload as the Direct API `/FI/fetch`. `Target-Entity` type: `AA`. Retries and other routes resend the same payload, with the same `txnid`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/TargetEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/CoreSignature'
@@ -683,8 +807,14 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         '400':
-          description: 'Gateway error `InvalidRequest`: `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -730,8 +860,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '500':
-          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -741,8 +877,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '502':
-          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted (multi-tenant mode: also when its `kid` is missing or is not the FIU''s) or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -752,8 +894,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '503':
-          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or IopToken unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or access token unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -798,6 +946,7 @@ paths:
       operationId: post_fiu_dgw_Consent_Notification
       description: 'Same payload as the Direct API `/Consent/Notification`. `Target-Entity` type: `AA`. Retries and other routes resend the same payload, with the same `txnid`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/TargetEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/CoreSignature'
@@ -824,8 +973,14 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         '400':
-          description: 'Gateway error `InvalidRequest`: `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -871,8 +1026,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '500':
-          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -882,8 +1043,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '502':
-          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted (multi-tenant mode: also when its `kid` is missing or is not the FIU''s) or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -893,8 +1060,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '503':
-          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or IopToken unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or access token unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -939,6 +1112,7 @@ paths:
       operationId: get_fiu_dgw_Heartbeat
       description: 'Same payload as the Direct API `/Heartbeat`. `Target-Entity` type: `AA`. No body and no `x-jws-signature`; the response is the Target''s heartbeat answer.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/TargetEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/PreferredHop'
@@ -963,8 +1137,14 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         '400':
-          description: 'Gateway error `InvalidRequest`: `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -998,20 +1178,15 @@ paths:
               description: The method the API accepts.
           schema:
             $ref: '#/definitions/ErrorResponse'
-        '413':
-          description: 'Gateway error `InvalidRequest`: The request body is too large.'
-          headers:
-            Correlation-Id:
-              type: string
-              description: The value the core sent.
-            IOP-Gw-Error:
-              type: string
-              description: '`true` when the gateway generated the error.'
-          schema:
-            $ref: '#/definitions/ErrorResponse'
         '500':
-          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InternalError`: the gateway cannot sign the IOP request (a heartbeat has no payload to sign or encrypt). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -1021,8 +1196,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '502':
-          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted (multi-tenant mode: also when its `kid` is missing or is not the FIU''s) or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -1032,8 +1213,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '503':
-          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or IopToken unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or access token unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -1079,6 +1266,7 @@ paths:
       operationId: post_fiu_dgw_User_discover
       description: 'Same payload as the Direct API `/User/discover`. `Target-Entity` type: `AA`. Retries and other routes resend the same payload, with the same `txnid`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/TargetEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/CoreSignature'
@@ -1110,8 +1298,14 @@ paths:
           schema:
             $ref: '#/definitions/CustDiscoveryResponse'
         '400':
-          description: 'Gateway error `InvalidRequest`: `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); `Target-Entity` missing, invalid or of the wrong type; the Target is not registered or not marked interop ready; `Correlation-Id` missing or not a UUID; `Http-Retries` or `Route-Retries` not a non-negative number; the body is not a JSON object with `txnid`; the core''s `x-jws-signature` does not verify; no interop-ready linked AA can reach the Target. Gateway error `InvalidSecurity`: the internal API token is missing or wrong (when one is configured). Gateway error `SignatureDoesNotMatch`: the Target''s signature on the reply does not verify. The Target''s own `400` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -1157,8 +1351,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '500':
-          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `InternalError`: The gateway cannot sign the payload or encrypt it for the Target (for example, no encryption key published for the Target). The Target''s own `500` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -1168,8 +1368,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '502':
-          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `BadGateway`: the AIG is not available, or the answer of the Connected-AA has an invalid signature, cannot be decrypted (multi-tenant mode: also when its `kid` is missing or is not the FIU''s) or is malformed. The Target''s own `502` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -1179,8 +1385,14 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '503':
-          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or IopToken unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body.'
+          description: 'Gateway error `AllRoutesUnavailable / ServiceUnavailable`: `AllRoutesUnavailable`: every route failed (no Connected-AA answered, or each answered an error that is not from the Target). `ServiceUnavailable`: the gateway is not ready yet (registry, keys or linkedAAs not loaded, or access token unavailable). The Target''s own `503` reaches the core with the same status, without `IOP-Gw-Error`, with the Target''s error payload and signature, or with an empty body. When `IOP-Gw-Error` is absent, the body is the Target''s Direct API error payload (`DirectApiResponse`), or empty when the Target answered without a payload.'
           headers:
+            x-jws-signature:
+              type: string
+              description: 'Present only when the Target answered with a payload: the Target''s detached JWS over the body (RFC 7515, base64url-encoded payload), not RFC 7797. Never present on a gateway error.'
+            Forwarding-Hop:
+              type: string
+              description: The entity id of the Connected-AA that carried the call. Absent when the gateway refused the call before sending it, or when every route failed.
             Correlation-Id:
               type: string
               description: The value the core sent.
@@ -1238,6 +1450,7 @@ paths:
 
         `Target-Entity`, `Preferred-Hop` and `x-jws-signature` are not used.
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/CorrelationId'
       - name: Http-Retries
         in: header
@@ -1269,7 +1482,7 @@ paths:
           schema:
             $ref: '#/definitions/CustDiscoveryResponse'
         '400':
-          description: '`InvalidRequest`: `Correlation-Id` missing or not a UUID; the body is not a JSON object with `txnid`; `Http-Retries` or `Route-Retries` not a non-negative number. `InvalidSecurity`: the internal API token is missing or wrong (when one is configured).'
+          description: '`InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); `Correlation-Id` missing or not a UUID; the body is not a JSON object with `txnid`; `Http-Retries` or `Route-Retries` not a non-negative number. `InvalidSecurity`: the internal API token is missing or wrong (when one is configured).'
           headers:
             Correlation-Id:
               type: string
@@ -1321,10 +1534,11 @@ paths:
       - Keys
       summary: Replace the signing key set
       operationId: push_fiu_dgw_signing_keys
-      description: 'Request headers: only `Authorization`, when an internal API token is configured. Replies, success or error, carry no headers and are not signed.'
+      description: 'Request headers: only `Authorization`, when an internal API token is configured for the FIU, and, in multi-tenant mode only, `Core-Entity-Id` (optional with one FIU loaded). Replies, success or error, carry no headers and are not signed.'
       schemes:
       - https
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - name: body
         in: body
         required: true
@@ -1336,7 +1550,7 @@ paths:
           schema:
             $ref: '#/definitions/KeySetStatus'
         '400':
-          description: '`InvalidRequest`: the key set is invalid (empty, duplicate or missing `kid`, a key that is not RSA of at least 2048 bits, missing or invalid `active` / `applied` / `expiry`). The current set is kept. `InvalidSecurity`: the internal API token is missing or wrong.'
+          description: '`InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not loaded, or a decryption key `kid` already used by another entity on the fiu-iop-gw (multi-tenant mode only); or (both modes) the key set is invalid (empty, duplicate or missing `kid`, a key that is not RSA of at least 2048 bits, missing or invalid `active` / `applied` / `expiry`). The current set is kept. `InvalidSecurity`: the internal API token is missing or wrong.'
           schema:
             $ref: '#/definitions/ErrorResponse'
         '403':
@@ -1344,7 +1558,7 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '404':
-          description: '`InvalidURI`: the gateway does not take this key type from the fiu-core, or the path is not for the FIU.'
+          description: '`InvalidURI`: the gateway does not take this key type from the fiu-core for the FIU (in multi-tenant mode, the FIU named in `Core-Entity-Id`), or the path is for a gateway running in another `mode` (AA, FIU or FIP).'
           schema:
             $ref: '#/definitions/ErrorResponse'
         '405':
@@ -1361,10 +1575,11 @@ paths:
       - Keys
       summary: Replace the decryption key set
       operationId: push_fiu_dgw_decryption_keys
-      description: 'Request headers: only `Authorization`, when an internal API token is configured. Replies, success or error, carry no headers and are not signed.'
+      description: 'Request headers: only `Authorization`, when an internal API token is configured for the FIU, and, in multi-tenant mode only, `Core-Entity-Id` (optional with one FIU loaded). Replies, success or error, carry no headers and are not signed.'
       schemes:
       - https
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - name: body
         in: body
         required: true
@@ -1376,7 +1591,7 @@ paths:
           schema:
             $ref: '#/definitions/KeySetStatus'
         '400':
-          description: '`InvalidRequest`: the key set is invalid (empty, duplicate or missing `kid`, a key that is not RSA of at least 2048 bits, missing or invalid `active` / `applied` / `expiry`). The current set is kept. `InvalidSecurity`: the internal API token is missing or wrong.'
+          description: '`InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not loaded, or a decryption key `kid` already used by another entity on the fiu-iop-gw (multi-tenant mode only); or (both modes) the key set is invalid (empty, duplicate or missing `kid`, a key that is not RSA of at least 2048 bits, missing or invalid `active` / `applied` / `expiry`). The current set is kept. `InvalidSecurity`: the internal API token is missing or wrong.'
           schema:
             $ref: '#/definitions/ErrorResponse'
         '403':
@@ -1384,7 +1599,7 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         '404':
-          description: '`InvalidURI`: the gateway does not take this key type from the fiu-core, or the path is not for the FIU.'
+          description: '`InvalidURI`: the gateway does not take this key type from the fiu-core for the FIU (in multi-tenant mode, the FIU named in `Core-Entity-Id`), or the path is for a gateway running in another `mode` (AA, FIU or FIP).'
           schema:
             $ref: '#/definitions/ErrorResponse'
         '405':
@@ -1401,8 +1616,9 @@ paths:
       - Linked AAs
       summary: Replace the list of linked AAs
       operationId: push_fiu_dgw_linkedAAs
-      description: 'Request headers: only `Authorization`, when an internal API token is configured. Replies, success or error, carry no headers.'
+      description: 'Request headers: only `Authorization`, when an internal API token is configured for the FIU, and, in multi-tenant mode only, `Core-Entity-Id` (optional with one FIU loaded). Replies, success or error, carry no headers.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - name: body
         in: body
         required: true
@@ -1414,11 +1630,11 @@ paths:
           schema:
             $ref: '#/definitions/LinkedAAs'
         '400':
-          description: '`InvalidRequest`: empty list or repeated id. The current list is kept. `InvalidSecurity`: the internal API token is missing or wrong.'
+          description: '`InvalidRequest`: `Core-Entity-Id` missing while more than one FIU is loaded, empty, or not an entity loaded on the fiu-iop-gw (multi-tenant mode only); or an empty list or repeated id. The current list is kept. `InvalidSecurity`: the internal API token is missing or wrong.'
           schema:
             $ref: '#/definitions/ErrorResponse'
         '404':
-          description: The gateway does not take the list from the fiu-core.
+          description: '`InvalidURI`: the gateway does not take the list from the fiu-core for the FIU (in multi-tenant mode, the FIU named in `Core-Entity-Id`), or the path is for a gateway running in another `mode` (AA, FIU or FIP).'
           schema:
             $ref: '#/definitions/ErrorResponse'
         '405':
@@ -1430,6 +1646,13 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
 parameters:
+  CoreEntityId:
+    name: Core-Entity-Id
+    in: header
+    required: false
+    type: string
+    x-example: fiu-test-001
+    description: 'Multi-tenant mode only (`multiTenant: on`); ignored in single-tenant mode. The entity id of the FIU the call is sent for. **Required while the fiu-iop-gw has more than one FIU loaded**; otherwise optional, and a call without it is for the only FIU. Missing (with more than one FIU loaded), empty, or not an entity loaded on the fiu-iop-gw: `400 InvalidRequest`. A fiu-core that may serve more than one FIU should always send it. Not returned on responses.'
   TargetEntity:
     name: Target-Entity
     in: header
@@ -1465,7 +1688,7 @@ parameters:
     type: integer
     minimum: 0
     default: 2
-    description: 'How many times to retry the same route when it does not answer (no connection, or a timeout). An error answer, `502`/`503`/`504` included, is not retried on that route. `0`: do not retry. Capped by the gateway (by default at 3). Waits 200 ms, doubling up to 2 s.'
+    description: 'How many times to retry the same route when it does not answer (no connection, or a timeout). An error answer, `502`/`503`/`504` included, is not retried on that route. `0`: do not retry. Capped by the gateway (by default at 3; a lower cap also lowers the default). Waits 200 ms, doubling up to 2 s.'
   RouteRetries:
     name: Route-Retries
     in: header
@@ -1473,7 +1696,7 @@ parameters:
     type: integer
     minimum: 0
     default: 2
-    description: 'How many other routes to try after the first route fails. `0`: do not try another route. Capped by the gateway (by default at 2).'
+    description: 'How many other routes to try after the first route fails. `0`: do not try another route. Capped by the gateway (by default at 2; a lower cap also lowers the default).'
   Body:
     name: body
     in: body
@@ -1509,7 +1732,7 @@ definitions:
       ver:
         type: string
         example: 2.0.0
-        description: From the request body; the gateway's configured version if the body has none.
+        description: From the request body; the gateway's configured version (`gwApi.ver`, default `1.1.0`) if the body has none.
       txnid:
         type: string
         example: 3f2b8c1e-7d4a-4c9e-9b1f-2a6d5e8c4b71

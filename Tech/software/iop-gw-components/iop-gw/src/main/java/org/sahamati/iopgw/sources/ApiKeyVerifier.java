@@ -20,8 +20,14 @@ import java.util.Optional;
  * signature, {@code exp}/{@code nbf} (with clock skew) and optional {@code iss}/{@code aud} are
  * checked, and the sender-id is the configured claim ({@code azp} by default). {@code static} mode
  * (development and tests only) maps fixed key values to entity ids.
+ * <p>
+ * The verified caller also says whether the token is an <b>IopToken</b>: a JWT whose claims hold
+ * {@code token_use} = {@code iop}. A static key has no claims and counts as one.
  */
 public final class ApiKeyVerifier {
+
+    /** A verified api-key: the sender-id, and whether it is an IopToken. */
+    public record Caller(String senderId, boolean iopToken) {}
 
     private final Config.ApiKey conf;
     private final IssuerKeys issuerKeys;
@@ -57,6 +63,10 @@ public final class ApiKeyVerifier {
     }
 
     public Optional<String> senderId(String apiKey) {
+        return verify(apiKey).map(Caller::senderId);
+    }
+
+    public Optional<Caller> verify(String apiKey) {
         if (apiKey == null || apiKey.isEmpty()) {
             return Optional.empty();
         }
@@ -64,7 +74,7 @@ public final class ApiKeyVerifier {
             byte[] given = apiKey.getBytes(StandardCharsets.UTF_8);
             for (Map.Entry<String, String> e : staticKeys.entrySet()) {
                 if (MessageDigest.isEqual(given, e.getKey().getBytes(StandardCharsets.UTF_8))) {
-                    return Optional.of(e.getValue());
+                    return Optional.of(new Caller(e.getValue(), true));
                 }
             }
             return Optional.empty();
@@ -96,7 +106,10 @@ public final class ApiKeyVerifier {
                 return Optional.empty();
             }
             Object sender = c.getClaim(conf.senderIdClaim);
-            return sender instanceof String s && !s.isEmpty() ? Optional.of(s) : Optional.empty();
+            if (!(sender instanceof String s) || s.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new Caller(s, "iop".equals(c.getClaim("token_use"))));
         } catch (Exception e) {
             return Optional.empty();
         }

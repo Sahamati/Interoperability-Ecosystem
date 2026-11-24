@@ -7,7 +7,9 @@ the interoperability work: signing and checking signatures, end-to-end encryptio
 through another AA, retries, and the Sahamati services it depends on.
 
 This guide covers what to prepare, how to install the gateway (Kubernetes, Docker or plain Java),
-every configuration setting, what your core needs to do, and how to check that it works.
+every configuration setting, what your core needs to do, and how to check that it works. One
+gateway normally serves one entity. In FIU and FIP mode, one gateway can also serve several
+entities of the same type (multi-tenant mode, section 5.12).
 
 All identifiers in examples (`aa-test-002`, `fiu-test-001`, …) are illustrative.
 
@@ -54,7 +56,7 @@ Example: an FIU sends a consent request to an AA it is not connected to, through
    a `Target-Entity` header naming `aa-test-003`.
 2. **Your gateway sends it to the hop**: it signs the message, encrypts the payload so that only
    `aa-test-003` can read it, chooses a hop among the AAs you are linked to, and calls the hop's
-   `POST /iop/Consent` with your IopToken.
+   `POST /iop/Consent` with your token from the token service (section 5.5).
 3. **The hop's gateway forwards it**: it checks your token and signature, checks that it can reach
    `aa-test-003`, and passes the message on unchanged. It cannot read the payload. The hop's core
    is not involved.
@@ -92,7 +94,7 @@ The gateway uses three Sahamati services:
 
 | Service | Used for |
 |---|---|
-| **Token service** | Two tokens for your entity: an **access token** (Direct API calls the gateway makes, and the Central Registry and AIG) and an **IopToken** (sent on every `/iop` call). It also publishes the keys that verify other participants' tokens (JWKS). |
+| **Token service** | Tokens for your entity: an **access token** (for the Central Registry and AIG, and in FIU and FIP mode also on every `/iop` call) and, in AA mode, an **IopToken** (sent on every `/iop` call an AA makes). It also publishes the keys that verify other participants' tokens (JWKS). |
 | **Central Registry (CR)** | Every participant's id, base URL, public keys (with validity windows) and whether it is ready for interoperability. |
 | **AA Interoperability Graph (AIG)** | Which AAs can reach which FIUs, FIPs and AAs: used to choose a route. |
 
@@ -133,6 +135,9 @@ which `/iop` messages the gateway accepts.
 | `AA` | `/aa-dgw/*` (to FIUs, through their Connected-AA), `/aa-sgw/*` (to FIPs, through an Inter-AA) | `/aa-core/*` | yes: as Connected-AA or Inter-AA for other participants |
 | `FIU` | `/fiu-dgw/*` (to AAs, through your Connected-AA) | `/fiu-core/*` (notifications) | no |
 | `FIP` | `/fip-sgw/*` (to AAs, through an Inter-AA) | `/fip-core/*` | no |
+
+In FIU or FIP mode, one gateway can serve several FIUs, or several FIPs, with `multiTenant: on`
+(section 5.12). AA mode is always single-tenant: one gateway per AA.
 
 ---
 
@@ -222,12 +227,27 @@ Your values file only needs what differs from the chart's defaults (`helm/iop-gw
 `values-production.yaml` already sets the production choices: persistent cache on, no plain-HTTP
 internal listener, larger resources, and existing Secrets named `iop-gw-env` and `iop-gw-files`.
 
+**Multi-tenant mode** (FIU or FIP mode only, section 5.12)
+
+| Value | Default | What it does |
+|---|---|---|
+| `config.multiTenant` | off | Set to `on` (FIU or FIP mode) to serve several entities from this gateway. The chart then sets `config.entityConfigPath` to `/etc/iop-gw/entities` and leaves `config.self`, `core`, `linkedAAs`, `hopPreference`, `aigToken`, `tokenService.credentialsFile` and `gwApi.token` out of the main file: each entity sets its own in its entity file. In AA mode, which is always single-tenant, the setting is not used. |
+| `entityFiles` | `{}` | The entity files, as `file name: content` (the content as YAML, or as a string). `.yaml` is added to a name that does not end in `.yaml` or `.yml`. The chart puts them in a ConfigMap mounted as the folder `/etc/iop-gw/entities`. A change applied with `helm upgrade` does not restart the pods: Kubernetes updates the mounted folder (usually within a minute or two) and the gateway's rescan picks it up. Used only in multi-tenant mode. |
+
+The mode decides which settings are used, and nothing is refused for being set in the other mode: the
+install notes list each setting that was left out.
+
+Put each entity's key and credentials files in the files Secret under names of their own (for
+example `fiu-test-001-signing.pem`), and each entity's internal API token in the env Secret (for
+example `IOPGW_API_TOKEN_FIU_TEST_001`). A new environment variable needs a restart (section 7.3).
+An example entity file is in the comments of `helm/iop-gw/values.yaml`.
+
 **Image**
 
 | Value | Default | What it does |
 |---|---|---|
 | `image.repository` | – (required) | Registry and name of the gateway image. Set it to where Sahamati publishes the image, or to your own registry if you mirror it. |
-| `image.tag` | the chart's `appVersion` (`0.0.0.0`) | Image version. Pin an exact version; upgrade it together with the chart. |
+| `image.tag` | the chart's `appVersion` (`0.1.0.0`) | Image version. Pin an exact version; upgrade it together with the chart. |
 | `image.pullPolicy` | `IfNotPresent` | Standard Kubernetes pull policy. |
 | `imagePullSecrets` | `[]` | `[{name: <secret>}]` when your registry needs credentials. |
 
@@ -340,7 +360,7 @@ source inside Docker, so only Docker is needed; the first build takes a few minu
 downloads its dependencies:
 
 ```bash
-cd iop-gw && docker build -t iop-gw:0.0.0.0 .
+cd iop-gw && docker build -t iop-gw:0.1.0.0 .
 ```
 
 Run it with the configuration, the secret files mounted read-only, the secrets as environment
@@ -354,7 +374,7 @@ docker run -d --name iop-gw \
   -v iop-gw-cache:/var/lib/iop-gw/cache \
   --read-only --tmpfs /tmp \
   -e IOPGW_API_TOKEN=<random internal API token> \
-  iop-gw:0.0.0.0
+  iop-gw:0.1.0.0
 ```
 
 The files in the secrets folder must be readable by the gateway's user, uid 10001 (for example
@@ -383,7 +403,7 @@ Requires Java 21.
 
 ```bash
 cd iop-gw && mvn package
-IOPGW_API_TOKEN=<…> java -jar target/iop-gw-0.0.0.0.jar /path/to/config.yaml
+IOPGW_API_TOKEN=<…> java -jar target/iop-gw-0.1.0.0.jar /path/to/config.yaml
 ```
 
 The only argument is the configuration file (default `config.yaml` in the working directory).
@@ -392,7 +412,8 @@ The only argument is the configuration file (default `config.yaml` in the workin
 
 ## 5. Configuration reference
 
-The configuration is one YAML file. It is checked strictly at start-up. An **unknown key** (usually
+The configuration is one YAML file (in multi-tenant mode, one main file plus one file per entity:
+section 5.12). It is checked strictly at start-up. An **unknown key** (usually
 a typo), an empty file or more than one YAML document stops the gateway at the first such problem.
 Once the file's structure is right, **every** remaining error (missing values, wrong URLs, missing
 files, literal secrets) is reported at once, and the gateway exits with code 2. Secrets are never written in the file: you write `${NAME}`, and the gateway reads the
@@ -405,6 +426,9 @@ Below, "required" means the gateway does not start without it. Times are in seco
 | Key | Default | Meaning |
 |---|---|---|
 | `mode` | `AA` | `AA`, `FIU` or `FIP` (section 3). |
+| `multiTenant` | `off` | `off`: the gateway serves one entity, described in this file (`self` and the sections below). `on`: FIU or FIP mode only, the gateway serves every entity described in the entity files (section 5.12). `true` and `false` are accepted as well. |
+| `entityConfigPath` | – (required with `multiTenant: on`) | The folder holding the entity files. It must exist at start-up. Ignored, with a warning, when `multiTenant` is `off`. |
+| `entityRescanSeconds` | `60` | With `multiTenant: on`: how often the entity folder is read again. Must be greater than 0. |
 | `listenAddr` | – (required) | Public `/iop` listener, `host:port` (e.g. `0.0.0.0:8080`). Also serves `GET /healthz`. |
 | `tls.certFile`, `tls.keyFile` | – | Serve `/iop` over HTTPS with this certificate. Leave out when TLS is terminated in front of the gateway (Ingress, load balancer). |
 | `logging.level` | `INFO` | `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` or `CRITICAL`. Logs are JSON lines on standard output. |
@@ -412,6 +436,8 @@ Below, "required" means the gateway does not start without it. Times are in seco
 | `logging.statsIntervalSeconds` | `60` | How often a stats line with counters is written; `0` turns it off. |
 
 ### 5.2 Your entity: `self`
+
+With `multiTenant: on`, these settings go in each entity file instead (section 5.12).
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -456,18 +482,31 @@ sender is listed in the Central Registry, and the sender's type is allowed to us
 (for example only an FIU may send `client_api_key`). Until the token service's keys are loaded,
 every api-key is refused.
 
+With `mode: jwt`, an AA's api-key (`x-conn_aa_api_key`, `x-cust_aa_api_key`, `x-orig_aa_api_key`,
+`x-inter_aa_api_key`) must also be an **IopToken**, that is, carry the claim `token_use: iop`. An
+access token sent in its place is refused with `400 InvalidSecurity` (`api-key is not an
+IopToken`). This check is made after the api-key and the signature have been verified. The FIU and
+FIP api-keys (`client_api_key`, `fip_api_key`) are access tokens. With `mode: static`, keys are not
+checked for this.
+
 ### 5.5 Tokens for your own calls: `tokenService`
 
 | Key | Default | Meaning |
 |---|---|---|
 | `tokenService.baseUrl` | – (required with `tokenService`) | The token service's base URL. |
-| `tokenService.path` | `/entity/token/generate` | Where the **access token** is generated. |
-| `tokenService.iopPath` | `/entity/iopToken/generate` | Where the **IopToken** is generated. |
-| `tokenService.credentialsFile` | – (required) | A JSON file `{"entityId": "<your id>", "entitySecret": "<secret>"}`. It is read again on every token generation, so a rotated secret needs no restart. Its `entityId` must equal `self.id`. |
+| `tokenService.path` | `/entity/token/generate` | Where tokens are generated. The **access token** is requested here; in AA mode the **IopToken** is requested here too, with the extra form field `use=iop`. |
+| `tokenService.credentialsFile` | – (required) | A JSON file `{"entityId": "<your id>", "entitySecret": "<secret>"}`. It is read again on every token generation, so a rotated secret needs no restart. Its `entityId` must equal `self.id` (in multi-tenant mode, the entity file's `entityId`; the setting then goes in the entity file). |
 | `tokenService.refreshBeforeSeconds` | `3600` | A token is renewed when less than this much of its lifetime is left (or at half-life, for short-lived tokens). |
 | `tokenService.timeoutSeconds` | `30` | Timeout for each token request. |
 
-The two tokens are fetched and renewed independently. If a renewal fails, the current token is
+Which token is sent where:
+
+| Mode | Access token | IopToken |
+|---|---|---|
+| `AA` | Central Registry and AIG | every `/iop` call to another gateway |
+| `FIU`, `FIP` | Central Registry and AIG, and every `/iop` call to another gateway | not used |
+
+In AA mode the two tokens are fetched and renewed independently. If a renewal fails, the current token is
 used until it expires; failures are retried at most every 10 seconds. Neither the secret nor the
 tokens are ever logged.
 
@@ -479,7 +518,7 @@ tokens are ever logged.
 | `cr.baseUrl` | – (required with `api`) | The Central Registry's base URL (HTTPS). |
 | `cr.entityInfoPath` | `/v2/entityInfo` | Path of the entity lists. In AA mode the AA, FIP and FIU lists are fetched; in FIU and FIP mode only the AA list. |
 | `cr.token` | – | A fixed bearer token (`${NAME}`) instead of the access token. Not allowed together with `tokenService`. |
-| `cr.refreshSeconds`, `cr.retrySeconds`, `cr.timeoutSeconds` | `14400`, `300`, `30` | Refresh every 4 hours; after a failure, retry every 5 minutes. A failed fetch keeps the lists the gateway already has. |
+| `cr.refreshSeconds`, `cr.retrySeconds`, `cr.timeoutSeconds` | `21600`, `300`, `30` | Refresh every 6 hours; after a failure, retry every 5 minutes. A failed fetch keeps the lists the gateway already has. |
 | `entities` | – | With `cr.source: api`: optional **local overrides** per entity: `{id, baseUrl, outboundApiKey}` (no keys). With `cr.source: config` (testing): the full list, `{id, type, baseUrl, signingPublicKeys, encryptionPublicKeys, interop}`. |
 
 Keys from the Central Registry carry an optional validity window (`validFrom`, `validTo`): the
@@ -492,8 +531,8 @@ gateway uses a key only inside its window, checked at every use.
 | `aigSource` | `config` | `api` (production): the AIG. `config` (testing): the `aig` graph below. |
 | `aigBaseUrl` | – (required with `api`) | The AIG's base URL. |
 | `fiuAigPath`, `fipAigPath`, `aaAigPath` | `/v1/aig/fiu`, `/v1/aig/fip`, `/v1/aig/aa` | AIG paths. AA mode uses the FIU and FIP graphs; FIU and FIP mode use the AA graph. |
-| `aigToken` | – | A fixed bearer token (`${NAME}`) instead of the access token. Not allowed together with `tokenService`. |
-| `aigRefreshSeconds`, `aigRetrySeconds`, `aigTimeoutSeconds` | `43200`, `300`, `30` | Refresh every 12 hours; retry every 5 minutes after a failure. |
+| `aigToken` | – | A fixed bearer token (`${NAME}`) instead of the access token. Not allowed together with `tokenService`. In multi-tenant mode it goes in the entity files. |
+| `aigRefreshSeconds`, `aigRetrySeconds`, `aigTimeoutSeconds` | `21600`, `300`, `30` | Refresh every 6 hours; retry every 5 minutes after a failure. |
 | `aig` | – | Testing only, with `aigSource: config`: the graph as lists of `{id: [AA ids]}`. |
 | `linkedAAs.source` | `config` | `config`: the list in `linkedAAs.aas`. `api`: fetched from your core (section 6.3). |
 | `linkedAAs.aas` | – (required with `config`) | The AAs you are linked to. **Only these are used as hops**, and (in AA mode) only AA targets in this list are forwarded to. With `source: api`, until the list is loaded the gateway sends nothing (`503`), and as a hop it answers calls for AA targets with `503 InternalError`. |
@@ -512,10 +551,10 @@ then `hopPreference`, then the remaining eligible hops in random order.
 | `gwApi.listenAddr` | – (required) | The internal HTTPS listener (`host:port`). Must differ from `listenAddr`. |
 | `gwApi.tls.certFile`, `.keyFile` | – (required) | Its certificate and key. The internal APIs always run on HTTPS. |
 | `gwApi.httpListenAddr` | – | Optional extra plain-HTTP internal listener, for message calls only (key push is refused on it). Leave it out in production unless your network requires it. |
-| `gwApi.token` | – | The internal API token (`${NAME}`). Your core sends `Authorization: Bearer <token>` on every call. Without it, internal calls need no authorization (a warning is logged). **Set it in production.** |
+| `gwApi.token` | – | The internal API token (`${NAME}`). Your core sends `Authorization: Bearer <token>` on every call. Without it, internal calls need no authorization (a warning is logged). **Set it in production.** In multi-tenant mode each entity has its own, in its entity file. |
 | `gwApi.maxRetries` | `3` | Upper limit on your core's `Http-Retries` header. |
 | `gwApi.maxRouteRetries` | `2` | Upper limit on your core's `Route-Retries` header. |
-| `gwApi.ver` | `2.0.0` | API version used when a payload carries none (e.g. Heartbeat). |
+| `gwApi.ver` | `1.1.0` | API version used when a payload carries none (e.g. Heartbeat). |
 | `gwApi.broadcastTimeoutSeconds` | `10` (FIU mode only) | How long the user discovery broadcast waits for the AAs. |
 
 ### 5.9 Forwarding (AA mode)
@@ -573,6 +612,119 @@ For FIU or FIP mode, change `mode` and `self`, and list your Connected-AAs (FIU)
 (FIP) in `linkedAAs`. `forwarding.httpRetries`, `pathRewrite` and `preserveUnknownEnvelopeFields`
 are not allowed outside AA mode.
 
+### 5.12 Several entities on one gateway: multi-tenant mode (FIU and FIP)
+
+An organisation that operates several FIUs, or several FIPs, can serve them all from one gateway.
+Set `multiTenant: on` in the main file and describe each entity in a file of its own:
+
+- The **main file** holds what the entities share: `mode`, listeners, logging, `apiKey`,
+  `tokenService.baseUrl` (and the other `tokenService` settings except `credentialsFile`), `cr`,
+  `entities`, `aigSource` and the AIG URLs, `gwApi` (except `token`), `forwarding`, `cache`,
+  `limits` and `jws`. It must not contain `self`, `core`, `linkedAAs`, `hopPreference`, `aigToken`,
+  `tokenService.credentialsFile` or `gwApi.token`: the gateway refuses to start if it does.
+- Each **entity file** (`.yaml` or `.yml`, in `entityConfigPath`) holds one entity's own settings.
+
+All entities on one gateway are of the gateway's type (`mode: FIU` serves FIUs only). AA mode is
+always single-tenant.
+
+**Entity file**
+
+| Key | Meaning |
+|---|---|
+| `entityId` | Required. The entity's Central Registry id. Each id may appear in one file only. |
+| `enable` | `true` loads the entity. Anything else (including no `enable` at all) leaves it unloaded. A value other than `true` or `false` is logged as a warning. |
+| `signingKey`, `decryptionKeys` | As `self.signingKey` and `self.decryptionKeys` (section 5.2). A decryption key id (`kid`) may belong to one entity only (see below). |
+| `tokenService.credentialsFile` | The entity's token-service credentials. Its `entityId` must equal the file's `entityId`. |
+| `core` | As section 5.3: this entity's core. |
+| `gwApi.token` | This entity's internal API token (`${NAME}`). Its core must send it. |
+| `linkedAAs` | Required. As section 5.7. |
+| `hopPreference` | Optional. As section 5.7. |
+| `outboundApiKey`, `aigToken` | Testing only, as in the single-tenant configuration. |
+
+Example: a main file and one entity file. Each further FIU gets a file like the second.
+
+```yaml
+# /etc/iop-gw/config.yaml
+mode: FIU
+multiTenant: on
+entityConfigPath: /etc/iop-gw/entities
+entityRescanSeconds: 60
+listenAddr: "0.0.0.0:8080"
+tokenService: {baseUrl: "https://<token service>"}
+apiKey: {mode: jwt, issuerKeysUrl: "https://<token service JWKS>"}
+cr: {source: api, baseUrl: "https://<central registry>"}
+aigSource: api
+aigBaseUrl: "https://<aig>"
+gwApi:
+  listenAddr: "0.0.0.0:8443"
+  tls: {certFile: /etc/iop-gw/secrets/gw-tls.crt, keyFile: /etc/iop-gw/secrets/gw-tls.key}
+cache: {dir: /var/lib/iop-gw/cache/store}
+```
+
+```yaml
+# /etc/iop-gw/entities/fiu-test-001.yaml
+entityId: fiu-test-001
+enable: true
+signingKey: {source: file, kid: fiu-test-001-sig-2026-11, file: /etc/iop-gw/secrets/fiu-test-001/signing.pem}
+decryptionKeys: {source: file, keys: [{kid: fiu-test-001-enc-2026-11, file: /etc/iop-gw/secrets/fiu-test-001/decryption.pem}]}
+tokenService: {credentialsFile: /etc/iop-gw/secrets/fiu-test-001/credentials.json}
+core: {baseUrl: "http://fiu-test-001-core.internal:8090"}
+gwApi: {token: "${IOPGW_API_TOKEN_FIU_TEST_001}"}
+linkedAAs: {source: config, aas: [aa-test-002, aa-test-003]}
+```
+
+**Adding, changing and removing entities.** The gateway reads the folder at start-up and again
+every `entityRescanSeconds`, with no restart:
+
+| You | The gateway |
+|---|---|
+| Add a file with `enable: true` | Loads the entity. It is served once loaded. |
+| Change a loaded entity's file | Loads the new settings while the previous ones keep serving, and switches over once the new settings have their signing keys, decryption keys, linked AAs and access token. |
+| Make a loaded entity's file invalid | Logs the errors (`entity file not used`) and keeps serving the entity with its previous settings. |
+| Set `enable: false`, or delete the file | Unloads the entity. Its calls are refused from then on. |
+
+A file with errors never stops the gateway, at start-up or later: the gateway logs each problem once,
+and serves the entities whose files are valid. Two files with the same `entityId`: the one whose name
+sorts first is used and the other is skipped. Environment variables (`${NAME}`) are read when the
+gateway starts, so an entity file that names a new variable needs a restart.
+
+**Decryption key ids.** Incoming messages are matched to an entity by the `kid` of their encrypted
+payload, so a `kid` can belong to one entity only. A file that names a `kid` another loaded entity
+already uses is not loaded (at start-up, files load in name order). A key set fetched from or
+pushed by a core (`source: api`) that holds another entity's `kid` is refused: a fetched set is
+ignored and the current keys stay; a pushed set gets `400 InvalidRequest`.
+
+**Which entity a call is for**
+
+| Call | How the gateway finds the entity |
+|---|---|
+| Internal API, from a core | The `Core-Entity-Id` header (section 6.1). It may be left out only while one entity is loaded. |
+| `/iop`, any message with an encrypted payload | The `kid` of the encrypted payload. |
+| `/iop/Heartbeat`, FIP mode | The `Target-Id` header, set by your own front door (below). It may be left out only while one entity is loaded. |
+| Your gateway calling a core | It adds `Core-Entity-Id: <entity id>`, so a core shared by several entities knows which one is meant (section 6.2). |
+
+`Target-Id` is used only on `/iop/Heartbeat` in FIP mode, since a heartbeat carries no encrypted
+payload. Other participants do not send it: your application gateway (the front door at the base
+URL registered for each FIP in the Central Registry) sets it to the FIP the base URL belongs to, and
+removes any `Target-Id` a caller sent. It is ignored on every other `/iop` call.
+
+With `multiTenant: off`, `Core-Entity-Id` and `Target-Id` are ignored, and nothing changes for a
+single-tenant gateway.
+
+**Errors before the entity is known.** When the gateway refuses a `/iop` call before it knows the
+entity (for example an invalid api-key), the error is signed by the loaded entity if only one is
+loaded; otherwise it is unsigned and has no `errorSource`. With no entity loaded at all, `/iop`
+calls get `503 ServiceUnavailable` and internal API calls `400 InvalidRequest` (`no entity loaded`).
+
+**Shared and per-entity data.** The Central Registry lists, the AIG and the token service's keys are
+fetched once and shared, with the access token of any loaded entity. Each entity has its own tokens,
+keys, linked AAs and internal API token. Stats are written per entity (section 9).
+
+**Running it.** Mount the entity folder alongside the main file, with each entity's secret files.
+On Docker, mount the folder (not single files) so that added and changed files are seen. On Helm,
+set `config.multiTenant: on` and give the entity files in `entityFiles` (section 4.1, "Multi-tenant
+mode").
+
 ---
 
 ## 6. What your core needs to do
@@ -608,6 +760,7 @@ Request headers:
 | Header | Required | Value |
 |---|---|---|
 | `Authorization` | when `gwApi.token` is set | `Bearer <internal API token>` |
+| `Core-Entity-Id` | multi-tenant mode, while more than one entity is loaded | Your entity id: the entity this call is sent for (section 5.12). Without it, the call gets `400 InvalidRequest` (`Core-Entity-Id header is required`); with an id that is not loaded, `Core-Entity-Id is not a loaded entity`. Also send it on key and linked-AA pushes (section 6.3). Ignored in single-tenant mode. |
 | `Target-Entity` | yes (not on the broadcast) | `{"type":"AA","id":"aa-test-003"}`: the final recipient |
 | `Correlation-Id` | yes | A UUID for the whole flow, the same on every message of it |
 | `Preferred-Hop` | no | An AA id to try first as hop. It is ignored when that AA is not an eligible hop (section 5.7). |
@@ -636,6 +789,7 @@ Serve the same APIs as your Direct APIs under `core.pathPrefix` (for example `PO
 | `Correlation-Id` | The flow's correlation id |
 | `x-jws-signature` | The initiator's signature over the body, already checked by the gateway: a standard detached JWS (RFC 7515, base64url-encoded payload), **not** RFC 7797, as for responses (section 6.1). |
 | `Authorization` | `Bearer <core.token>`, when set: check it |
+| `Core-Entity-Id` | Multi-tenant mode only: the entity the message is for. It is also sent when the gateway fetches keys or linked AAs from your core (section 6.3). |
 
 Your core must:
 
@@ -751,7 +905,7 @@ mount keeps showing the old file after the file is replaced on the host.
 ### 7.5 Rotating keys and secrets
 
 Other gateways verify your signatures, and choose a key to encrypt for you, from their copy of the
-Central Registry. They refresh that copy every **4 hours** by default. The key rotations below
+Central Registry. They refresh that copy every **6 hours** by default. The key rotations below
 allow for that delay.
 
 Give every new key a **new file name** (for example `signing-2026-12.pem`) and a new key id. The
@@ -765,7 +919,7 @@ already know.
 
 1. Create the new key pair. Register the new public key in the Central Registry with its new key
    id, and keep the old key registered.
-2. **Wait at least 4 hours** (and until the new key's `validFrom`, if you set one), so every
+2. **Wait at least 6 hours** (and until the new key's `validFrom`, if you set one), so every
    gateway has the new key.
 3. Switch the gateway to the new private key:
 
@@ -795,7 +949,7 @@ keep it until nobody can still encrypt for it.
 2. Check that every pod is running with the new configuration (`kubectl rollout status` on Helm;
    on Docker, that the container restarted cleanly). Then register the new public key in the Central
    Registry.
-3. Set a `validTo` on the old public key **at least 4 hours ahead**, so gateways with an older copy
+3. Set a `validTo` on the old public key **at least 6 hours ahead**, so gateways with an older copy
    of the registry also stop using it in time.
 4. After that `validTo` has passed, remove the old entry from `decryptionKeys.keys` and apply it:
    `helm upgrade` on Helm, `docker restart iop-gw` on Docker. Then remove the old file.
@@ -806,7 +960,7 @@ The steps and the waits are the same as above, but there are no files and no res
 pushes the new set (`POST <internal API>/keys/signing` or `/keys/decryption`), or the gateway picks
 it up at its next fetch:
 
-- **Signing:** after the 4-hour wait, push a set in which the new key is `active`.
+- **Signing:** after the 6-hour wait, push a set in which the new key is `active`.
 - **Decryption:** push a set holding both keys, and later a set without the old one.
 
 This works the same on Helm and Docker.
@@ -880,7 +1034,7 @@ Update the truststore Secret on Helm, or the mounted file on Docker, then restar
 2. **Start-up log** (JSON lines), for a gateway on production sources:
 
    ```
-   "msg":"IOP Gateway started","mode":"AA","self":"aa-test-002"
+   "msg":"IOP Gateway started","mode":"AA","multiTenant":"off","entities":["aa-test-002"]
    "msg":"CR loaded","entities":…
    "msg":"AIG loaded"
    "msg":"issuer keys loaded","kids":[…]
@@ -901,9 +1055,14 @@ Update the truststore Secret on Helm, or the mounted file on Docker, then restar
 4. **Audit records:** one JSON record (`"tag":"IOPGW_AUDIT"`) per request and response on each leg:
    `core-in` (your core to your gateway), `hop-out` (to the hop), `iop-in` (received on `/iop`),
    `target-out` (a hop to the target), `core-out` (your gateway to your core). Each has the
-   `correlationId`, status, timings and error code; never payloads or keys.
+   `correlationId`, status, timings and error code; never payloads or keys. In multi-tenant mode
+   each record names the entity it is for, and shows the `Core-Entity-Id` and `Target-Id` headers.
 5. **Stats:** a line every `logging.statsIntervalSeconds` (`"tag":"IOPGW_STATS"`) with request,
-   response, retry and failure counters for the interval.
+   response, retry and failure counters for the interval. In multi-tenant mode there is one line
+   per loaded entity, plus one for the entity `-`: calls refused before their entity was known.
+6. **Multi-tenant mode:** `entity loaded` for each entity at start-up, and later `entity loaded`,
+   `entity reloaded with the new settings` or `entity unloaded` as files change. A file that is not
+   used logs `entity file not used` with the reason.
 
 ---
 
@@ -917,12 +1076,16 @@ Update the truststore Secret on Helm, or the mounted file on Docker, then restar
 | `cache.dir is in use by another gateway process` | Two gateways share one cache directory. Give each its own (one volume per pod). |
 | `UnsatisfiedLinkError` … `librocksdbjni` | RocksDB's native library could not load. The published image includes it; for a plain-Java run on a `noexec` `/tmp`, set `cache.engine: file` or run the image. |
 | `CR load failed` / `AIG load failed` / `issuer JWKS fetch failed` | The service is unreachable, refuses the token (check the credentials file and `self.id`), or its TLS certificate is not trusted (for a private CA, provide a truststore). The gateway keeps retrying; with a persistent cache it serves the last good copy meanwhile. |
-| `token service refused` | Wrong entity id or secret in the credentials file, or the file's `entityId` differs from `self.id`. |
-| Internal API answers `401` | Missing or wrong `Authorization: Bearer <gwApi.token>`. |
+| `token service refused` | Wrong entity id or secret in the credentials file. |
+| `credentials file is for another entity` | The credentials file's `entityId` differs from `self.id` (or from the entity file's `entityId`). |
+| Internal API answers `400 InvalidSecurity` `invalid or missing internal API token` | Missing or wrong `Authorization: Bearer <gwApi.token>` (in multi-tenant mode, the token of the entity named in `Core-Entity-Id`). |
+| Internal API answers `400 InvalidRequest` `Core-Entity-Id header is required` | Multi-tenant mode with more than one entity loaded: your core must name its entity (section 6.1). |
 | Internal API answers `400` with `IOP-Gw-Error` | The request itself: missing `Target-Entity` or `Correlation-Id`, a `Correlation-Id` that is not a UUID, a target not in the CR or not interop ready, or no linked AA that can reach it. The `errorMsg` says which. |
 | Internal API answers `503 AllRoutesUnavailable` | No hop could deliver: the hops did not answer or refused. Check `linkedAAs`, the AIG, and the hops' status. |
 | A hop answers `400 InvalidRoute` | That AA is not linked to the target (or does not know it); the gateway tries the next hop. |
-| `/iop` requests from others get `401` | Their token did not verify (token-service keys not loaded yet, wrong issuer, or the sender is not in the CR). |
+| `/iop` requests from others get `400 InvalidSecurity` | Their token did not verify (token-service keys not loaded yet, wrong issuer, or the sender is not in the CR), their signature did not verify, or (from an AA) the api-key is an access token instead of an IopToken (section 5.4). The `errorMsg` says which. |
+| `entity file not used` | Multi-tenant mode: the file named in the log has the error shown. A loaded entity keeps its previous settings until the file is fixed. |
+| `/iop` calls get `400 InvalidRequest` `encryptedPayload not decryptable` | Multi-tenant mode: no loaded entity holds the key the sender encrypted for. Check that the entity is loaded and that its decryption keys match its keys in the Central Registry. |
 | Your core gets nothing after a call reached your gateway | Your core did not echo `Correlation-Id`, or is unreachable at `core.baseUrl`. |
 
 ---
@@ -944,13 +1107,15 @@ docker compose down -v
 To point those gateways at the real services, change the four mock URLs in
 `examples/local/gateways/*.yaml` and remove the truststore options in `compose.yaml`.
 
+`examples/local-multi-tenant` does the same for multi-tenant mode: one FIU gateway serving two FIUs
+(`fiu-test-001`, `fiu-test-005`), each with its own core and entity file. The same four commands
+run it. Its `smoke.sh` sends a call from each FIU's core (with `Core-Entity-Id`), checks that a call
+without it is refused, and sends a notification back to each FIU.
+
 ---
 
 ## 12. Not yet available
 
-- **Checking that a received api-key is an IopToken** (and not an access token): the verification
-  procedure is still to be published. Until then, any valid token-service token from an entity of
-  the right type is accepted.
 - **User discovery is started by the FIU only** (`/fiu-dgw/User/discover`,
   `/fiu-dgw/broadcast/User/discover`). An AA never sends it: `/aa-dgw/User/discover` answers
   `404 InvalidURI`.

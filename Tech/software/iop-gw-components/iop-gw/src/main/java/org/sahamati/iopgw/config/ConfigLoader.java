@@ -2,6 +2,7 @@ package org.sahamati.iopgw.config;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
@@ -13,7 +14,9 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +28,11 @@ import java.util.regex.Pattern;
  * Loads and validates the configuration: strict YAML (unknown keys, empty files and
  * multi-document files rejected), all errors reported together, secrets only as {@code ${ENV}}
  * references.
+ * <p>
+ * The main file holds the shared settings and, with {@code multiTenant: off} (the default), the
+ * one entity's settings ({@code self} and the top-level per-entity settings). With
+ * {@code multiTenant: on} each entity's settings are in an entity file, read by
+ * {@link #entity(Config, String, String)}; the same per-entity rules apply to both.
  */
 public final class ConfigLoader {
 
@@ -37,7 +45,17 @@ public final class ConfigLoader {
         }
     }
 
+    /** One entity file read in multi-tenant mode. */
+    public record EntityLoad(String file, String entityId, boolean enabled, EntitySettings settings, List<String> errors) {
+        public boolean valid() {
+            return errors.isEmpty();
+        }
+    }
+
     private static final Pattern ENV_REF = Pattern.compile("^\\$\\{([A-Za-z_][A-Za-z0-9_]*)}$");
+    private static final Set<String> MULTI_TENANT_VALUES = Set.of("on", "off", "true", "false");
+    /** Main-file keys that belong in the entity files with {@code multiTenant: on}. */
+    private static final List<String> ENTITY_KEYS = List.of("self", "core", "linkedAAs", "hopPreference", "aigToken");
 
     private final Map<String, String> env;
     private final List<String> errors = new ArrayList<>();
@@ -51,6 +69,12 @@ public final class ConfigLoader {
         return warnings;
     }
 
+    private static ObjectMapper yaml() {
+        return new ObjectMapper(new YAMLFactory())
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+    }
+
     public Config load(Path file) throws ConfigException {
         String text;
         try {
@@ -62,38 +86,48 @@ public final class ConfigLoader {
     }
 
     public Config parse(String text) throws ConfigException {
-        if (text == null || text.isBlank()) {
-            throw new ConfigException(List.of("configuration file is empty"));
+        Config c = read(text, Config.class, "configuration");
+        JsonNode tree;
+        try {
+            tree = yaml().readTree(text);
+        } catch (Exception e) {
+            throw new ConfigException(List.of("configuration is not valid YAML"));
         }
-        ObjectMapper yaml = new ObjectMapper(new YAMLFactory())
-                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
-        Config c;
-        try (MappingIterator<Config> it = yaml.readerFor(Config.class).readValues(text)) {
+        validate(c, tree);
+        if (!errors.isEmpty()) {
+            throw new ConfigException(errors);
+        }
+        return c;
+    }
+
+    /** Strict YAML into {@code type}; the errors name {@code what} ("configuration" or "entity file"). */
+    private static <T> T read(String text, Class<T> type, String what) throws ConfigException {
+        if (text == null || text.isBlank()) {
+            throw new ConfigException(List.of(what + " file is empty"));
+        }
+        T c;
+        try (MappingIterator<T> it = yaml().readerFor(type).readValues(text)) {
             if (!it.hasNext()) {
-                throw new ConfigException(List.of("configuration file is empty"));
+                throw new ConfigException(List.of(what + " file is empty"));
             }
             c = it.next();
             if (it.hasNext()) {
-                throw new ConfigException(List.of("configuration must be a single YAML document"));
+                throw new ConfigException(List.of(what + " must be a single YAML document"));
             }
         } catch (ConfigException e) {
             throw e;
         } catch (Exception e) {
             for (Throwable t = e; t != null; t = t.getCause()) {
                 if (t instanceof UnrecognizedPropertyException u) {
-                    throw new ConfigException(List.of("unknown configuration key '" + u.getPropertyName() + "' at " + path(u)));
+                    throw new ConfigException(List.of("unknown " + ("configuration".equals(what) ? "configuration" : "entity file")
+                            + " key '" + u.getPropertyName() + "' at " + path(u)));
                 }
             }
-            throw new ConfigException(List.of("configuration is not valid YAML for this gateway: "
+            throw new ConfigException(List.of(what + " is not valid YAML for this gateway: "
                     + String.valueOf(e.getMessage()).lines().findFirst().orElse("")));
         }
         if (c == null) {
-            throw new ConfigException(List.of("configuration file is empty"));
-        }
-        validate(c);
-        if (!errors.isEmpty()) {
-            throw new ConfigException(errors);
+            throw new ConfigException(List.of(what + " file is empty"));
         }
         return c;
     }
@@ -111,8 +145,80 @@ public final class ConfigLoader {
     }
 
     // ------------------------------------------------------------------------------------
+    // Entity files (multi-tenant mode)
+    // ------------------------------------------------------------------------------------
 
-    private void validate(Config c) {
+    /**
+     * Reads one entity file against the validated main configuration {@code main}. A disabled file
+     * is read but not validated further. Never throws: the result carries the errors.
+     */
+    public EntityLoad entity(Config main, String fileName, String text) {
+        String hash = sha256(text == null ? "" : text);
+        EntityFile f;
+        try {
+            f = read(text, EntityFile.class, "entity file");
+        } catch (ConfigException e) {
+            return new EntityLoad(fileName, lenientEntityId(text), true, null, prefixed(fileName, e.errors));
+        }
+        boolean enabled = "true".equals(f.enable);
+        if (f.enable != null && !"true".equals(f.enable) && !"false".equals(f.enable)) {
+            warnings.add("entity file " + fileName + ": enable is '" + f.enable + "', not true: the entity is not loaded");
+        }
+        if (!enabled) {
+            return new EntityLoad(fileName, f.entityId, false, null, List.of());
+        }
+        EntitySettings s = new EntitySettings();
+        s.id = f.entityId;
+        s.signingKey = f.signingKey;
+        s.decryptionKeys = f.decryptionKeys;
+        s.credentialsFile = f.tokenService == null ? null : f.tokenService.credentialsFile;
+        s.core = f.core;
+        s.linkedAAs = f.linkedAAs;
+        s.hopPreference = f.hopPreference;
+        s.file = fileName;
+        s.contentHash = hash;
+        Roles.Mode mode = Roles.Mode.valueOf(main.mode);
+        Names n = new Names("entityId", "signingKey", "decryptionKeys", "outboundApiKey", "entity file " + fileName + ": ");
+        if (f.tokenService != null && f.tokenService.credentialsFile == null) {
+            errors.add(n.label + "tokenService must set credentialsFile");
+        }
+        if (f.gwApi != null && main.gwApi == null) {
+            errors.add(n.label + "gwApi.token is set but the main file has no gwApi (internal APIs)");
+        }
+        validateEntity(main, mode, s, new Refs(f.outboundApiKey, f.aigToken, f.gwApi == null ? null : f.gwApi.token), n);
+        List<String> errs = List.copyOf(errors);
+        errors.clear();
+        return new EntityLoad(fileName, f.entityId, true, errs.isEmpty() ? s : null, errs);
+    }
+
+    /** The entityId of a file that is not valid for this gateway, when it can still be read as YAML; else null. */
+    private static String lenientEntityId(String text) {
+        try {
+            JsonNode n = new ObjectMapper(new YAMLFactory()).readTree(text == null ? "" : text);
+            JsonNode id = n == null ? null : n.get("entityId");
+            return id != null && id.isTextual() && !id.asText().isBlank() ? id.asText() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static List<String> prefixed(String file, List<String> errs) {
+        return errs.stream().map(e -> "entity file " + file + ": " + e).toList();
+    }
+
+    private static String sha256(String text) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    // ------------------------------------------------------------------------------------
+    // Main file
+    // ------------------------------------------------------------------------------------
+
+    private void validate(Config c, JsonNode tree) {
         Roles.Mode mode;
         try {
             mode = Roles.Mode.valueOf(c.mode);
@@ -121,6 +227,46 @@ public final class ConfigLoader {
             return;
         }
         boolean connector = mode != Roles.Mode.AA;
+
+        // single-tenant or multi-tenant
+        if (c.multiTenant != null && !MULTI_TENANT_VALUES.contains(c.multiTenant)) {
+            errors.add("multiTenant must be on or off (true or false are accepted too), not '" + c.multiTenant + "'");
+            return;
+        }
+        boolean multi = c.isMultiTenant();
+        if (multi) {
+            if (mode == Roles.Mode.AA) {
+                errors.add("multiTenant: on is not allowed in AA mode (AA mode is single-tenant)");
+            }
+            if (blank(c.entityConfigPath)) {
+                errors.add("entityConfigPath is required with multiTenant: on");
+            } else if (!Files.isDirectory(Path.of(c.entityConfigPath))) {
+                errors.add("entityConfigPath: folder not found: " + c.entityConfigPath);
+            }
+            if (c.entityRescanSeconds == null) {
+                c.entityRescanSeconds = 60;
+            } else if (c.entityRescanSeconds <= 0) {
+                errors.add("entityRescanSeconds must be positive");
+            }
+            for (String key : ENTITY_KEYS) {
+                if (tree != null && tree.has(key)) {
+                    errors.add(key + " is not allowed in the main file with multiTenant: on (it belongs in the entity files)");
+                }
+            }
+            if (tree != null && tree.path("tokenService").has("credentialsFile")) {
+                errors.add("tokenService.credentialsFile is not allowed in the main file with multiTenant: on (it belongs in the entity files)");
+            }
+            if (tree != null && tree.path("gwApi").has("token")) {
+                errors.add("gwApi.token is not allowed in the main file with multiTenant: on (it belongs in the entity files)");
+            }
+        } else {
+            if (c.entityConfigPath != null) {
+                warnings.add("entityConfigPath is ignored with multiTenant: off (single-tenant: the main file holds the entity's settings)");
+            }
+            if (c.entityRescanSeconds != null) {
+                warnings.add("entityRescanSeconds is ignored with multiTenant: off");
+            }
+        }
 
         String level = Logs.normalise(c.logging.level);
         if (level == null) {
@@ -134,27 +280,6 @@ public final class ConfigLoader {
 
         addr("listenAddr", c.listenAddr, true);
         tls("tls", c.tls, false);
-
-        if (blank(c.self.id)) {
-            errors.add("self.id is required");
-        }
-        secret(c, "self.outboundApiKey", c.self.outboundApiKey);
-
-        // core
-        if (blank(c.core.baseUrl) || !httpUrl(c.core.baseUrl)) {
-            errors.add("core.baseUrl must be an absolute http(s) URL");
-        }
-        if (c.core.pathPrefix == null) {
-            c.core.pathPrefix = Roles.defaultCorePrefix(mode);
-        } else if (!c.core.pathPrefix.startsWith("/")) {
-            errors.add("core.pathPrefix must start with /");
-        }
-        if (c.core.keysBaseUrl != null && !httpsUrl(c.core.keysBaseUrl)) {
-            errors.add("core.keysBaseUrl must be an absolute https URL (private keys are in transit)");
-        }
-        validateKeys(c);
-        secret(c, "core.token", c.core.token);
-        positive("core.timeoutSeconds", c.core.timeoutSeconds);
 
         // api-key checking
         switch (String.valueOf(c.apiKey.mode)) {
@@ -225,27 +350,13 @@ public final class ConfigLoader {
             errors.add("forwarding.httpRetries must be 0 or more");
         }
 
-        // token service
+        // token service (shared settings; the credentials file is per entity)
         if (c.tokenService != null) {
             if (blank(c.tokenService.baseUrl) || !httpUrl(c.tokenService.baseUrl)) {
                 errors.add("tokenService.baseUrl must be an absolute http(s) URL");
             }
             if (c.tokenService.path == null || !c.tokenService.path.startsWith("/")) {
                 errors.add("tokenService.path must start with /");
-            }
-            if (c.tokenService.iopPath == null || !c.tokenService.iopPath.startsWith("/")) {
-                errors.add("tokenService.iopPath must start with /");
-            }
-            if (blank(c.tokenService.credentialsFile)) {
-                errors.add("tokenService.credentialsFile is required");
-            } else {
-                exists("tokenService.credentialsFile", c.tokenService.credentialsFile);
-            }
-            if (c.self.outboundApiKey != null) {
-                errors.add("self.outboundApiKey is not allowed with tokenService (one source)");
-            }
-            if (c.aigToken != null) {
-                errors.add("aigToken is not allowed with tokenService (one source)");
             }
         }
 
@@ -265,78 +376,226 @@ public final class ConfigLoader {
                 || c.limits.maxUpstreamBytes == null || c.limits.maxUpstreamBytes <= 0) {
             errors.add("limits must be positive");
         }
+
+        if (!multi) {
+            // single-tenant: the entity's settings are in the main file (self and top-level settings)
+            EntitySettings s = new EntitySettings();
+            s.id = c.self.id;
+            s.signingKey = c.self.signingKey;
+            s.decryptionKeys = c.self.decryptionKeys;
+            s.credentialsFile = c.tokenService == null ? null : c.tokenService.credentialsFile;
+            s.core = c.core;
+            s.linkedAAs = c.linkedAAs;
+            s.hopPreference = c.hopPreference;
+            validateEntity(c, mode, s, new Refs(c.self.outboundApiKey, c.aigToken, c.gwApi == null ? null : c.gwApi.token),
+                    new Names("self.id", "self.signingKey", "self.decryptionKeys", "self.outboundApiKey", ""));
+            c.single = s;
+        }
     }
 
-    private void validateKeys(Config c) {
-        Config.SigningKey sk = c.self.signingKey;
+    // ------------------------------------------------------------------------------------
+    // Per-entity settings (both modes)
+    // ------------------------------------------------------------------------------------
+
+    /** The secret references of one entity's settings. */
+    private record Refs(String outboundApiKey, String aigToken, String gwApiToken) {}
+
+    /** How the per-entity settings are named in the messages: {@code self.*} or entity-file keys. */
+    private record Names(String id, String signingKey, String decryptionKeys, String outboundApiKey, String label) {}
+
+    private void validateEntity(Config c, Roles.Mode mode, EntitySettings s, Refs r, Names n) {
+        String l = n.label;
+        if (blank(s.id)) {
+            errors.add(l + n.id + " is required");
+        }
+        secret(s, "outboundApiKey", l + n.outboundApiKey, r.outboundApiKey);
+
+        // core
+        if (blank(s.core.baseUrl) || !httpUrl(s.core.baseUrl)) {
+            errors.add(l + "core.baseUrl must be an absolute http(s) URL");
+        }
+        if (s.core.pathPrefix == null) {
+            s.core.pathPrefix = Roles.defaultCorePrefix(mode);
+        } else if (!s.core.pathPrefix.startsWith("/")) {
+            errors.add(l + "core.pathPrefix must start with /");
+        }
+        if (s.core.keysBaseUrl != null && !httpsUrl(s.core.keysBaseUrl)) {
+            errors.add(l + "core.keysBaseUrl must be an absolute https URL (private keys are in transit)");
+        }
+        validateKeys(c, s, n);
+        secret(s, "core.token", l + "core.token", s.core.token);
+        positive(l + "core.timeoutSeconds", s.core.timeoutSeconds);
+
+        // token service: the entity's credentials file
+        if (c.tokenService != null) {
+            if (blank(s.credentialsFile)) {
+                errors.add(l + "tokenService.credentialsFile is required");
+            } else if (!Files.isRegularFile(Path.of(s.credentialsFile))) {
+                errors.add(l + "tokenService.credentialsFile: file not found: " + s.credentialsFile);
+            } else if (s.id != null) {
+                String id = credentialsEntityId(s.credentialsFile);
+                if (id == null) {
+                    errors.add(l + "tokenService.credentialsFile is not a JSON object with entityId");
+                } else if (!id.equals(s.id)) {
+                    errors.add(l + "tokenService.credentialsFile is for another entity, not " + s.id);
+                }
+            }
+            if (r.outboundApiKey != null) {
+                errors.add(l + n.outboundApiKey + " is not allowed with tokenService (one source)");
+            }
+            if (r.aigToken != null) {
+                errors.add(l + "aigToken is not allowed with tokenService (one source)");
+            }
+        } else if (s.credentialsFile != null) {
+            errors.add(l + "tokenService.credentialsFile is set but the main file has no tokenService");
+        }
+
+        // AIG token (testing only, without tokenService)
+        if ("config".equals(c.aigSource)) {
+            if (r.aigToken != null) {
+                errors.add(l + "aigToken belongs to aigSource api");
+            }
+        } else if ("api".equals(c.aigSource)) {
+            if (c.tokenService == null && r.aigToken == null) {
+                errors.add(l + "AIG: a token source is required (tokenService or aigToken)");
+            }
+            secret(s, "aigToken", l + "aigToken", r.aigToken);
+        }
+
+        // internal API token
+        secret(s, "gwApi.token", l + "gwApi.token", r.gwApiToken);
+        if (c.gwApi != null && r.gwApiToken == null) {
+            warnings.add(l + "gwApi.token is not set: internal API calls" + (l.isEmpty() ? "" : " for this entity")
+                    + " need no Authorization");
+        }
+
+        // linkedAAs: required
+        Config.LinkedAAsConf la = s.linkedAAs;
+        switch (String.valueOf(la.source)) {
+            case "config" -> {
+                if (la.url != null || la.token != null) {
+                    errors.add(l + "linkedAAs: url and token belong to source api");
+                }
+                if (la.aas == null || la.aas.isEmpty()) {
+                    errors.add(l + "linkedAAs.aas is required (source config)");
+                } else if (new HashSet<>(la.aas).size() != la.aas.size()) {
+                    errors.add(l + "linkedAAs.aas has a repeated id");
+                }
+            }
+            case "api" -> {
+                if (la.aas != null) {
+                    errors.add(l + "linkedAAs.aas belongs to source config");
+                }
+                if (la.token == null) {
+                    errors.add(l + "linkedAAs.token is required with source api");
+                }
+                secret(s, "linkedAAs.token", l + "linkedAAs.token", la.token);
+                if (la.url != null && !httpUrl(la.url)) {
+                    errors.add(l + "linkedAAs.url must be an absolute http(s) URL");
+                }
+                positive(l + "linkedAAs.refreshSeconds", la.refreshSeconds);
+            }
+            default -> errors.add(l + "linkedAAs.source must be config or api");
+        }
+
+        // hopPreference
+        if (mode == Roles.Mode.FIU && !s.hopPreference.interAAs.isEmpty()) {
+            errors.add(l + "hopPreference.interAAs is not allowed in FIU mode");
+        }
+        if (mode == Roles.Mode.FIP && !s.hopPreference.connectedAAs.isEmpty()) {
+            errors.add(l + "hopPreference.connectedAAs is not allowed in FIP mode");
+        }
+        for (List<String> p : List.of(s.hopPreference.connectedAAs, s.hopPreference.interAAs)) {
+            if (new HashSet<>(p).size() != p.size()) {
+                errors.add(l + "hopPreference: duplicate entry");
+            }
+        }
+    }
+
+    /** The {@code entityId} of a credentials file, or null when it cannot be read as one. */
+    private static String credentialsEntityId(String file) {
+        try {
+            JsonNode n = new ObjectMapper().readTree(Files.readAllBytes(Path.of(file)));
+            JsonNode id = n == null ? null : n.get("entityId");
+            return id != null && id.isTextual() ? id.asText() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void validateKeys(Config c, EntitySettings s, Names n) {
+        String l = n.label;
+        String skName = n.signingKey;
+        Config.SigningKey sk = s.signingKey;
         switch (String.valueOf(sk.source)) {
             case "file" -> {
                 if (blank(sk.kid)) {
-                    errors.add("self.signingKey.kid is required");
+                    errors.add(l + skName + ".kid is required");
                 }
-                exists("self.signingKey.file", sk.file);
+                exists(l + skName + ".file", sk.file);
                 if (sk.url != null || sk.token != null || sk.refreshSeconds != null) {
-                    errors.add("self.signingKey: url, token and refreshSeconds belong to source api");
+                    errors.add(l + skName + ": url, token and refreshSeconds belong to source api");
                 }
-                validity("self.signingKey", sk.applied, sk.expiry);
+                validity(l + skName, sk.applied, sk.expiry);
             }
             case "api" -> {
                 if (sk.kid != null || sk.file != null || sk.active != null || sk.applied != null || sk.expiry != null) {
-                    errors.add("self.signingKey: kid, file, active, applied and expiry belong to source file");
+                    errors.add(l + skName + ": kid, file, active, applied and expiry belong to source file");
                 }
-                apiKeySource(c, "self.signingKey", "signing", sk.url, sk.token, sk.refreshSeconds);
+                apiKeySource(c, s, l + skName, "signing", sk.url, sk.token, sk.refreshSeconds);
+                secret(s, "signingKey.token", l + skName + ".token", sk.token);
                 if (sk.refreshSeconds == null) {
                     sk.refreshSeconds = 3600;
                 }
             }
-            default -> errors.add("self.signingKey.source must be file or api");
+            default -> errors.add(l + skName + ".source must be file or api");
         }
-        Config.DecryptionKeys dk = c.self.decryptionKeys;
+        String dkName = n.decryptionKeys;
+        Config.DecryptionKeys dk = s.decryptionKeys;
         switch (String.valueOf(dk.source)) {
             case "file" -> {
                 if (dk.keys.isEmpty()) {
-                    errors.add("self.decryptionKeys.keys must list at least one key");
+                    errors.add(l + dkName + ".keys must list at least one key");
                 }
                 Set<String> kids = new HashSet<>();
                 for (Config.KeyFile k : dk.keys) {
                     if (blank(k.kid) || !kids.add(k.kid)) {
-                        errors.add("self.decryptionKeys.keys: kids must be present and unique");
+                        errors.add(l + dkName + ".keys: kids must be present and unique");
                     }
-                    exists("self.decryptionKeys.keys.file", k.file);
-                    validity("self.decryptionKeys.keys[" + k.kid + "]", k.applied, k.expiry);
+                    exists(l + dkName + ".keys.file", k.file);
+                    validity(l + dkName + ".keys[" + k.kid + "]", k.applied, k.expiry);
                 }
                 if (dk.url != null || dk.token != null || dk.refreshSeconds != null) {
-                    errors.add("self.decryptionKeys: url, token and refreshSeconds belong to source api");
+                    errors.add(l + dkName + ": url, token and refreshSeconds belong to source api");
                 }
             }
             case "api" -> {
                 if (!dk.keys.isEmpty()) {
-                    errors.add("self.decryptionKeys.keys belongs to source file");
+                    errors.add(l + dkName + ".keys belongs to source file");
                 }
-                apiKeySource(c, "self.decryptionKeys", "decryption", dk.url, dk.token, dk.refreshSeconds);
+                apiKeySource(c, s, l + dkName, "decryption", dk.url, dk.token, dk.refreshSeconds);
+                secret(s, "decryptionKeys.token", l + dkName + ".token", dk.token);
                 if (dk.refreshSeconds == null) {
                     dk.refreshSeconds = 3600;
                 }
             }
-            default -> errors.add("self.decryptionKeys.source must be file or api");
+            default -> errors.add(l + dkName + ".source must be file or api");
         }
     }
 
     /** Keys from the core: https only, a bearer token as an ${ENV} secret, the HTTPS internal listener for push. */
-    private void apiKeySource(Config c, String name, String kind, String url, String token, Integer refresh) {
+    private void apiKeySource(Config c, EntitySettings s, String name, String kind, String url, String token, Integer refresh) {
         if (url != null && !httpUrl(url)) {
             errors.add(name + ".url must be an absolute https URL");
         } else {
-            String effective = c.keyUrl(kind);
+            String effective = s.keyUrl(kind);
             if (effective != null && !httpsUrl(effective)) {
-                errors.add(name + ": the key URL " + (url != null ? "(url)" : c.core.keysBaseUrl != null
+                errors.add(name + ": the key URL " + (url != null ? "(url)" : s.core.keysBaseUrl != null
                         ? "(core.keysBaseUrl)" : "(core.baseUrl, the default)") + " must be https: private keys are in transit");
             }
         }
         if (token == null) {
             errors.add(name + ".token is required with source api");
-        } else {
-            secret(c, name + ".token", token);
         }
         if (refresh != null && refresh <= 0) {
             errors.add(name + ".refreshSeconds must be positive");
@@ -440,8 +699,8 @@ public final class ConfigLoader {
     private void validateAig(Config c, Roles.Mode mode) {
         switch (String.valueOf(c.aigSource)) {
             case "config" -> {
-                if (c.aigBaseUrl != null || c.aigToken != null) {
-                    errors.add("aigBaseUrl and aigToken belong to aigSource api");
+                if (c.aigBaseUrl != null) {
+                    errors.add("aigBaseUrl belongs to aigSource api");
                 }
                 if (c.gwApi != null && c.aig == null) {
                     errors.add("aig: aigSource config needs a configured graph");
@@ -473,10 +732,6 @@ public final class ConfigLoader {
                         errors.add("AIG paths must start with /");
                     }
                 }
-                if (c.tokenService == null && c.aigToken == null) {
-                    errors.add("AIG: a token source is required (tokenService or aigToken)");
-                }
-                secret(c, "aigToken", c.aigToken);
             }
             default -> errors.add("aigSource must be config or api");
         }
@@ -524,10 +779,6 @@ public final class ConfigLoader {
                 errors.add("internal API listeners must not use the public listenAddr");
             }
         }
-        secret(c, "gwApi.token", g.token);
-        if (g.token == null) {
-            warnings.add("gwApi.token is not set: internal API calls need no Authorization");
-        }
         if (g.maxRetries == null || g.maxRetries < 0) {
             errors.add("gwApi.maxRetries must be 0 or more");
         }
@@ -546,46 +797,6 @@ public final class ConfigLoader {
         } else if (mode == Roles.Mode.FIU) {
             g.broadcastTimeoutSeconds = 10;
         }
-
-        Config.LinkedAAsConf l = c.linkedAAs;
-        switch (String.valueOf(l.source)) {
-            case "config" -> {
-                if (l.url != null || l.token != null) {
-                    errors.add("linkedAAs: url and token belong to source api");
-                }
-                if (l.aas == null || l.aas.isEmpty()) {
-                    errors.add("linkedAAs.aas is required with the internal APIs (source config)");
-                } else if (new HashSet<>(l.aas).size() != l.aas.size()) {
-                    errors.add("linkedAAs.aas has a repeated id");
-                }
-            }
-            case "api" -> {
-                if (l.aas != null) {
-                    errors.add("linkedAAs.aas belongs to source config");
-                }
-                if (l.token == null) {
-                    errors.add("linkedAAs.token is required with source api");
-                }
-                secret(c, "linkedAAs.token", l.token);
-                if (l.url != null && !httpUrl(l.url)) {
-                    errors.add("linkedAAs.url must be an absolute http(s) URL");
-                }
-                positive("linkedAAs.refreshSeconds", l.refreshSeconds);
-            }
-            default -> errors.add("linkedAAs.source must be config or api");
-        }
-
-        if (mode == Roles.Mode.FIU && !c.hopPreference.interAAs.isEmpty()) {
-            errors.add("hopPreference.interAAs is not allowed in FIU mode");
-        }
-        if (mode == Roles.Mode.FIP && !c.hopPreference.connectedAAs.isEmpty()) {
-            errors.add("hopPreference.connectedAAs is not allowed in FIP mode");
-        }
-        for (List<String> p : List.of(c.hopPreference.connectedAAs, c.hopPreference.interAAs)) {
-            if (new HashSet<>(p).size() != p.size()) {
-                errors.add("hopPreference: duplicate entry");
-            }
-        }
     }
 
     // ---------------- helpers ----------------
@@ -597,6 +808,17 @@ public final class ConfigLoader {
         String v = resolve(name, ref);
         if (v != null) {
             c.secrets.put(name, v);
+        }
+    }
+
+    /** Resolves {@code ref} into the entity's secrets under {@code key}; {@code name} is used in messages. */
+    private void secret(EntitySettings s, String key, String name, String ref) {
+        if (ref == null) {
+            return;
+        }
+        String v = resolve(name, ref);
+        if (v != null) {
+            s.secrets.put(key, v);
         }
     }
 

@@ -36,7 +36,7 @@ One process serves all three services on **one HTTPS port**:
 
 | Service | What it serves |
 |---|---|
-| Token service | Access tokens and IopTokens for the entities you list, from the same credentials files the gateways use. Tokens are RS256 JWTs signed by a key the mocks generate, and published as a JWKS. |
+| Token service | Access tokens and IopTokens (`use=iop`) for the entities you list, from the same credentials files the gateways use. Tokens are RS256 JWTs signed by a key the mocks generate, and published as a JWKS. |
 | Central Registry | `/v2/entityInfo/{AA,FIU,FIP}`: each entity's id, base URL, `interop` flag and public keys (with optional validity windows). |
 | AIG | The FIU, FIP and AA graphs, read by the gateways, and the update call AAs use to publish their links. |
 
@@ -53,8 +53,8 @@ Docker Compose. It is the quickest way to see everything working.
 
 ```bash
 # 1. Build the two images (only Docker is needed; the first build takes a few minutes)
-cd iop-gw-components/iop-gw       && docker build -t iop-gw:0.0.0.0 .
-cd ../iop-gw-mocks                && docker build -t iop-gw-mocks:0.0.0.0 .
+cd iop-gw-components/iop-gw       && docker build -t iop-gw:0.1.0.0 .
+cd ../iop-gw-mocks                && docker build -t iop-gw-mocks:0.1.0.0 .
 
 # 2. Generate synthetic keys, credentials and .env (all git-ignored)
 cd ../examples/local
@@ -71,6 +71,10 @@ docker compose down -v
 ```
 
 `smoke.sh` should print `HTTP/1.1 200` and `Forwarding-Hop: aa-test-002`.
+
+`examples/local-multi-tenant` is the same set-up with one FIU gateway serving two FIUs
+(`multiTenant: on`, see [SETUP.md](SETUP.md), section 5.12). Run it with the same commands from its
+own folder.
 
 What the example contains:
 
@@ -91,7 +95,7 @@ What the example contains:
 
 ```bash
 cd iop-gw-components/iop-gw-mocks
-docker build -t iop-gw-mocks:0.0.0.0 .
+docker build -t iop-gw-mocks:0.1.0.0 .
 ```
 
 The build compiles the mocks from source inside Docker. Add `--build-arg MVN_ARGS=` to run the tests
@@ -106,7 +110,7 @@ docker run -d --name mocks -p 9443:9443 \
   -v "$PWD/generated:/etc/iop-gw-mocks/generated:ro" \
   -v mocks-out:/var/lib/iop-gw-mocks/out \
   --read-only --tmpfs /tmp \
-  iop-gw-mocks:0.0.0.0
+  iop-gw-mocks:0.1.0.0
 ```
 
 The image runs as a non-root user (uid 10002). Mounted files must be readable by it. The output
@@ -119,7 +123,7 @@ Requires JDK 21 and Maven 3.6 or later.
 ```bash
 cd iop-gw-components/iop-gw-mocks
 mvn package
-java -jar target/iop-gw-mocks-0.0.0.0.jar /path/to/mocks.yaml
+java -jar target/iop-gw-mocks-0.1.0.0.jar /path/to/mocks.yaml
 ```
 
 The only argument is the configuration file (default `mocks.yaml` in the working directory).
@@ -153,13 +157,14 @@ credentials files.
 | `tokenService` | – | Token service settings (4.2). |
 | `entities` | `[]` | The participants the Central Registry lists (4.3). |
 | `aig` | empty | The starting AIG graph (4.4). |
+| `users` | `[]` | Users who may get a user token, needed only to publish an AA's AIG links (4.5). |
 
 ### 4.2 `tokenService`
 
 | Key | Default | Meaning |
 |---|---|---|
-| `path` | `/entity/token/generate` | Where access tokens are generated. |
-| `iopPath` | `/entity/iopToken/generate` | Where IopTokens are generated. |
+| `path` | `/entity/token/generate` | Where tokens are generated: an access token, or an IopToken when the request has the form field `use=iop`. |
+| `userPath` | `/user/token/generate` | Where user tokens are generated (4.5). |
 | `issuer` | `https://mock-token-service.local/realms/sahamati` | The `iss` claim of every token. Set the gateways' `apiKey.issuer` to the same value. |
 | `ttlSeconds` | `86400` | Token lifetime (24 hours, as the Sahamati token service). Shorten it to see the gateways renew tokens. |
 | `signingKeyFile` | – | The token-signing private key (PEM, RSA, PKCS#8). With it, tokens and the published JWKS stay valid across restarts. Without it, a new key is generated at every start. |
@@ -198,8 +203,26 @@ aig:
     - aa-test-002: [aa-test-004]      # the two AAs peer with each other
 ```
 
-AAs can change the graph while the mocks run (`PUT /v1/aig/update`, section 5); changes are lost on
-restart.
+AAs can change the graph while the mocks run (`PUT /v1/aig/{aaid}`, section 5); changes are
+lost on restart.
+
+### 4.5 `users`
+
+Publishing an AA's AIG links takes a **user token** of a user linked to that AA, as with the Sahamati
+token service. Gateways never publish, so this is needed only to try publishing yourself.
+
+| Key | Required | Meaning |
+|---|---|---|
+| `username` | yes | The user name. |
+| `passwordFile` | yes | A file holding only the user's password. It is read again on every token request. |
+| `entities` | yes | Entity id → the user's roles for that entity. The user token carries this as its `entity_meta` claim. |
+
+```yaml
+users:
+  - username: aa-test-002-admin@example.test
+    passwordFile: ./secrets/aa-test-002-admin.password
+    entities: {aa-test-002: [admin]}
+```
 
 ---
 
@@ -211,8 +234,8 @@ All on the one HTTPS listener.
 
 | Method and path | Request | Response |
 |---|---|---|
-| `POST /entity/token/generate` | Form (`application/x-www-form-urlencoded`): `id`, `secret` | `200 {ver, timestamp, txnId, accessToken, expiresIn, refreshExpiresIn, tokenType, notBeforePolicy, scope}` |
-| `POST /entity/iopToken/generate` | The same | The same; the token is an IopToken |
+| `POST /entity/token/generate` | Form (`application/x-www-form-urlencoded`): `id`, `secret`, and optionally `use=iop` | `200 {ver, timestamp, txnId, accessToken, expiresIn, refreshExpiresIn, tokenType, notBeforePolicy, scope}`. With `use=iop`, the token is an IopToken. |
+| `POST /user/token/generate` | Form: `username`, `password` | The same fields; the token is a user token (4.5) |
 | `GET /tokenservice/jwks`, `GET /auth/realms/sahamati/protocol/openid-connect/certs`, `GET /.well-known/jwks.json` | – | The token-signing key as a JWKS (three paths, one key) |
 
 Token errors use the Sahamati token service's format, `{ver, timestamp, txnId, errorCode,
@@ -220,13 +243,16 @@ errorMsg}`:
 
 | Status | `errorCode` | `errorMsg` | When |
 |---|---|---|---|
-| `400` | `TKN_2014` | `id is missing in the request` / `secret is missing in the request` | A form field is missing |
+| `400` | `TKN_2014` | `<field> is missing in the request` | A form field is missing |
 | `401` | `TKN_2025` | `Invalid id/secret` | Unknown entity (not in `credentialsFiles`) or wrong secret |
+| `401` | `TKN_2025` | `Invalid username/password` | Unknown user (not in `users`) or wrong password |
 
 The token is an RS256 JWT. Its claims: `iss` (the configured issuer), `aud` `"account"`,
 `typ` `"Bearer"`, `azp`, `clientId` and `client_id` (the entity id), `roles` (the entity's type,
-when it is listed in `entities`), `scope`, `sub`, `iat`, `exp`, `jti`, and `tokenUse` (`access`
-or `iop`, this mock's own marker).
+when it is listed in `entities`), `scope`, `sub`, `iat`, `exp` and `jti`. An IopToken also carries
+`token_use` `"iop"`, which is what a receiving gateway checks on an AA's api-key (see
+[SETUP.md](SETUP.md), section 5.4). A user token has `preferred_username` and `entity_meta` instead
+of `azp`, `clientId`, `client_id` and `roles`; it is accepted only for publishing AIG links.
 
 ### Central Registry (bearer token from the mocks)
 
@@ -241,9 +267,10 @@ or `iop`, this mock's own marker).
 | `GET /v1/aig/fiu` | AAs | Every FIU with its Connected-AAs |
 | `GET /v1/aig/fip` | AAs | Every FIP with its Inter-AAs |
 | `GET /v1/aig/aa` | FIUs and FIPs | Every AA with its peer AAs |
-| `PUT /v1/aig/update` | AAs | Body `{"fiu": [...], "fip": [...], "aa": [...]}`: the FIUs, FIPs and peer AAs the calling AA is linked to; each list given replaces that AA's previous links of that kind. Answers `{..., "responseText": "Uploaded"}`. |
+| `PUT /v1/aig/{aaid}` | A user linked to `aaid` (user token, 4.5) | Body `{"fiu": [...], "fip": [...], "aa": [...]}`: the FIUs, FIPs and peer AAs that AA is linked to; each list given replaces that AA's previous links of that kind. Answers `{..., "responseText": "Uploaded"}`. |
 
-Without a valid token: `401`. A caller of the wrong type: `403 Forbidden`.
+Without a valid token of the right kind (an entity token for the `GET`s, a user token for the
+`PUT`): `401`. A caller of the wrong type, or a user not linked to `aaid`: `403 Forbidden`.
 
 ### Other
 
@@ -309,7 +336,7 @@ For every gateway, the mocks must know the entity:
 
 1. its credentials file is in `tokenService.credentialsFiles`;
 2. it is in `entities`, with its public keys and the base URL of its gateway;
-3. its links are in the `aig` graph (or published with `PUT /v1/aig/update`).
+3. its links are in the `aig` graph (or published with `PUT /v1/aig/{aaid}`).
 
 ---
 
@@ -350,7 +377,7 @@ It works on any Kubernetes cluster you can reach with `kubectl` and `helm`.
    |---|---|
    | `context` | The kube context to install into. **Required**: the script never uses your current context by default. |
    | `namespace` | The namespace everything goes into (default `iop-gw-mock-setup`). Uninstalling removes it. |
-   | `images.gateway`, `images.mocks` | The two images, as your cluster pulls them (for example `registry.your-domain.example/iop-gw:0.0.0.0`). |
+   | `images.gateway`, `images.mocks` | The two images, as your cluster pulls them (for example `registry.your-domain.example/iop-gw:0.1.0.0`). |
    | `images.coreStub` | The image the stand-in core runs on (default `python:3.13-alpine`). |
    | `cores.<entity id>` | Where that gateway delivers messages to its core. Empty: the stand-in core. |
 
@@ -462,8 +489,7 @@ The keys you register in the Central Registry are your own; nothing from the moc
 
 | Topic | Mocks | Sahamati services |
 |---|---|---|
-| IopToken | Issued at `/entity/iopToken/generate` | **Not yet available** in the token service (the path answers `404`). Until it is, a gateway can only be tested against the real token service by using the access token in its place (`tokenService.iopPath: /entity/token/generate`). That is for testing only: the two tokens are separate on purpose. |
-| Telling an IopToken apart | The `tokenUse` claim (`access` or `iop`), this mock's own marker | Not yet specified. The gateway does not check it yet. |
+| IopToken | Issued at `/entity/token/generate` with `use=iop`, with the claim `token_use: iop` | Requested the same way. Check with Sahamati that the token service environment you use issues IopTokens: an AA gateway on a token service that does not will have its `/iop` calls refused by gateways that check api-keys with `mode: jwt` (`api-key is not an IopToken`). |
 | Token service paths | No version prefix (`/entity/token/generate`) | Under a version prefix (`/v1/entity/token/generate`), covered by the base URL |
 | Failed logins | Never locks an entity | Locks an entity out after repeated failed attempts |
 | Token claims | The claims the gateway uses, plus a few of the real ones (section 5) | Many more (Keycloak claims, roles, secret expiry) |
@@ -482,7 +508,8 @@ The keys you register in the Central Registry are your own; nothing from the moc
 | Everything worked, then failed after restarting the mocks (Docker or plain Java, without `tls` and `signingKeyFile` set) | The mocks generated a new certificate and token-signing key. Copy the new `truststore.p12` to the gateways and restart them (with a persistent cache, delete the gateways' caches too: they hold tokens signed with the old key). |
 | `token service refused`, `TKN_2025` `Invalid id/secret` | The entity's credentials file is not in the mocks' `tokenService.credentialsFiles`, or the gateway and the mocks read different files. |
 | `token service refused`, `TKN_2014` | The request is missing `id` or `secret`. The gateway always sends both: this points at another client. |
-| `/iop` calls answered `401 InvalidSecurity` `sender not registered` | The sender is missing from the mocks' `entities`, or the receiving gateway has not loaded the CR yet. |
+| `/iop` calls answered `400 InvalidSecurity` `api-key is not an IopToken` | An AA's gateway sent an access token instead of an IopToken. With the mocks this does not happen; on another token service, see section 10. |
+| `/iop` calls answered `400 InvalidSecurity` `sender not registered` | The sender is missing from the mocks' `entities`, or the receiving gateway has not loaded the CR yet. |
 | A call answered `400 InvalidRoute` or `503 AllRoutesUnavailable` | The AIG graph does not link the participants: check `aig` (section 4.4) and the gateways' `linkedAAs`. |
 | A gateway never routes to an AA | That AA is marked `interop: false`, or has no `baseUrl`, in `entities`. |
 | Mocks exit with code `2` at start-up | Invalid configuration: an unknown key, or an entity without `id` or with a type other than `AA`, `FIU` or `FIP`. The log line `invalid mock configuration` says which. |

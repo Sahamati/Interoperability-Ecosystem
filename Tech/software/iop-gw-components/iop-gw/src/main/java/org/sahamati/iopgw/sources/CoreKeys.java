@@ -38,33 +38,60 @@ public final class CoreKeys {
     private final String token;
     private final Http http;
     private final Duration timeout;
+    private final String entityId;
+    private final Map<String, String> headers;
+    private final java.util.function.Function<List<KeyRing.PrivKey>, String> guard;
 
     public CoreKeys(String name, KeyRing ring, String url, String token, Http http, Duration timeout) {
+        this(name, ring, url, token, http, timeout, null, Map.of(), set -> null);
+    }
+
+    /**
+     * Keys of entity {@code entityId}. {@code extraHeaders} are sent on the GET with the bearer token
+     * (multi-tenant mode: {@code Core-Entity-Id}); {@code guard} returns why a set may not be used
+     * (another entity's decryption {@code kid}), or null.
+     */
+    public CoreKeys(String name, KeyRing ring, String url, String token, Http http, Duration timeout, String entityId,
+                    Map<String, String> extraHeaders, java.util.function.Function<List<KeyRing.PrivKey>, String> guard) {
         this.name = name;
         this.ring = ring;
         this.url = url;
         this.token = token;
         this.http = http;
         this.timeout = timeout;
+        this.entityId = entityId;
+        Map<String, String> h = new java.util.LinkedHashMap<>();
+        h.put("Authorization", "Bearer " + token);
+        h.putAll(extraHeaders);
+        this.headers = Map.copyOf(h);
+        this.guard = guard;
+    }
+
+    public KeyRing ring() {
+        return ring;
     }
 
     /** One GET from the core. A failure keeps the current set. */
     public boolean pull() {
         try {
-            Http.Response r = http.send("GET", url, Map.of("Authorization", "Bearer " + token), null, timeout, 1 << 20);
+            Http.Response r = http.send("GET", url, headers, null, timeout, 1 << 20);
             if (r.status() != 200) {
-                LOG.atWarn().addKeyValue("keys", name).addKeyValue("status", r.status()).log("key fetch failed; current set kept");
+                LOG.atWarn().addKeyValue("entity", entityId).addKeyValue("keys", name).addKeyValue("status", r.status()).log("key fetch failed; current set kept");
                 return false;
             }
             List<KeyRing.PrivKey> set = parse(r.body());
+            String refused = guard.apply(set);
+            if (refused != null) {
+                throw new IllegalArgumentException(refused);
+            }
             ring.replace(set);
             logSet("key set fetched", set);
             return true;
         } catch (Http.NoResponse e) {
-            LOG.atWarn().addKeyValue("keys", name).addKeyValue("noResponse", e.kind).log("key fetch failed; current set kept");
+            LOG.atWarn().addKeyValue("entity", entityId).addKeyValue("keys", name).addKeyValue("noResponse", e.kind).log("key fetch failed; current set kept");
             return false;
         } catch (IllegalArgumentException e) {
-            LOG.atWarn().addKeyValue("keys", name).addKeyValue("reason", e.getMessage()).log("key set invalid; current set kept");
+            LOG.atWarn().addKeyValue("entity", entityId).addKeyValue("keys", name).addKeyValue("reason", e.getMessage()).log("key set invalid; current set kept");
             return false;
         }
     }
@@ -77,6 +104,10 @@ public final class CoreKeys {
     /** Replaces the set from a key push; throws {@link IllegalArgumentException} with a safe reason. */
     public List<KeyRing.PrivKey> push(byte[] body) {
         List<KeyRing.PrivKey> set = parse(body);
+        String refused = guard.apply(set);
+        if (refused != null) {
+            throw new IllegalArgumentException(refused);
+        }
         ring.replace(set);
         logSet("key set replaced by push", set);
         return set;
@@ -85,7 +116,7 @@ public final class CoreKeys {
     private void logSet(String msg, List<KeyRing.PrivKey> set) {
         Instant now = Instant.now();
         boolean anyUsable = set.stream().anyMatch(k -> k.usable(now));
-        var ev = (anyUsable ? LOG.atInfo() : LOG.atWarn()).addKeyValue("keys", name).addKeyValue("set", Json.MAPPER.convertValue(status(set), Object.class));
+        var ev = (anyUsable ? LOG.atInfo() : LOG.atWarn()).addKeyValue("entity", entityId).addKeyValue("keys", name).addKeyValue("set", Json.MAPPER.convertValue(status(set), Object.class));
         ev.log(anyUsable ? msg : msg + "; no key is usable now");
     }
 

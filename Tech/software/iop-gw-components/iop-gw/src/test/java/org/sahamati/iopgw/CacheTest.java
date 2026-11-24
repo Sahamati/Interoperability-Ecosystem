@@ -63,9 +63,8 @@ class CacheTest {
     private static TokenService tokenService(Path credentials, String url) {
         Config.TokenServiceConf c = new Config.TokenServiceConf();
         c.baseUrl = url;
-        c.credentialsFile = credentials.toString();
         c.timeoutSeconds = 2;
-        return new TokenService(c, "fiu-test-501", new Http());
+        return new TokenService(c, credentials.toString(), "fiu-test-501", new Http());
     }
 
     private static void saveToken(Store s, Instant issued, Instant expires) {

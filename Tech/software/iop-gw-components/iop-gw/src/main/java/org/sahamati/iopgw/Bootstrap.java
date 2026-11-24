@@ -1,7 +1,6 @@
 package org.sahamati.iopgw;
 
 import org.sahamati.iopgw.config.Config;
-import org.sahamati.iopgw.crypto.KeyRing;
 import org.sahamati.iopgw.crypto.Pem;
 import org.sahamati.iopgw.crypto.PubKey;
 import org.sahamati.iopgw.gateway.Gateway;
@@ -13,16 +12,16 @@ import org.sahamati.iopgw.obs.Audit;
 import org.sahamati.iopgw.obs.Stats;
 import org.sahamati.iopgw.server.GatewayServer;
 import org.sahamati.iopgw.sources.Aig;
-import org.sahamati.iopgw.http.Json;
 import org.sahamati.iopgw.sources.ApiKeyVerifier;
 import org.sahamati.iopgw.sources.CacheCodec;
 import org.sahamati.iopgw.sources.CoreKeys;
+import org.sahamati.iopgw.tenant.Tenant;
+import org.sahamati.iopgw.tenant.TenantManager;
+import org.sahamati.iopgw.tenant.Tenants;
 import org.sahamati.iopgw.sources.IssuerKeys;
 import org.sahamati.iopgw.sources.Store;
-import org.sahamati.iopgw.sources.LinkedAAs;
 import org.sahamati.iopgw.sources.Periodic;
 import org.sahamati.iopgw.sources.Registry;
-import org.sahamati.iopgw.sources.TokenService;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -31,6 +30,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
 
 /** Builds and starts a gateway from a validated configuration. */
 public final class Bootstrap {
@@ -51,7 +52,9 @@ public final class Bootstrap {
         @Override
         public void close() {
             server.close();
-            for (AutoCloseable c : closeables) {
+            // reverse start order: the last stats records are written while every entity is still
+            // loaded, then the entities, the shared sources and the cache are closed
+            for (AutoCloseable c : closeables.reversed()) {
                 try {
                     c.close();
                 } catch (Exception ignored) {
@@ -66,31 +69,30 @@ public final class Bootstrap {
     }
 
     public static Running start(Config c, Http http) throws Exception {
+        return start(c, http, System.getenv());
+    }
+
+    /** {@code env} resolves the {@code ${ENV}} references of entity files (multi-tenant mode). */
+    public static Running start(Config c, Http http, Map<String, String> env) throws Exception {
         Roles.Mode mode = Roles.Mode.valueOf(c.mode);
+        boolean multi = c.isMultiTenant();
         List<AutoCloseable> closeables = new ArrayList<>();
-
-        // Signing and decryption keys: from mounted PEM files, or from the core.
-        KeyRing signing;
-        if ("api".equals(c.self.signingKey.source)) {
-            signing = new KeyRing(List.of());
-        } else {
-            signing = new KeyRing(List.of(new KeyRing.PrivKey(c.self.signingKey.kid,
-                    Pem.privateKey(Path.of(c.self.signingKey.file)),
-                    c.self.signingKey.active == null || c.self.signingKey.active,
-                    date(c.self.signingKey.applied), date(c.self.signingKey.expiry))));
-        }
-        KeyRing decryption;
-        if ("api".equals(c.self.decryptionKeys.source)) {
-            decryption = new KeyRing(List.of());
-        } else {
-            List<KeyRing.PrivKey> dec = new ArrayList<>();
-            for (Config.KeyFile k : c.self.decryptionKeys.keys) {
-                dec.add(new KeyRing.PrivKey(k.kid, Pem.privateKey(Path.of(k.file)), k.active == null || k.active,
-                        date(k.applied), date(k.expiry)));
+        try {
+            return start(c, http, env, mode, multi, closeables);
+        } catch (Exception e) {
+            for (int i = closeables.size() - 1; i >= 0; i--) {
+                try {
+                    closeables.get(i).close();
+                } catch (Exception ignored) {
+                    // failed start-up
+                }
             }
-            decryption = new KeyRing(dec);
+            throw e;
         }
+    }
 
+    private static Running start(Config c, Http http, Map<String, String> env, Roles.Mode mode, boolean multi,
+                                 List<AutoCloseable> closeables) throws Exception {
         // Persistent cache: a store that cannot be opened stops start-up.
         Store store = null;
         if (c.cache != null && c.cache.dir != null) {
@@ -99,13 +101,28 @@ public final class Bootstrap {
         }
         final Store cache = store;
 
-        // Two tokens: the access token (Direct API, CR, AIG) and the IopToken (/iop calls).
-        TokenService tokens = c.tokenService == null ? null : new TokenService(c.tokenService, c.self.id, http);
-        TokenService iopTokens = c.tokenService == null ? null : TokenService.iopToken(c.tokenService, c.self.id, http);
-        if (tokens != null && cache != null) {
-            tokens.persistIn(cache);
-            iopTokens.persistIn(cache);
-        }
+        Tenants tenants = new Tenants(multi);
+        // The Central Registry and AIG are loaded with the access token of one loaded entity that
+        // has a usable token, or with cr.token and an entity's aigToken without tokenService.
+        Supplier<Optional<String>> anyAccessToken = () -> {
+            for (Tenant t : tenants.all()) {
+                if (t.tokens != null) {
+                    Optional<String> tok = t.tokens.get();
+                    if (tok.isPresent()) {
+                        return tok;
+                    }
+                }
+            }
+            return Optional.empty();
+        };
+        Supplier<Optional<String>> anyAigToken = () -> {
+            for (Tenant t : tenants.all()) {
+                if (t.aigToken() != null) {
+                    return Optional.of(t.aigToken());
+                }
+            }
+            return anyAccessToken.get();
+        };
 
         // Entity registry
         Map<String, String> outbound = new LinkedHashMap<>();
@@ -116,19 +133,20 @@ public final class Bootstrap {
             }
         }
         Registry registry;
+        Periodic crLoad = null;
+        Instant crSavedAt = null;
         if ("api".equals(c.cr.source)) {
             Map<String, Registry.Override> overrides = new LinkedHashMap<>();
             for (Config.EntityConf e : c.entities) {
                 overrides.put(e.id, new Registry.Override(e.baseUrl, outbound.get(e.id)));
             }
             registry = Registry.fromCentralRegistry(overrides);
-            Instant savedAt = null;
             if (cache != null) {
                 var snap = cache.load("cr/entities");
                 if (snap.isPresent()) {
                     try {
                         registry.restore(CacheCodec.entities(snap.get().data()));
-                        savedAt = snap.get().savedAt();
+                        crSavedAt = snap.get().savedAt();
                     } catch (RuntimeException e) {
                         org.slf4j.LoggerFactory.getLogger(Bootstrap.class).atWarn().log("persisted CR lists malformed; ignored");
                     }
@@ -136,11 +154,10 @@ public final class Bootstrap {
                 registry.onReplace(list -> cache.save("cr/entities", CacheCodec.entities(list)));
             }
             String crToken = c.secret("cr.token");
-            Periodic p = new Periodic("cr", () -> registry.loadFromCr(c.cr, mode, http,
-                    () -> crToken != null ? java.util.Optional.of(crToken) : tokens.get()),
+            crLoad = new Periodic("cr", () -> registry.loadFromCr(c.cr, mode, http,
+                    () -> crToken != null ? Optional.of(crToken) : anyAccessToken.get()),
                     c.cr.refreshSeconds, c.cr.retrySeconds);
-            closeables.add(p);
-            p.startRestored(savedAt);
+            closeables.add(crLoad);
         } else {
             registry = Registry.fromConfig(c.entities, outbound);
             if (cache != null) {
@@ -153,54 +170,24 @@ public final class Bootstrap {
         if (cache != null) {
             aig.onReplace(g -> cache.save("aig/graph", g));
         }
+        Periodic aigLoad = null;
+        Instant aigSavedAt = null;
         if ("api".equals(c.aigSource)) {
-            Instant savedAt = null;
             if (cache != null) {
                 var snap = cache.load("aig/graph");
                 if (snap.isPresent()) {
                     try {
                         aig.restore(snap.get().data());
-                        savedAt = snap.get().savedAt();
+                        aigSavedAt = snap.get().savedAt();
                     } catch (RuntimeException e) {
                         org.slf4j.LoggerFactory.getLogger(Bootstrap.class).atWarn().log("persisted AIG graph malformed; ignored");
                     }
                 }
             }
-            String aigToken = c.secret("aigToken");
-            Periodic p = new Periodic("aig", () -> aig.loadFromApi(c, http,
-                    () -> aigToken != null ? java.util.Optional.of(aigToken) : tokens.get()),
-                    c.aigRefreshSeconds, c.aigRetrySeconds);
-            closeables.add(p);
-            p.startRestored(savedAt);
+            aigLoad = new Periodic("aig", () -> aig.loadFromApi(c, http, anyAigToken), c.aigRefreshSeconds, c.aigRetrySeconds);
+            closeables.add(aigLoad);
         } else if (c.aig != null) {
             aig.loadConfigured(c.aig);
-        }
-
-        // linkedAAs
-        LinkedAAs linked = new LinkedAAs();
-        if ("api".equals(c.linkedAAs.source) && cache != null) {
-            cache.load("linkedAAs/list").ifPresent(snap -> {
-                try {
-                    linked.set(LinkedAAs.parse(Json.bytes(snap.data())));
-                } catch (RuntimeException e) {
-                    org.slf4j.LoggerFactory.getLogger(Bootstrap.class).atWarn().log("persisted linkedAAs malformed; ignored");
-                }
-            });
-            linked.onReplace(list -> {
-                var o = Json.object();
-                o.set("linkedAAs", Json.MAPPER.valueToTree(list));
-                cache.save("linkedAAs/list", o);
-            });
-        }
-        if ("api".equals(c.linkedAAs.source)) {
-            String url = c.linkedAAs.url != null ? c.linkedAAs.url : c.core.baseUrl + c.core.pathPrefix + "/linkedAAs";
-            String token = c.secret("linkedAAs.token");
-            Periodic p = new Periodic("linkedAAs", () -> linked.pull(url, token, http, Duration.ofSeconds(c.core.timeoutSeconds)),
-                    c.linkedAAs.refreshSeconds, 30);
-            p.start();
-            closeables.add(p);
-        } else if (c.linkedAAs.aas != null) {
-            linked.set(c.linkedAAs.aas);
         }
 
         // Api-key checking: issuer keys from PEM files or the issuer's JWKS URL.
@@ -239,32 +226,41 @@ public final class Bootstrap {
         });
         ApiKeyVerifier apiKeys = new ApiKeyVerifier(c.apiKey, issuerKeys, staticKeys);
 
-        Audit audit = new Audit(c.logging.audit == null || c.logging.audit, c.self.id, c.mode);
-        Stats stats = new Stats(c.self.id, c.mode, c.logging.statsIntervalSeconds);
+        // The entities: the one in the main file, or the entity folder (multi-tenant mode).
+        Tenant.Context tctx = new Tenant.Context(c, mode, multi, cache, http);
+        if (multi) {
+            TenantManager manager = new TenantManager(c, env, tenants, tctx);
+            closeables.add(manager);
+            manager.start();
+        } else {
+            Tenant t = Tenant.load(tctx, c.single, kid -> null);
+            tenants.put(t);
+            closeables.add(t);
+        }
+
+        // Shared loads start once the entities can supply a token.
+        if (crLoad != null) {
+            crLoad.startRestored(crSavedAt);
+        }
+        if (aigLoad != null) {
+            aigLoad.startRestored(aigSavedAt);
+        }
+
+        Audit audit = new Audit(c.logging.audit == null || c.logging.audit, c.mode);
+        Stats stats = new Stats(c.mode, c.logging.statsIntervalSeconds, () -> {
+            List<String> ids = tenants.ids();
+            if (multi) {
+                ids.add(Stats.UNKNOWN);
+            }
+            return ids;
+        });
         stats.start();
 
-        Gateway gw = new Gateway(c, signing, decryption, registry, aig, linked, apiKeys, tokens, iopTokens, http, audit, stats);
-        // Keys from the core: fetched at start-up and every refreshSeconds; while
-        // none is loaded the fetch is retried every 30 s. Never persisted.
-        if ("api".equals(c.self.signingKey.source)) {
-            gw.coreSigning = coreKeys(c, "signing", signing, c.self.signingKey.refreshSeconds, http, closeables);
-        }
-        if ("api".equals(c.self.decryptionKeys.source)) {
-            gw.coreDecryption = coreKeys(c, "decryption", decryption, c.self.decryptionKeys.refreshSeconds, http, closeables);
-        }
+        Gateway gw = new Gateway(c, registry, aig, apiKeys, tenants, http, audit, stats);
         GatewayServer server = new GatewayServer(c, new IopHandler(gw), new GwApiHandler(gw));
         server.start();
         closeables.add(stats);
         return new Running(gw, server, closeables);
-    }
-
-    private static CoreKeys coreKeys(Config c, String kind, KeyRing ring, int refresh, Http http, List<AutoCloseable> closeables) {
-        CoreKeys k = new CoreKeys(kind, ring, c.keyUrl(kind), c.secret("self." + kind + "Key" + ("signing".equals(kind) ? "" : "s") + ".token"),
-                http, Duration.ofSeconds(c.core.timeoutSeconds));
-        Periodic p = new Periodic(kind + "Keys", k::pull, refresh, () -> k.retrySeconds(refresh));
-        closeables.add(p);
-        p.start();
-        return k;
     }
 
     private static Instant date(String s) {

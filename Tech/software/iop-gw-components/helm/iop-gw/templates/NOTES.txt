@@ -1,4 +1,9 @@
-IOP Gateway {{ .Values.config.self.id }} ({{ .Values.config.mode }} mode) installed as {{ include "iop-gw.fullname" . }}.
+{{- if include "iop-gw.multiTenant" . -}}
+IOP Gateway ({{ .Values.config.mode }} mode, multi-tenant) installed as {{ include "iop-gw.fullname" . }}.
+  Entity files: {{ if .Values.entityFiles }}{{ $names := list }}{{ range $n, $_ := .Values.entityFiles }}{{ $names = append $names (include "iop-gw.entityFileName" $n) }}{{ end }}{{ $names | sortAlpha | join ", " }}{{ else }}none yet (the gateway starts and serves no entity until one is added){{ end }}
+{{- else -}}
+IOP Gateway {{ dig "self" "id" "" .Values.config }} ({{ .Values.config.mode }} mode) installed as {{ include "iop-gw.fullname" . }}.
+{{- end }}
 
   Public /iop listener (for other entities' gateways): service {{ include "iop-gw.fullname" . }}, port {{ .Values.service.port }}
   Internal APIs (for this entity's core only):         service {{ include "iop-gw.fullname" . }}-internal, port {{ .Values.internalService.httpsPort }} (HTTPS){{ if .Values.ports.gwApiHttp }}, {{ .Values.internalService.httpPort }} (HTTP){{ end }}
@@ -6,6 +11,13 @@ IOP Gateway {{ .Values.config.self.id }} ({{ .Values.config.mode }} mode) instal
 
 Check it is ready:  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
 Its logs (JSON):    kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }} --tail=50
+{{- with include "iop-gw.ignored" . }}
+
+Not used in this mode, left out of the gateway configuration:
+{{- range (splitList "\n" (trim .)) }}
+  - {{ . }}
+{{- end }}
+{{- end }}
 {{- if .Values.createSecrets.enabled }}
 
 WARNING: createSecrets is on. It is for testing only: use existing Secrets for real keys and secrets.

@@ -1,0 +1,47 @@
+# iop-gw-mocks for the multi-tenant example: token service, Central Registry and AIG.
+# Both FIUs are served by one gateway (gw-fiu), so they share its base URL.
+listenAddr: "0.0.0.0:9443"
+outDir: /var/lib/iop-gw-mocks/out
+tlsHosts: [mocks, localhost, 127.0.0.1]
+tokenService:
+  issuer: "https://mock-token-service.local/realms/sahamati"
+  credentialsFiles:
+    - /etc/iop-gw-mocks/generated/fiu-test-001/credentials.json
+    - /etc/iop-gw-mocks/generated/fiu-test-005/credentials.json
+    - /etc/iop-gw-mocks/generated/aa-test-002/credentials.json
+    - /etc/iop-gw-mocks/generated/aa-test-004/credentials.json
+entities:
+  - id: fiu-test-001
+    type: FIU
+    baseUrl: "http://gw-fiu:8080"
+    signingPublicKeys: [{kid: fiu-test-001-sig, file: /etc/iop-gw-mocks/generated/fiu-test-001/sig.pub.pem}]
+    encryptionPublicKeys: [{kid: fiu-test-001-enc, file: /etc/iop-gw-mocks/generated/fiu-test-001/enc.pub.pem}]
+  - id: fiu-test-005
+    type: FIU
+    baseUrl: "http://gw-fiu:8080"
+    signingPublicKeys: [{kid: fiu-test-005-sig, file: /etc/iop-gw-mocks/generated/fiu-test-005/sig.pub.pem}]
+    encryptionPublicKeys: [{kid: fiu-test-005-enc, file: /etc/iop-gw-mocks/generated/fiu-test-005/enc.pub.pem}]
+  - id: aa-test-002
+    type: AA
+    baseUrl: "http://gw-aa-test-002:8080"
+    signingPublicKeys: [{kid: aa-test-002-sig, file: /etc/iop-gw-mocks/generated/aa-test-002/sig.pub.pem}]
+    encryptionPublicKeys: [{kid: aa-test-002-enc, file: /etc/iop-gw-mocks/generated/aa-test-002/enc.pub.pem}]
+  - id: aa-test-004
+    type: AA
+    baseUrl: "http://gw-aa-test-004:8080"
+    signingPublicKeys: [{kid: aa-test-004-sig, file: /etc/iop-gw-mocks/generated/aa-test-004/sig.pub.pem}]
+    encryptionPublicKeys: [{kid: aa-test-004-enc, file: /etc/iop-gw-mocks/generated/aa-test-004/enc.pub.pem}]
+  # A registered FIP with no gateway here: AA gateways need non-empty AA, FIP and FIU lists.
+  - id: fip-test-003
+    type: FIP
+    baseUrl: "http://fip-test-003.example.invalid"
+    signingPublicKeys: [{kid: fip-test-003-sig, file: /etc/iop-gw-mocks/generated/fip-test-003/sig.pub.pem}]
+    encryptionPublicKeys: [{kid: fip-test-003-enc, file: /etc/iop-gw-mocks/generated/fip-test-003/enc.pub.pem}]
+aig:
+  fiu:
+    - fiu-test-001: [aa-test-002]     # aa-test-002 is the Connected-AA of both FIUs
+    - fiu-test-005: [aa-test-002]
+  fip:
+    - fip-test-003: [aa-test-002]     # aa-test-002 is fip-test-003's Inter-AA
+  aa:
+    - aa-test-002: [aa-test-004]      # the two AAs peer with each other

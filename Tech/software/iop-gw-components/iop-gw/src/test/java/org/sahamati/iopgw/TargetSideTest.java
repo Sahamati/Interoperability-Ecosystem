@@ -131,7 +131,7 @@ class TargetSideTest {
     void ownErrorAsTargetCarriesErrorSource() throws Exception {
         // the inner JWS is signed by the wrong participant: the Target's gateway refuses it itself
         HttpResponse<byte[]> r = toTarget(terminating(aa2.sig));
-        assertEquals(401, r.statusCode());
+        assertEquals(400, r.statusCode());
         JsonNode b = Json.parseObject(r.body());
         assertEquals("Initiator signature does not verify", Json.text(b, "errorMsg"));
         assertEquals("{\"type\":\"AA\",\"id\":\"aa-test-903\"}", b.get("errorSource").toString());
@@ -180,7 +180,7 @@ class TargetSideTest {
         };
         try {
             HttpResponse<byte[]> r = toTarget(terminating(fiu.sig));
-            assertEquals(502, r.statusCode());
+            assertEquals(500, r.statusCode());
             JsonNode b = Json.parseObject(r.body());
             assertEquals("InternalError", Json.text(b, "errorCode"));
             assertEquals("{\"type\":\"AA\",\"id\":\"aa-test-903\"}", b.get("errorSource").toString());
@@ -204,7 +204,7 @@ class TargetSideTest {
         HttpResponse<byte[]> r = post(aa5, "client_api_key", fiu, Json.bytes(env));
         assertEquals(503, r.statusCode(), new String(r.body()));
         JsonNode b = Json.parseObject(r.body());
-        assertEquals("InternalError", Json.text(b, "errorCode"));
+        assertEquals("ServiceUnavailable", Json.text(b, "errorCode"));
         assertEquals("linkedAAs not loaded", Json.text(b, "errorMsg"));
         assertTrue(aa3.core.calls.isEmpty(), "the Target is not called");
     }

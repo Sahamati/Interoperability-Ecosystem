@@ -215,6 +215,33 @@ public final class Jose {
         }
     }
 
+    /**
+     * The {@code kid} in the protected header of a compact JWE, or null when it has none.
+     * Throws when the header cannot be read.
+     */
+    public static String jweKid(String compact) throws JoseException {
+        try {
+            String kid = JWEObject.parse(compact).getHeader().getKeyID();
+            return kid == null || kid.isEmpty() ? null : kid;
+        } catch (Exception e) {
+            throw new JoseException("not a compact JWE");
+        }
+    }
+
+    /**
+     * Decrypts a compact JWE with the usable keys of {@code ring}; with {@code requireKid}, a JWE
+     * without a {@code kid}, or with one that is not in {@code ring}, cannot be decrypted.
+     */
+    public static String decrypt(String compact, KeyRing ring, boolean requireKid) throws JoseException {
+        if (requireKid) {
+            String kid = jweKid(compact);
+            if (kid == null || ring.all().stream().noneMatch(k -> kid.equals(k.kid()))) {
+                throw new JoseException("unable to decrypt");
+            }
+        }
+        return decrypt(compact, ring);
+    }
+
     /** Decrypts a compact JWE with the usable keys of {@code ring}, matched by kid. */
     public static String decrypt(String compact, KeyRing ring) throws JoseException {
         JWEObject jwe;

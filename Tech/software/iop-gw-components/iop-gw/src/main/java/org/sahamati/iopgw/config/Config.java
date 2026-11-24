@@ -12,6 +12,16 @@ import java.util.Map;
  */
 public final class Config {
     public String mode = "AA";
+    /**
+     * {@code on} or {@code off} ({@code true} / {@code false} accepted too); default {@code off}.
+     * Kept as the scalar written in the file, so that YAML 1.1 spellings such as {@code yes} are refused.
+     */
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = RawScalar.class)
+    public String multiTenant;
+    /** Multi-tenant mode: the folder holding one entity file per entity. */
+    public String entityConfigPath;
+    /** Multi-tenant mode: how often the entity folder is read again; default 60. */
+    public Integer entityRescanSeconds;
     public String listenAddr;
     public Tls tls;
     public Self self = new Self();
@@ -28,7 +38,7 @@ public final class Config {
     public String fiuAigPath = "/v1/aig/fiu";
     public String aaAigPath = "/v1/aig/aa";
     public String aigToken;
-    public Integer aigRefreshSeconds = 43200;
+    public Integer aigRefreshSeconds = 21600;
     public Integer aigRetrySeconds = 300;
     public Integer aigTimeoutSeconds = 30;
     public AigGraph aig;
@@ -134,8 +144,6 @@ public final class Config {
     public static final class TokenServiceConf {
         public String baseUrl;
         public String path = "/entity/token/generate";
-        /** Where the IopToken is generated. */
-        public String iopPath = "/entity/iopToken/generate";
         public String credentialsFile;
         public Integer refreshBeforeSeconds = 3600;
         public Integer timeoutSeconds = 30;
@@ -153,7 +161,7 @@ public final class Config {
         public String baseUrl;
         public String entityInfoPath = "/v2/entityInfo";
         public String token;
-        public Integer refreshSeconds = 14400;
+        public Integer refreshSeconds = 21600;
         public Integer retrySeconds = 300;
         public Integer timeoutSeconds = 30;
     }
@@ -175,7 +183,7 @@ public final class Config {
         public String httpListenAddr;
         public Tls tls;
         public String token;
-        public String ver = "2.0.0";
+        public String ver = "1.1.0";
         public Integer maxRetries = 3;
         public Integer maxRouteRetries = 2;
         /** FIU mode: how long /fiu-dgw/broadcast/User/discover waits for the AAs; default 10. */
@@ -202,31 +210,33 @@ public final class Config {
 
     // ---- resolved at load time (not YAML keys) ----
 
-    /** Resolved secrets, keyed by a descriptive name; never logged. */
+    /** Resolved secrets of the main file (shared settings), keyed by a descriptive name; never logged. */
     @com.fasterxml.jackson.annotation.JsonIgnore
     public final Map<String, String> secrets = new LinkedHashMap<>();
+
+    /** Single-tenant mode: the one entity's settings, read from the main file. Null in multi-tenant mode. */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public EntitySettings single;
 
     public String secret(String name) {
         return secrets.get(name);
     }
 
-    /**
-     * The URL keys of {@code kind} ("signing" or "decryption") are fetched from with source api
-     *: the key's own {@code url}, else
-     * {@code <core.keysBaseUrl or core.baseUrl><core.pathPrefix>/keys/<kind>}.
-     */
-    public String keyUrl(String kind) {
-        String explicit = "signing".equals(kind) ? self.signingKey.url : self.decryptionKeys.url;
-        if (explicit != null) {
-            return explicit;
+    /** True with {@code multiTenant: on} (or {@code true}). */
+    public boolean isMultiTenant() {
+        return "on".equals(multiTenant) || "true".equals(multiTenant);
+    }
+
+    /** A scalar as written in the YAML file ({@code on} stays {@code "on"}, not {@code true}). */
+    public static final class RawScalar extends com.fasterxml.jackson.databind.JsonDeserializer<String> {
+        @Override
+        public String deserialize(com.fasterxml.jackson.core.JsonParser p,
+                                  com.fasterxml.jackson.databind.DeserializationContext ctx) throws java.io.IOException {
+            if (!p.currentToken().isScalarValue()) {
+                p.skipChildren();
+                return "<not a scalar>";
+            }
+            return p.getText();
         }
-        String base = core.keysBaseUrl != null ? core.keysBaseUrl : core.baseUrl;
-        if (base == null) {
-            return null;
-        }
-        while (base.endsWith("/")) {
-            base = base.substring(0, base.length() - 1);
-        }
-        return base + (core.pathPrefix == null ? "" : core.pathPrefix) + "/keys/" + kind;
     }
 }

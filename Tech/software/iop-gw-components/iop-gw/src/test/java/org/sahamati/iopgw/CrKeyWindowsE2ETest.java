@@ -123,10 +123,10 @@ class CrKeyWindowsE2ETest {
     }
 
     @Test
-    void aSenderKeyPastItsValidToGets401() throws Exception {
+    void aSenderKeyPastItsValidToGets400() throws Exception {
         aa703.core.calls.clear();
         HttpResponse<byte[]> r = deliver(aa702, fiu701);
-        assertEquals(401, r.statusCode(), new String(r.body()));
+        assertEquals(400, r.statusCode(), new String(r.body()));
         assertTrue(aa703.core.calls.isEmpty());
     }
 

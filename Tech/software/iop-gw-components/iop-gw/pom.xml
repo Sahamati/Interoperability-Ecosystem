@@ -6,7 +6,7 @@
 
   <groupId>org.sahamati</groupId>
   <artifactId>iop-gw</artifactId>
-  <version>0.0.0.0</version>
+  <version>0.1.0.0</version>
   <packaging>jar</packaging>
   <name>IOP Gateway</name>
   <description>AA Interoperability (IOP) Gateway for AA, FIU and FIP modes</description>

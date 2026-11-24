@@ -4,9 +4,10 @@ The IOP Gateway lets an Account Aggregator (AA), Financial Information User (FIU
 Information Provider (FIP) exchange messages with participants it is not directly connected to,
 through other AAs. Each participant runs its own gateway next to its existing system (its core);
 the gateway signs, encrypts and routes the messages, and talks to the Sahamati token service,
-Central Registry and AA Interoperability Graph (AIG).
+Central Registry and AA Interoperability Graph (AIG). In FIU and FIP mode, one gateway can also
+serve several entities of the same type (multi-tenant mode).
 
-Version: **0.0.0.0**.
+Version: **0.1.0.0**.
 
 ## What is in this folder
 
@@ -20,6 +21,7 @@ Version: **0.0.0.0**.
 | `helm/iop-gw-mocks/` | Helm chart for the mocks. |
 | `helm/examples/mock-setup/` | Installs the mocks and four gateways, wired together, on a Kubernetes cluster. |
 | `examples/local/` | The same idea with Docker Compose, on one machine. |
+| `examples/local-multi-tenant/` | One FIU gateway serving two FIUs (multi-tenant mode), with Docker Compose. |
 
 ## Where to start
 
@@ -29,8 +31,8 @@ Version: **0.0.0.0**.
 2. **Build the images.** Only Docker is needed:
 
    ```bash
-   cd iop-gw       && docker build -t iop-gw:0.0.0.0 .
-   cd ../iop-gw-mocks && docker build -t iop-gw-mocks:0.0.0.0 .
+   cd iop-gw       && docker build -t iop-gw:0.1.0.0 .
+   cd ../iop-gw-mocks && docker build -t iop-gw-mocks:0.1.0.0 .
    ```
 
    For Kubernetes, push them to a registry your cluster can pull from.
@@ -53,13 +55,14 @@ Version: **0.0.0.0**.
 
 ## Current status
 
-- **IopToken.** The gateway sends an IopToken, obtained from the token service, on every call to
-  another gateway. The Sahamati token service does not issue IopTokens yet. Until it does, the
-  gateway cannot complete calls to other gateways on the Sahamati services. Everything can be
-  tried end to end with the mocks, which do issue them.
+- **IopToken.** In AA mode, the gateway sends an IopToken (requested from the token service with
+  `use=iop`) on every call to another gateway, and a gateway that checks api-keys with `mode: jwt`
+  refuses an AA's api-key that is not an IopToken ([SETUP.md](SETUP.md), section 5.4). Check with
+  Sahamati that the token service environment you use issues IopTokens. Everything can be tried
+  end to end with the mocks, which do issue them.
+- **Multi-tenant mode** (several FIUs or FIPs on one gateway) is set up as described in
+  [SETUP.md](SETUP.md), section 5.12, on Helm, Docker or plain Java.
 - **Images** are built from this folder (step 2); there is no published image yet.
-- **Checking that a received api-key is an IopToken** (rather than an access token) is not yet
-  specified, and so not yet enforced ([SETUP.md](SETUP.md), section 12).
 
 ## Requirements
 

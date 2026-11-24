@@ -273,7 +273,7 @@ class UserDiscoveryE2ETest {
         // token, Correlation-Id and body checks
         Map<String, String> noToken = broadcastHeaders(UUID.randomUUID().toString());
         noToken.remove("Authorization");
-        assertEquals(401, net.call(fiu, "POST", "/fiu-dgw/broadcast/User/discover", noToken, request("t")).statusCode());
+        assertEquals(400, net.call(fiu, "POST", "/fiu-dgw/broadcast/User/discover", noToken, request("t")).statusCode());
         Map<String, String> noCorr = broadcastHeaders("not-a-uuid");
         assertEquals(400, net.call(fiu, "POST", "/fiu-dgw/broadcast/User/discover", noCorr, request("t")).statusCode());
         assertEquals(400, net.call(fiu, "POST", "/fiu-dgw/broadcast/User/discover",

@@ -89,6 +89,23 @@ class RegistryTest {
         assertFalse(r.get("aa-test-003").orElseThrow().interop());
     }
 
+    /** A v2 entry is preferred, then v1, then an unprefixed URL; an invalid entry is skipped. */
+    @Test
+    void versionedBaseUrlFallsBackPastAnInvalidEntry() throws Exception {
+        lists.put("AA", "[" + entry("aa-test-002", "v2:not-a-url, v1:https://aa-test-002.example.invalid/v1", "true") + ","
+                + entry("aa-test-003", "v1:https://aa-test-003.example.invalid/v1, v2:https://aa-test-003.example.invalid/v2", "true") + ","
+                + entry("aa-test-004", "https://aa-test-004.example.invalid, v1:ftp://aa-test-004.example.invalid", "true") + ","
+                + entry("aa-test-005", "v2:not-a-url, v1:also-not-a-url", "true") + ","
+                + entry("aa-test-006", "v3:https://aa-test-006.example.invalid/v3, https://aa-test-006.example.invalid", "true") + "]");
+        Registry r = Registry.fromCentralRegistry(Map.of());
+        assertTrue(load(r));
+        assertEquals("https://aa-test-002.example.invalid/v1", r.get("aa-test-002").orElseThrow().baseUrl(), "invalid v2 falls back to v1");
+        assertEquals("https://aa-test-003.example.invalid/v2", r.get("aa-test-003").orElseThrow().baseUrl(), "v2 preferred");
+        assertEquals("https://aa-test-004.example.invalid", r.get("aa-test-004").orElseThrow().baseUrl(), "an invalid v1 falls back to the unprefixed URL");
+        assertEquals(null, r.get("aa-test-005").orElseThrow().baseUrl(), "no valid entry: no usable baseUrl");
+        assertEquals("https://aa-test-006.example.invalid", r.get("aa-test-006").orElseThrow().baseUrl(), "other prefixes are ignored");
+    }
+
     @Test
     void absentInteropMeansNotReady() throws Exception {
         lists.put("AA", "[" + entry("aa-test-002", "https://aa-test-002.example.invalid", null) + "]");

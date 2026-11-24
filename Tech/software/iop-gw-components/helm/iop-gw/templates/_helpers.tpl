@@ -23,7 +23,59 @@ to root, and the gateway creates its cache directory itself (mode 0700).
 {{- define "iop-gw.config" -}}
 {{- $c := deepCopy .Values.config -}}
 {{- if .Values.cache.persistent -}}{{- $_ := set $c "cache" (dict "dir" "/var/lib/iop-gw/cache/store") -}}{{- end -}}
+{{- if include "iop-gw.multiTenant" . -}}
+{{- /* multi-tenant: the per-entity settings are in the entity files, never in the main file */ -}}
+{{- range list "self" "core" "linkedAAs" "hopPreference" "aigToken" }}{{ $_ := unset $c . }}{{ end -}}
+{{- if kindIs "map" $c.tokenService }}{{ $_ := unset $c.tokenService "credentialsFile" }}{{ end -}}
+{{- if kindIs "map" $c.gwApi }}{{ $_ := unset $c.gwApi "token" }}{{ end -}}
+{{- $_ := set $c "entityConfigPath" "/etc/iop-gw/entities" -}}
+{{- else if include "iop-gw.multiTenantAsked" . -}}
+{{- $_ := unset $c "multiTenant" -}}
+{{- end -}}
 {{- toYaml $c -}}
+{{- end -}}
+
+{{/*
+"true" when config.multiTenant is on (on and true are accepted; Helm reads an
+unquoted on as true).
+*/}}
+{{- define "iop-gw.multiTenant" -}}
+{{- if include "iop-gw.multiTenantAsked" . -}}{{- if ne (toString .Values.config.mode) "AA" -}}true{{- end -}}{{- end -}}
+{{- end -}}
+
+{{/* "true" when config.multiTenant is set to on (or true), whatever the mode. */}}
+{{- define "iop-gw.multiTenantAsked" -}}
+{{- $v := toString (default "off" .Values.config.multiTenant) -}}
+{{- if or (eq $v "true") (eq $v "on") -}}true{{- end -}}
+{{- end -}}
+
+{{/* The entity file name: .yaml is added when the name has no .yaml or .yml ending. */}}
+{{- define "iop-gw.entityFileName" -}}
+{{- if or (hasSuffix ".yaml" .) (hasSuffix ".yml" .) -}}{{ . }}{{- else -}}{{ . }}.yaml{{- end -}}
+{{- end -}}
+
+{{/*
+The settings this install leaves out because the mode does not use them, one per
+line: shown in the install notes.
+*/}}
+{{- define "iop-gw.ignored" -}}
+{{- $c := .Values.config -}}
+{{- if and (include "iop-gw.multiTenantAsked" .) (eq (toString $c.mode) "AA") }}
+config.multiTenant: AA mode is always single-tenant
+{{- end }}
+{{- if include "iop-gw.multiTenant" . }}
+{{- if dig "self" "id" "" $c }}
+config.self: each entity's settings come from its entity file
+{{- end }}
+{{- if dig "core" "baseUrl" "" $c }}
+config.core: each entity's core is set in its entity file
+{{- end }}
+{{- if dig "linkedAAs" "aas" (list) $c }}
+config.linkedAAs: each entity's linked AAs are set in its entity file
+{{- end }}
+{{- else if .Values.entityFiles }}
+entityFiles: used only with config.multiTenant: on (FIU or FIP mode)
+{{- end }}
 {{- end -}}
 
 {{- define "iop-gw.envSecret" -}}
@@ -54,6 +106,8 @@ naming each one. (The gateway checks its whole configuration again at start-up.)
 {{- $c := .Values.config -}}
 {{- $missing := list -}}
 {{- if not .Values.image.repository }}{{ $missing = append $missing "image.repository: where the iop-gw image is (your registry)" }}{{ end -}}
+{{- if not (include "iop-gw.multiTenant" .) -}}
+{{- /* single-tenant: the main file describes the one entity (multi-tenant needs nothing more here) */ -}}
 {{- if not (dig "self" "id" "" $c) }}{{ $missing = append $missing "config.self.id: your Central Registry id" }}{{ end -}}
 {{- if eq (dig "self" "signingKey" "source" "file" $c) "file" -}}
 {{- if not (dig "self" "signingKey" "kid" "" $c) }}{{ $missing = append $missing "config.self.signingKey.kid: the key id of your signing key in the Central Registry" }}{{ end -}}
@@ -64,13 +118,14 @@ naming each one. (The gateway checks its whole configuration again at start-up.)
 {{- range $keys }}{{ if not .kid }}{{ $missing = append $missing "config.self.decryptionKeys.keys[].kid: the key id of each decryption key in the Central Registry" }}{{ end }}{{ end -}}
 {{- end -}}
 {{- if not (dig "core" "baseUrl" "" $c) }}{{ $missing = append $missing "config.core.baseUrl: where your core is reached" }}{{ end -}}
+{{- if and (eq (dig "linkedAAs" "source" "config" $c) "config") (not (dig "linkedAAs" "aas" (list) $c)) }}{{ $missing = append $missing "config.linkedAAs.aas: the AAs you are linked to" }}{{ end -}}
+{{- end -}}
 {{- if and (hasKey $c "tokenService") (not (dig "tokenService" "baseUrl" "" $c)) }}{{ $missing = append $missing "config.tokenService.baseUrl: the token service" }}{{ end -}}
 {{- if eq (dig "apiKey" "mode" "jwt" $c) "jwt" -}}
 {{- if and (not (dig "apiKey" "issuerKeysUrl" "" $c)) (not (dig "apiKey" "issuerPublicKeys" (list) $c)) }}{{ $missing = append $missing "config.apiKey.issuerKeysUrl: the token service's JWKS URL" }}{{ end -}}
 {{- end -}}
 {{- if and (eq (dig "cr" "source" "config" $c) "api") (not (dig "cr" "baseUrl" "" $c)) }}{{ $missing = append $missing "config.cr.baseUrl: the Central Registry" }}{{ end -}}
 {{- if and (eq (default "config" $c.aigSource) "api") (not $c.aigBaseUrl) }}{{ $missing = append $missing "config.aigBaseUrl: the AIG" }}{{ end -}}
-{{- if and (eq (dig "linkedAAs" "source" "config" $c) "config") (not (dig "linkedAAs" "aas" (list) $c)) }}{{ $missing = append $missing "config.linkedAAs.aas: the AAs you are linked to" }}{{ end -}}
 {{- if $missing -}}
 {{- fail (printf "\n\nThese values must be set (see SETUP.md, section 5):\n  - %s\n" (join "\n  - " $missing)) -}}
 {{- end -}}

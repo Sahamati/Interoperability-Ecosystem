@@ -162,7 +162,7 @@ class CoreKeysE2ETest {
     void keysFetchedFromTheCoreSignAndDecryptEndToEnd() throws Exception {
         HttpResponse<byte[]> r = consent(fiu);
         assertEquals(200, r.statusCode(), new String(r.body()));
-        assertEquals(List.of(fiu.id + "-sig"), fiu.gw.gateway.signing.all().stream().map(KeyRing.PrivKey::kid).toList());
+        assertEquals(List.of(fiu.id + "-sig"), fiu.gw.gateway.single().signing.all().stream().map(KeyRing.PrivKey::kid).toList());
     }
 
     @Test
@@ -198,18 +198,18 @@ class CoreKeysE2ETest {
         assertTrue(new String(r.body()).contains("key push is accepted only over HTTPS"));
         noHeaders(r);
 
-        // GET on the push path: 405; no token: 401; invalid set: 400 - all header-less
+        // GET on the push path: 405; no token: 400; invalid set: 400 - all header-less
         r = net.callHttps(fiu, "GET", "/fiu-dgw/keys/signing", Map.of("Authorization", "Bearer " + TestNet.GW_TOKEN), null);
         assertEquals(405, r.statusCode());
         noHeaders(r);
         r = net.callHttps(fiu, "POST", "/fiu-dgw/keys/signing", Map.of("Correlation-Id", UUID.randomUUID().toString()), good);
-        assertEquals(401, r.statusCode());
+        assertEquals(400, r.statusCode());
         noHeaders(r);
         r = push(fiu, "signing", set(key("dup", newPem(), true, "2026-01-01", null), key("dup", newPem(), true, "2026-01-01", null)));
         assertEquals(400, r.statusCode());
         noHeaders(r);
         assertEquals("", Json.text(Json.parseObject(r.body()), "txnid"), "a key set has no txnid");
-        assertEquals(List.of(fiu.id + "-sig"), fiu.gw.gateway.signing.all().stream().map(KeyRing.PrivKey::kid).toList(),
+        assertEquals(List.of(fiu.id + "-sig"), fiu.gw.gateway.single().signing.all().stream().map(KeyRing.PrivKey::kid).toList(),
                 "an invalid set leaves the current one");
 
         // another mode's family is not served (404); neither is a file-sourced key type
@@ -231,7 +231,7 @@ class CoreKeysE2ETest {
         assertEquals("rotated-sig", k.get("kid").asText());
         assertTrue(k.get("usable").asBoolean());
         assertTrue(k.get("expiry").isNull());
-        assertEquals(List.of("rotated-sig"), fiu.gw.gateway.signing.all().stream().map(KeyRing.PrivKey::kid).toList());
+        assertEquals(List.of("rotated-sig"), fiu.gw.gateway.single().signing.all().stream().map(KeyRing.PrivKey::kid).toList());
 
         // a set with only a future key is accepted, but nothing can be signed (500)
         r = push(fiu, "signing", set(key("future-sig", newPem(), true, "2099-01-01", null)));

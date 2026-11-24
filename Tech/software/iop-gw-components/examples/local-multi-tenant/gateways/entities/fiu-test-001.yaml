@@ -1,0 +1,9 @@
+# Entity file of fiu-test-001, served by gw-fiu (multiTenant: on).
+entityId: fiu-test-001
+enable: true
+signingKey: {source: file, kid: fiu-test-001-sig, file: /etc/iop-gw/generated/fiu-test-001/sig.pem}
+decryptionKeys: {source: file, keys: [{kid: fiu-test-001-enc, file: /etc/iop-gw/generated/fiu-test-001/enc.pem}]}
+tokenService: {credentialsFile: /etc/iop-gw/generated/fiu-test-001/credentials.json}
+core: {baseUrl: "http://core-fiu-test-001:8090", timeoutSeconds: 10}
+gwApi: {token: "${IOPGW_GWAPI_TOKEN_FIU_TEST_001}"}
+linkedAAs: {source: config, aas: [aa-test-002]}

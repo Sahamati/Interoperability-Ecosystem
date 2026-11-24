@@ -132,6 +132,8 @@ public final class TestNet implements AutoCloseable {
         /** Entities this party does not know (to provoke InvalidRoute). */
         public final List<String> unknown = new ArrayList<>();
         public final Map<String, Boolean> interop = new HashMap<>();
+        /** Set when this entity is served by a multi-tenant gateway (it then has no gateway of its own). */
+        public Host host;
 
         Party(String id, String mode, String type) throws Exception {
             this.id = id;
@@ -162,11 +164,28 @@ public final class TestNet implements AutoCloseable {
         }
 
         public String publicUrl() {
-            return "http://127.0.0.1:" + publicPort;
+            return "http://127.0.0.1:" + (host != null ? host.publicPort : publicPort);
         }
 
         public String gwUrl() {
-            return "http://127.0.0.1:" + gwHttpPort;
+            return "http://127.0.0.1:" + (host != null ? host.gwHttpPort : gwHttpPort);
+        }
+
+        int httpsPort() {
+            return host != null ? host.gwHttpsPort : gwHttpsPort;
+        }
+
+        /** The env variable holding this entity's internal API token (multi-tenant hosts). */
+        public String gwTokenEnv() {
+            return "GWT_" + id.toUpperCase().replace('-', '_');
+        }
+
+        public String gwToken() {
+            return "gw-token-of-" + id;
+        }
+
+        public PubKey encPubKey() {
+            return new PubKey(id + "-enc", encPub);
         }
 
         String yaml(List<Party> all) {
@@ -259,8 +278,117 @@ public final class TestNet implements AutoCloseable {
         }
     }
 
+    /**
+     * A multi-tenant gateway ({@code multiTenant: on}) serving several entities of its mode, each
+     * with its own entity file and fake core.
+     */
+    public final class Host {
+        public final String name;
+        public final String mode;
+        public final int publicPort = freePort();
+        public final int gwHttpsPort = freePort();
+        public final int gwHttpPort = freePort();
+        public final Path entityDir;
+        public final List<Party> entities = new ArrayList<>();
+        public Bootstrap.Running gw;
+        public String aigYaml = "";
+        /** Edits of the generated entity file, per entity id. */
+        public final Map<String, java.util.function.UnaryOperator<String>> entityEdit = new HashMap<>();
+        /** Entity files not to write at start-up (the test writes them itself). */
+        public final java.util.Set<String> skipFiles = new java.util.HashSet<>();
+        public java.util.function.UnaryOperator<String> mainEdit = y -> y;
+        public int rescanSeconds = 1;
+
+        Host(String name, String mode) throws IOException {
+            this.name = name;
+            this.mode = mode;
+            this.entityDir = Files.createDirectories(dir.resolve("entities-" + name));
+        }
+
+        public String publicUrl() {
+            return "http://127.0.0.1:" + publicPort;
+        }
+
+        public String gwUrl() {
+            return "http://127.0.0.1:" + gwHttpPort;
+        }
+
+        public Party entity(String id) {
+            return entities.stream().filter(p -> p.id.equals(id)).findFirst().orElseThrow();
+        }
+
+        String mainYaml(List<Party> all) {
+            StringBuilder y = new StringBuilder();
+            y.append("mode: ").append(mode).append('\n');
+            y.append("multiTenant: on\n");
+            y.append("entityConfigPath: \"").append(entityDir).append("\"\n");
+            y.append("entityRescanSeconds: ").append(rescanSeconds).append('\n');
+            y.append("logging: {level: WARN, audit: true, statsIntervalSeconds: 0}\n");
+            y.append("listenAddr: \"127.0.0.1:").append(publicPort).append("\"\n");
+            y.append("apiKey:\n  mode: static\n  static:\n");
+            for (Party p : all) {
+                if (p.host != this) {
+                    y.append("    \"${").append(p.envKey()).append("}\": ").append(p.id).append('\n');
+                }
+            }
+            y.append("jws: {algorithm: RS256}\n");
+            y.append("cr: {source: config}\n");
+            y.append("entities:\n");
+            for (Party p : all) {
+                if (p.host == this || !"AA".equals(p.type)) {
+                    continue;
+                }
+                y.append("  - id: ").append(p.id).append('\n');
+                y.append("    type: AA\n");
+                y.append("    baseUrl: \"").append(p.publicUrl()).append("\"\n");
+                y.append("    signingPublicKeys: [{kid: ").append(p.id).append("-sig, file: ").append(dir.resolve(p.id + "-sig.pub.pem")).append("}]\n");
+                y.append("    encryptionPublicKeys: [{kid: ").append(p.id).append("-enc, file: ").append(dir.resolve(p.id + "-enc.pub.pem")).append("}]\n");
+            }
+            y.append("aigSource: config\n");
+            y.append(aigYaml.isEmpty() ? "aig:\n  aa:\n    - aa-unused: [aa-unused-2]\n" : aigYaml);
+            y.append("gwApi:\n  listenAddr: \"127.0.0.1:").append(gwHttpsPort).append("\"\n");
+            y.append("  httpListenAddr: \"127.0.0.1:").append(gwHttpPort).append("\"\n");
+            y.append("  tls: {certFile: ").append(dir.resolve("tls.crt")).append(", keyFile: ").append(dir.resolve("tls.key")).append("}\n");
+            y.append("forwarding: {timeoutSeconds: 3}\n");
+            return mainEdit.apply(y.toString());
+        }
+
+        /** The entity file of {@code p}: file keys, a fixed api-key, its own core and internal API token. */
+        public String entityYaml(Party p) {
+            StringBuilder y = new StringBuilder();
+            y.append("entityId: ").append(p.id).append('\n');
+            y.append("enable: true\n");
+            y.append("signingKey: {source: file, kid: ").append(p.id).append("-sig, file: ").append(dir.resolve(p.id + "-sig.pem")).append("}\n");
+            y.append("decryptionKeys: {source: file, keys: [{kid: ").append(p.id).append("-enc, file: ")
+                    .append(dir.resolve(p.id + "-enc.pem")).append("}]}\n");
+            y.append("outboundApiKey: \"${").append(p.envKey()).append("}\"\n");
+            y.append("core: {baseUrl: \"http://127.0.0.1:").append(p.corePort).append("\", timeoutSeconds: 5}\n");
+            y.append("gwApi: {token: \"${").append(p.gwTokenEnv()).append("}\"}\n");
+            y.append("linkedAAs: {source: config, aas: [").append(String.join(", ", p.linked.isEmpty() ? List.of("none") : p.linked)).append("]}\n");
+            return entityEdit.getOrDefault(p.id, x -> x).apply(y.toString());
+        }
+
+        /** Writes (or replaces) an entity file. */
+        public Path writeEntity(String fileName, String yaml) throws IOException {
+            Path f = entityDir.resolve(fileName);
+            Path tmp = entityDir.resolve("." + fileName + ".tmp");
+            Files.writeString(tmp, yaml);
+            Files.move(tmp, f, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            return f;
+        }
+
+        public Path writeEntity(Party p) throws IOException {
+            return writeEntity(p.id + ".yaml", entityYaml(p));
+        }
+
+        public org.sahamati.iopgw.tenant.Tenants tenants() {
+            return gw.gateway.tenants;
+        }
+    }
+
     public final Path dir;
     private final Map<String, Party> parties = new LinkedHashMap<>();
+    private final Map<String, Host> hosts = new LinkedHashMap<>();
     private final Map<String, String> env = new ConcurrentHashMap<>();
 
     public TestNet() throws Exception {
@@ -280,6 +408,67 @@ public final class TestNet implements AutoCloseable {
         return parties.get(id);
     }
 
+    /** A multi-tenant gateway in {@code mode} serving the entities {@code ids} (all of type {@code mode}). */
+    public Host addHost(String name, String mode, String... ids) throws Exception {
+        Host h = new Host(name, mode);
+        for (String id : ids) {
+            Party p = add(id, mode, mode);
+            p.host = h;
+            env.put(p.gwTokenEnv(), p.gwToken());
+            h.entities.add(p);
+        }
+        hosts.put(name, h);
+        return h;
+    }
+
+    /** One more entity for {@code h}, not written to its folder (the test writes it when it wants). */
+    public Party addEntity(Host h, String id) throws Exception {
+        Party p = add(id, h.mode, h.mode);
+        p.host = h;
+        env.put(p.gwTokenEnv(), p.gwToken());
+        h.entities.add(p);
+        h.skipFiles.add(id);
+        return p;
+    }
+
+    public Config config(Host h) throws ConfigLoader.ConfigException {
+        return new ConfigLoader(env).parse(h.mainYaml(new ArrayList<>(parties.values())));
+    }
+
+    /** Starts a host: its entities' fake cores, their entity files, and the gateway. */
+    public void start(Host h) throws Exception {
+        for (Party p : h.entities) {
+            if (p.core == null) {
+                p.core = new FakeCore(p.corePort);
+            }
+            if (!h.skipFiles.contains(p.id)) {
+                h.writeEntity(p);
+            }
+        }
+        h.gw = Bootstrap.start(config(h), gatewayHttp(), env);
+    }
+
+    /** Waits until {@code check} holds (rescans run every second in the tests). */
+    public static void await(String what, java.util.function.BooleanSupplier check) throws InterruptedException {
+        long deadline = System.nanoTime() + 15_000_000_000L;
+        while (!check.getAsBoolean()) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("timed out waiting for: " + what);
+            }
+            Thread.sleep(100);
+        }
+    }
+
+    /** Internal API headers of a hosted entity: its own token and Core-Entity-Id. */
+    public static Map<String, String> entityHeaders(Party p, String targetType, String targetId, String correlationId) {
+        Map<String, String> h = new LinkedHashMap<>();
+        h.put("Authorization", "Bearer " + p.gwToken());
+        h.put("Core-Entity-Id", p.id);
+        h.put("Target-Entity", "{\"type\":\"" + targetType + "\",\"id\":\"" + targetId + "\"}");
+        h.put("Correlation-Id", correlationId);
+        return h;
+    }
+
     public Map<String, String> env() {
         return env;
     }
@@ -291,7 +480,12 @@ public final class TestNet implements AutoCloseable {
     /** Starts every party's fake core and gateway. */
     public void start() throws Exception {
         for (Party p : parties.values()) {
-            start(p);
+            if (p.host == null) {
+                start(p);
+            }
+        }
+        for (Host h : hosts.values()) {
+            start(h);
         }
     }
 
@@ -345,7 +539,7 @@ public final class TestNet implements AutoCloseable {
     public HttpResponse<byte[]> callHttps(Party p, String method, String path, Map<String, String> headers, String body)
             throws Exception {
         HttpClient c = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).sslContext(ssl()).build();
-        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("https://127.0.0.1:" + p.gwHttpsPort + path)).timeout(Duration.ofSeconds(30));
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("https://127.0.0.1:" + p.httpsPort() + path)).timeout(Duration.ofSeconds(30));
         headers.forEach(b::header);
         b.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
         return c.send(b.build(), HttpResponse.BodyHandlers.ofByteArray());
@@ -381,12 +575,28 @@ public final class TestNet implements AutoCloseable {
 
     // ---------------- helpers ----------------
 
+    private static final java.util.Set<Integer> HANDED_OUT = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
+     * A free port below the usual ephemeral range (32768+). Ports are reserved up front and bound
+     * later; an ephemeral port could meanwhile be taken by an outgoing connection.
+     */
     static int freePort() {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
+        java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
+        for (int i = 0; i < 500; i++) {
+            int port = rnd.nextInt(20000, 32000);
+            if (!HANDED_OUT.add(port)) {
+                continue;
+            }
+            try (ServerSocket s = new ServerSocket()) {
+                s.setReuseAddress(false);
+                s.bind(new InetSocketAddress("127.0.0.1", port));
+                return port;
+            } catch (IOException busy) {
+                // try another
+            }
         }
+        throw new IllegalStateException("no free port found");
     }
 
     private static KeyPair rsa() throws Exception {
@@ -424,6 +634,11 @@ public final class TestNet implements AutoCloseable {
 
     @Override
     public void close() {
+        for (Host h : hosts.values()) {
+            if (h.gw != null) {
+                h.gw.close();
+            }
+        }
         for (Party p : parties.values()) {
             if (p.gw != null) {
                 p.gw.close();

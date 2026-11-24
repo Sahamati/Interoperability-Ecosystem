@@ -29,12 +29,15 @@ public final class MockConfig {
     public String outDir = "./mock-out";
     public TokenService tokenService = new TokenService();
     public List<Entity> entities = new ArrayList<>();
+    /** Users who may get a user token (needed to publish an AA's AIG links). */
+    public List<User> users = new ArrayList<>();
     public Graph aig = new Graph();
 
     public static final class TokenService {
+        /** Where entity tokens are generated: the access token, and the IopToken with the form field use=iop. */
         public String path = "/entity/token/generate";
-        /** Where the IopToken is generated. */
-        public String iopPath = "/entity/iopToken/generate";
+        /** Where a user token is generated (form username, password). */
+        public String userPath = "/user/token/generate";
         public String issuer = "https://mock-token-service.local/realms/sahamati";
         public Integer ttlSeconds = 86400; // as the Sahamati token service
         /** Credentials files of the entities that may get a token. */
@@ -60,6 +63,18 @@ public final class MockConfig {
         public Boolean interop = true;
         public List<KeyFile> signingPublicKeys = new ArrayList<>();
         public List<KeyFile> encryptionPublicKeys = new ArrayList<>();
+    }
+
+    /**
+     * A user of the token service. As in the Sahamati token service, a user is linked to entities,
+     * each with the user's roles there; the user token carries this as its {@code entity_meta} claim.
+     */
+    public static final class User {
+        public String username;
+        /** A file holding only the user's password (synthetic), kept out of this configuration. */
+        public String passwordFile;
+        /** Entity id → the user's roles for that entity, e.g. {@code aa-test-002: [admin]}. */
+        public Map<String, List<String>> entities = new java.util.LinkedHashMap<>();
     }
 
     public static final class KeyFile {
@@ -90,6 +105,11 @@ public final class MockConfig {
         for (Entity e : c.entities) {
             if (e.id == null || !List.of("AA", "FIU", "FIP").contains(e.type)) {
                 throw new IOException("entities: every entity needs an id and a type of AA, FIU or FIP");
+            }
+        }
+        for (User u : c.users) {
+            if (u.username == null || u.username.isEmpty() || u.passwordFile == null || u.entities == null || u.entities.isEmpty()) {
+                throw new IOException("users: every user needs a username, a passwordFile and at least one entity");
             }
         }
         return c;

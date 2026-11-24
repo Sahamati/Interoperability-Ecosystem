@@ -10,8 +10,11 @@ import org.sahamati.iopgw.http.Json;
 import org.sahamati.iopgw.model.Roles;
 import org.sahamati.iopgw.model.Roles.EntityType;
 import org.sahamati.iopgw.obs.Audit;
+import org.sahamati.iopgw.obs.Stats;
 import org.sahamati.iopgw.obs.Stats.C;
+import org.sahamati.iopgw.sources.ApiKeyVerifier;
 import org.sahamati.iopgw.sources.Registry.Entity;
+import org.sahamati.iopgw.tenant.Tenant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,12 +47,18 @@ public final class IopHandler {
         boolean terminating; // set once this gateway acts as the Target: its error replies then carry errorSource
         String initiator;
         String target;
+        /** The entity the call is for: known from the start in single-tenant mode, from the kid or Target-Id otherwise. */
+        Tenant tenant;
+        final Stats.Counts counts = new Stats.Counts();
         long started = System.nanoTime();
     }
 
     public Msg.Resp handle(Msg.Req req) {
         Ctx ctx = new Ctx();
-        gw.stats.inc(C.iopReq);
+        if (!gw.multiTenant()) {
+            ctx.tenant = gw.single(); // single-tenant: every call is for the one entity
+        }
+        ctx.counts.inc(C.iopReq);
         Map<String, Object> reqFields = new LinkedHashMap<>();
         reqFields.put("method", req.method);
         reqFields.put("path", req.path);
@@ -63,16 +72,16 @@ public final class IopHandler {
         reqFields.put("encryptedPayloadBytes", early != null && early.hasNonNull("encryptedPayload") ? early.get("encryptedPayload").asText().length() : null);
         reqFields.put("bodyBytes", req.body.length);
         reqFields.put("headers", Audit.headers(req.headers));
-        gw.audit.record("request", "iop-in", null, reqFields);
+        gw.audit.record("request", "iop-in", null, gw.recordId(ctx.tenant), reqFields);
         Msg.Resp resp;
         try {
             resp = pipeline(req, ctx);
         } catch (GwError e) {
             resp = errorResponse(e, ctx);
         }
-        gw.stats.inc(C.iopResp);
-        gw.stats.inc(resp.status < 400 ? C.iopRespOk : C.iopRespErr);
-        gw.stats.inc(resp.status < 400 ? C.success : C.failure);
+        ctx.counts.inc(C.iopResp);
+        ctx.counts.inc(resp.status < 400 ? C.iopRespOk : C.iopRespErr);
+        ctx.counts.inc(resp.status < 400 ? C.success : C.failure);
         Map<String, Object> f = new LinkedHashMap<>();
         f.put("method", req.method);
         f.put("path", req.path);
@@ -92,7 +101,8 @@ public final class IopHandler {
         }
         f.put("ms", (System.nanoTime() - ctx.started) / 1_000_000);
         f.put("headers", Audit.headers(resp.headers));
-        gw.audit.record("response", "iop-in", ctx.role, f);
+        gw.audit.record("response", "iop-in", ctx.role, gw.recordId(ctx.tenant), f);
+        gw.stats.add(gw.recordId(ctx.tenant), ctx.counts);
         return resp;
     }
 
@@ -108,6 +118,9 @@ public final class IopHandler {
         if (req.tooLarge) {
             throw new GwError(413, GwError.INVALID_REQUEST, "body too large");
         }
+        if (gw.multiTenant() && gw.tenants.count() == 0) {
+            throw new GwError(503, GwError.SERVICE_UNAVAILABLE, "no entity loaded");
+        }
         List<String> present = new ArrayList<>();
         for (String k : Roles.ALL_KEYS) {
             if (req.header(k) != null) {
@@ -115,7 +128,7 @@ public final class IopHandler {
             }
         }
         if (present.size() != 1) {
-            throw new GwError(401, GwError.INVALID_SECURITY, present.isEmpty() ? "role api-key header missing" : "more than one role api-key header");
+            throw new GwError(400, GwError.INVALID_SECURITY, present.isEmpty() ? "role api-key header missing" : "more than one role api-key header");
         }
         String key = present.get(0);
         if (!accepted.contains(key)) {
@@ -123,22 +136,27 @@ public final class IopHandler {
         }
         Roles.Leg leg = Roles.leg(gw.mode, key);
         if (!gw.registry.loaded()) {
-            throw new GwError(503, GwError.INTERNAL, "entity registry not loaded");
+            throw new GwError(503, GwError.SERVICE_UNAVAILABLE, "entity registry not loaded");
         }
-        String senderId = gw.apiKeys.senderId(req.header(key))
-                .orElseThrow(() -> new GwError(401, GwError.INVALID_SECURITY, "invalid api-key"));
+        ApiKeyVerifier.Caller caller = gw.apiKeys.verify(req.header(key))
+                .orElseThrow(() -> new GwError(400, GwError.INVALID_SECURITY, "invalid api-key"));
+        String senderId = caller.senderId();
         Entity sender = gw.registry.get(senderId)
-                .orElseThrow(() -> new GwError(401, GwError.INVALID_SECURITY, "sender not registered"));
+                .orElseThrow(() -> new GwError(400, GwError.INVALID_SECURITY, "sender not registered"));
         ctx.peer = senderId;
         if (sender.type() != Roles.KEY_OWNER.get(key)) {
             throw new GwError(403, GwError.INVALID_SECURITY, "sender type does not own this api-key header");
         }
         String sig = req.header("x-jws-signature");
         if (sig == null || sig.isEmpty()) {
-            throw new GwError(401, GwError.INVALID_SECURITY, "x-jws-signature missing");
+            throw new GwError(400, GwError.INVALID_SECURITY, "x-jws-signature missing");
         }
         if (!Jose.verifyDetached(sig, req.body, sender.signingKeys())) {
-            throw new GwError(401, GwError.SIG_MISMATCH, "x-jws-signature does not verify");
+            throw new GwError(400, GwError.SIG_MISMATCH, "x-jws-signature does not verify");
+        }
+        if (Roles.IOP_TOKEN_KEYS.contains(key) && !caller.iopToken()) {
+            // an AA role api-key must be an IopToken; checked after the api-key and signature.
+            throw new GwError(400, GwError.INVALID_SECURITY, "api-key is not an IopToken");
         }
         ObjectNode env = Json.parseObject(req.body);
         if (env == null || Json.text(env, "txnid") == null) {
@@ -169,6 +187,10 @@ public final class IopHandler {
     private Msg.Resp terminate(Msg.Req req, Ctx ctx, ObjectNode env, Roles.Leg leg, Entity sender, boolean heartbeat)
             throws GwError {
         ctx.terminating = true;
+        if (ctx.tenant == null) {
+            ctx.tenant = entityOf(req, env, heartbeat);
+        }
+        Tenant t = ctx.tenant;
         JsonNode init = env.get("Initiator");
         String initType = Json.text(init, "type");
         String initId = Json.text(init, "id");
@@ -195,11 +217,14 @@ public final class IopHandler {
         byte[] payload = null;
         String innerJws = null;
         if (!heartbeat) {
-            if (!gw.decryption.loaded()) {
-                throw new GwError(503, GwError.INTERNAL, "decryption keys not loaded");
+            if (!t.decryption.loaded()) {
+                throw new GwError(503, GwError.SERVICE_UNAVAILABLE, "decryption keys not loaded");
+            }
+            if (kidOf(payloadNode.asText()) == null) {
+                throw new GwError(400, GwError.INVALID_REQUEST, NO_KID); // both modes
             }
             try {
-                innerJws = Jose.decrypt(payloadNode.asText(), gw.decryption);
+                innerJws = Jose.decrypt(payloadNode.asText(), t.decryption, true);
             } catch (Jose.JoseException e) {
                 throw new GwError(400, GwError.INVALID_REQUEST, "encryptedPayload not decryptable");
             }
@@ -208,18 +233,18 @@ public final class IopHandler {
             }
             payload = Jose.verifyCompact(innerJws, initiator.signingKeys());
             if (payload == null) {
-                throw new GwError(401, GwError.SIG_MISMATCH, "Initiator signature does not verify");
+                throw new GwError(400, GwError.SIG_MISMATCH, "Initiator signature does not verify");
             }
         }
 
         // Call the core.
         String api = req.path.substring("/iop".length());
-        String url = gw.config.core.baseUrl + gw.corePrefix() + api;
-        Map<String, String> h = new LinkedHashMap<>();
+        String url = t.coreBaseUrl() + t.corePrefix() + api;
+        Map<String, String> h = new LinkedHashMap<>(t.coreEntityHeader); // Core-Entity-Id, multi-tenant mode only
         h.put("Initiator-Entity", Gateway.party(initType, initId));
         h.put("Forwarding-Hop", sender.id());
         h.put("Correlation-Id", ctx.correlationId);
-        String coreToken = gw.config.secret("core.token");
+        String coreToken = t.coreToken();
         if (coreToken != null) {
             h.put("Authorization", "Bearer " + coreToken);
         }
@@ -229,51 +254,51 @@ public final class IopHandler {
         String method = heartbeat ? "GET" : "POST";
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("method", method);
-        out.put("path", gw.corePrefix() + api);
+        out.put("path", t.corePrefix() + api);
         out.put("peer", "core");
         out.put("txnid", payload == null ? null : Json.text(Json.parseObject(payload), "txnid"));
         out.put("correlationId", ctx.correlationId);
         out.put("initiator", ctx.initiator);
         out.put("bodyBytes", payload == null ? 0 : payload.length);
         out.put("headers", Audit.headers(h));
-        gw.audit.record("request", "core-out", "target", out);
-        gw.stats.inc(C.coreNotif);
+        gw.audit.record("request", "core-out", "target", t.id, out);
+        ctx.counts.inc(C.coreNotif);
         long t0 = System.nanoTime();
         Http.Response core;
         try {
-            core = gw.http.send(method, url, h, payload, gw.coreTimeout(), gw.maxUpstream());
+            core = gw.http.send(method, url, h, payload, t.coreTimeout(), gw.maxUpstream());
         } catch (Http.NoResponse e) {
-            gw.stats.inc(C.coreNotifNoResp);
+            ctx.counts.inc(C.coreNotifNoResp);
             Map<String, Object> f = new LinkedHashMap<>(out);
             f.remove("headers");
             f.remove("bodyBytes");
             f.put("noResponse", e.kind);
             f.put("ms", (System.nanoTime() - t0) / 1_000_000);
-            gw.audit.record("response", "core-out", "target", f);
-            throw new GwError(502, GwError.INTERNAL, "core unavailable");
+            gw.audit.record("response", "core-out", "target", t.id, f);
+            throw new GwError(500, GwError.INTERNAL, "core unavailable");
         }
-        gw.stats.inc(C.coreNotifResp);
-        gw.stats.inc(core.status() < 400 ? C.coreNotifOk : C.coreNotifErr);
+        ctx.counts.inc(C.coreNotifResp);
+        ctx.counts.inc(core.status() < 400 ? C.coreNotifOk : C.coreNotifErr);
         Map<String, Object> f = new LinkedHashMap<>(out);
         f.put("status", core.status());
         f.put("bodyBytes", core.body().length);
         f.put("ms", (System.nanoTime() - t0) / 1_000_000);
         f.put("headers", Audit.headers(flatten(core.headers())));
-        gw.audit.record("response", "core-out", "target", f);
+        gw.audit.record("response", "core-out", "target", t.id, f);
         String echoed = core.header("Correlation-Id").orElse(null);
         if (!ctx.correlationId.equals(echoed)) {
-            throw new GwError(502, GwError.INTERNAL, "core Correlation-Id missing or different");
+            throw new GwError(500, GwError.INTERNAL, "core Correlation-Id missing or different");
         }
 
         // Wrap the core's answer for the Initiator. The inner JWS is always signed here; a signature
         // the core sends of its own must verify with this participant's signing keys.
         byte[] body = core.body();
         String coreSig = core.header("x-jws-signature").orElse(null);
-        if (coreSig != null && !coreSig.isEmpty() && !Jose.verifyDetached(coreSig, body, gw.signing.publicKeys())) {
+        if (coreSig != null && !coreSig.isEmpty() && !Jose.verifyDetached(coreSig, body, t.signing.publicKeys())) {
             LOG.atWarn().addKeyValue("correlationId", ctx.correlationId).log("core response x-jws-signature does not verify");
-            throw new GwError(502, GwError.INTERNAL, "core response signature does not verify");
+            throw new GwError(500, GwError.INTERNAL, "core response signature does not verify");
         }
-        String inner = gw.signCompact(body);
+        String inner = gw.signCompact(t, body);
         String jwe;
         try {
             jwe = Jose.encrypt(inner, encKey);
@@ -287,9 +312,9 @@ public final class IopHandler {
         reply.put("correlationId", ctx.correlationId);
         reply.put("encryptedPayload", jwe); // success and error alike: the status tells them apart
         if (core.status() >= 400) {
-            reply.set("errorSource", errorSource());
+            reply.set("errorSource", errorSource(t));
         }
-        return signed(core.status(), Json.bytes(reply));
+        return signed(t, core.status(), Json.bytes(reply));
     }
 
     // =====================================================================================
@@ -311,12 +336,13 @@ public final class IopHandler {
         if (heartbeat && EntityType.FIU.name().equals(tType)) {
             throw new GwError(400, GwError.INVALID_REQUEST, "heartbeat to an FIU is not allowed");
         }
-        if (gw.selfId.equals(tId)) {
+        Tenant t = ctx.tenant; // AA mode: always single-tenant
+        if (gw.tenants.isOwn(tId)) {
             throw new GwError(400, GwError.INVALID_REQUEST, "Target is this AA");
         }
         Entity target = gw.registry.get(tId).filter(e -> e.type() == leg.partyType() && e.baseUrl() != null)
                 .orElseThrow(() -> new GwError(400, GwError.INVALID_ROUTE, "Target is not registered with this AA"));
-        checkLinked(target);
+        checkLinked(t, target);
         JsonNode payloadNode = env.get("encryptedPayload");
         if (heartbeat) {
             if (payloadNode != null && !payloadNode.isNull()) {
@@ -350,9 +376,9 @@ public final class IopHandler {
             });
         }
         byte[] outBody = Json.bytes(out);
-        String outSig = gw.signDetached(outBody);
-        String apiKey = gw.outboundKey(target)
-                .orElseThrow(() -> new GwError(503, GwError.INTERNAL, "IopToken unavailable"));
+        String outSig = gw.signDetached(t, outBody);
+        String apiKey = gw.outboundKey(t, target)
+                .orElseThrow(() -> new GwError(503, GwError.SERVICE_UNAVAILABLE, "role api-key token unavailable"));
         String outPath = rewrite(req.path, target.type());
         String url = target.baseUrl() + outPath;
         Map<String, String> h = new LinkedHashMap<>();
@@ -366,7 +392,7 @@ public final class IopHandler {
         long backoff = 200;
         for (int attempt = 1; attempt <= 1 + retries; attempt++) {
             if (attempt > 1) {
-                gw.stats.inc(C.targetRetries);
+                ctx.counts.inc(C.targetRetries);
                 sleep(backoff);
                 backoff = Math.min(backoff * 2, 2000);
             }
@@ -383,8 +409,8 @@ public final class IopHandler {
             rf.put("bodyBytes", outBody.length);
             rf.put("encryptedPayloadBytes", heartbeat ? null : payloadNode.asText().length());
             rf.put("headers", Audit.headers(h));
-            gw.audit.record("request", "target-out", "hop", rf);
-            gw.stats.inc(C.targetReq);
+            gw.audit.record("request", "target-out", "hop", t.id, rf);
+            ctx.counts.inc(C.targetReq);
             long t0 = System.nanoTime();
             try {
                 resp = gw.http.send("POST", url, h, outBody, gw.forwardingTimeout(), gw.maxUpstream());
@@ -392,18 +418,18 @@ public final class IopHandler {
             } catch (Http.NoResponse e) {
                 lastNo = e;
                 resp = null;
-                gw.stats.inc(C.targetNoResp);
+                ctx.counts.inc(C.targetNoResp);
                 Map<String, Object> f = new LinkedHashMap<>(rf);
                 f.remove("headers");
                 f.remove("bodyBytes");
                 f.remove("encryptedPayloadBytes");
                 f.put("noResponse", e.kind);
                 f.put("ms", (System.nanoTime() - t0) / 1_000_000);
-                gw.audit.record("response", "target-out", "hop", f);
+                gw.audit.record("response", "target-out", "hop", t.id, f);
                 continue;
             }
-            gw.stats.inc(C.targetResp);
-            gw.stats.inc(resp.status() < 400 ? C.targetOk : C.targetErr);
+            ctx.counts.inc(C.targetResp);
+            ctx.counts.inc(resp.status() < 400 ? C.targetOk : C.targetErr);
             ObjectNode rb = Json.parseObject(resp.body());
             Map<String, Object> f = new LinkedHashMap<>(rf);
             f.put("status", resp.status());
@@ -413,7 +439,7 @@ public final class IopHandler {
             f.remove("encryptedPayloadBytes");
             f.put("ms", (System.nanoTime() - t0) / 1_000_000);
             f.put("headers", Audit.headers(flatten(resp.headers())));
-            gw.audit.record("response", "target-out", "hop", f);
+            gw.audit.record("response", "target-out", "hop", t.id, f);
             boolean retriable = (resp.status() == 502 || resp.status() == 503 || resp.status() == 504)
                     && (rb == null || !rb.hasNonNull("encryptedPayload"));
             if (!retriable) {
@@ -425,7 +451,7 @@ public final class IopHandler {
             throw new GwError(timeout ? 504 : 502, GwError.DOWNSTREAM,
                     timeout ? "Target did not answer in time" : "Target unreachable");
         }
-        return relay(resp, ctx, target);
+        return relay(resp, ctx, t, target);
     }
 
     /**
@@ -434,18 +460,18 @@ public final class IopHandler {
      * AA's linkedAAs. Otherwise 400 InvalidRoute, and the Target is not called. An AIG not loaded
      * gives 503, and so does a linkedAAs list not loaded for an AA Target.
      */
-    private void checkLinked(Entity target) throws GwError {
+    private void checkLinked(Tenant t, Entity target) throws GwError {
         boolean linked;
         if (target.type() == EntityType.AA) {
-            if (!gw.linkedAAs.loaded()) {
-                throw new GwError(503, GwError.INTERNAL, "linkedAAs not loaded");
+            if (!t.linkedAAs.loaded()) {
+                throw new GwError(503, GwError.SERVICE_UNAVAILABLE, "linkedAAs not loaded");
             }
-            linked = gw.linkedAAs.get().contains(target.id());
+            linked = t.linkedAAs.get().contains(target.id());
         } else {
             if (!gw.aig.loaded()) {
-                throw new GwError(503, GwError.INTERNAL, "hop directory unavailable");
+                throw new GwError(503, GwError.SERVICE_UNAVAILABLE, "hop directory unavailable");
             }
-            linked = gw.aig.candidates(target.type(), target.id()).contains(gw.selfId);
+            linked = gw.aig.candidates(target.type(), target.id()).contains(t.id);
         }
         if (!linked) {
             throw new GwError(400, GwError.INVALID_ROUTE, "Target is not linked to this AA");
@@ -453,7 +479,7 @@ public final class IopHandler {
     }
 
     /** Relays the Target's answer to the caller. */
-    private Msg.Resp relay(Http.Response resp, Ctx ctx, Entity target) throws GwError {
+    private Msg.Resp relay(Http.Response resp, Ctx ctx, Tenant t, Entity target) throws GwError {
         byte[] body = resp.body();
         ObjectNode rb = null;
         if (body.length > 0) {
@@ -470,10 +496,10 @@ public final class IopHandler {
         }
         if (resp.status() < 400) {
             if (rb == null) {
-                return signed(resp.status(), body);
+                return signed(t, resp.status(), body);
             }
             rb.put("txnid", ctx.txnid);
-            return signed(resp.status(), Json.bytes(rb));
+            return signed(t, resp.status(), Json.bytes(rb));
         }
         ObjectNode err = Json.object();
         err.put("ver", ctx.ver);
@@ -493,7 +519,7 @@ public final class IopHandler {
         if (source != null && source.isObject()) {
             err.set("errorSource", source);
         }
-        return signed(resp.status(), Json.bytes(err));
+        return signed(t, resp.status(), Json.bytes(err));
     }
 
     private String rewrite(String path, EntityType targetType) {
@@ -513,12 +539,61 @@ public final class IopHandler {
     // Responses
     // =====================================================================================
 
-    private Msg.Resp signed(int status, byte[] body) throws GwError {
-        return new Msg.Resp(status, body).header("x-jws-signature", gw.signDetached(body));
+    private Msg.Resp signed(Tenant t, int status, byte[] body) throws GwError {
+        return new Msg.Resp(status, body).header("x-jws-signature", gw.signDetached(t, body));
     }
 
-    /** Plaintext ErrorResponse signed by this gateway; a bare 500 when it cannot sign. */
+    // =====================================================================================
+    // Which entity a terminating call is for (multi-tenant mode)
+    // =====================================================================================
+
+    private static final String NO_KID = "encryptedPayload has no kid in its JWE header";
+
+    /** The kid of a compact JWE, or null when it has none or its header cannot be read. */
+    private static String kidOf(String compact) {
+        try {
+            return Jose.jweKid(compact);
+        } catch (Jose.JoseException e) {
+            return null;
+        }
+    }
+
+    /**
+     * A terminating call: the entity owning the JWE kid; a FIP heartbeat: the entity named in
+     * {@code Target-Id}, or the one entity loaded when there is no {@code Target-Id}. {@code Target-Id}
+     * is used on {@code /iop/Heartbeat} only.
+     */
+    private Tenant entityOf(Msg.Req req, ObjectNode env, boolean heartbeat) throws GwError {
+        if (heartbeat) {
+            String targetId = req.header("Target-Id");
+            if (targetId == null) {
+                if (gw.tenants.count() > 1) {
+                    throw new GwError(400, GwError.INVALID_REQUEST, "Target-Id header is required on a heartbeat while more than one entity is loaded");
+                }
+                return gw.tenants.only().orElseThrow(() -> new GwError(503, GwError.SERVICE_UNAVAILABLE, "no entity loaded"));
+            }
+            return gw.tenants.get(targetId)
+                    .orElseThrow(() -> new GwError(400, GwError.INVALID_REQUEST, "Target-Id is not a loaded entity"));
+        }
+        JsonNode payloadNode = env.get("encryptedPayload");
+        if (payloadNode == null || !payloadNode.isTextual() || !Jose.isCompactJwe(payloadNode.asText())) {
+            throw new GwError(400, GwError.INVALID_REQUEST, "encryptedPayload must be a compact JWE");
+        }
+        String kid = kidOf(payloadNode.asText());
+        if (kid == null) {
+            throw new GwError(400, GwError.INVALID_REQUEST, NO_KID);
+        }
+        return gw.tenants.byDecryptionKid(kid)
+                .orElseThrow(() -> new GwError(400, GwError.INVALID_REQUEST, "encryptedPayload not decryptable"));
+    }
+
+    /**
+     * Plaintext ErrorResponse, signed by the entity the call is for. Before that entity is known
+     * (multi-tenant mode): signed by the one entity loaded, or, with none or several loaded,
+     * unsigned and without errorSource. A bare 500 when it cannot sign.
+     */
     private Msg.Resp errorResponse(GwError e, Ctx ctx) {
+        Tenant signer = ctx.tenant != null ? ctx.tenant : gw.tenants.only().orElse(null);
         ObjectNode err = Json.object();
         err.put("ver", ctx.ver != null ? ctx.ver : gw.gwVer());
         err.put("txnid", ctx.txnid != null ? ctx.txnid : Json.newTxnId());
@@ -528,15 +603,19 @@ public final class IopHandler {
         }
         err.put("errorCode", e.code);
         err.put("errorMsg", e.getMessage());
-        if (ctx.terminating) {
-            err.set("errorSource", errorSource());
+        if (ctx.terminating && signer != null) {
+            err.set("errorSource", errorSource(signer));
         }
         byte[] body = Json.bytes(err);
         Msg.Resp r;
-        try {
-            r = signed(e.status, body);
-        } catch (GwError signFail) {
-            return new Msg.Resp(500, null);
+        if (signer == null) {
+            r = new Msg.Resp(e.status, body); // no entity's signing key can be chosen
+        } else {
+            try {
+                r = signed(signer, e.status, body);
+            } catch (GwError signFail) {
+                return new Msg.Resp(500, null);
+            }
         }
         if (e.status == 405) {
             r.header("Allow", "POST");
@@ -546,10 +625,10 @@ public final class IopHandler {
     }
 
     /** This participant as the source of an error it answers as the Target. A hop never adds its own. */
-    private ObjectNode errorSource() {
+    private ObjectNode errorSource(Tenant t) {
         ObjectNode s = Json.object();
         s.put("type", gw.mode.name());
-        s.put("id", gw.selfId);
+        s.put("id", t.id);
         return s;
     }
 

@@ -69,11 +69,15 @@ class MockServerTest {
                   fiu: [{fiu-test-001: [aa-test-001]}]
                   fip: [{fip-test-001: [aa-test-002]}]
                   aa:  [{aa-test-001: [aa-test-002]}]
+                users:
+                  - {username: aa1-admin@example.test, passwordFile: "%s", entities: {aa-test-001: [admin]}}
                 """.formatted(port, dir.resolve("out"),
                 dir.resolve("aa-test-001.creds.json"), dir.resolve("aa-test-002.creds.json"),
                 dir.resolve("fiu-test-001.creds.json"), dir.resolve("fip-test-001.creds.json"),
                 dir.resolve("aa-test-001.pub.pem"), dir.resolve("aa-test-001.pub.pem"),
-                dir.resolve("aa-test-002.pub.pem"), dir.resolve("fiu-test-001.pub.pem"), dir.resolve("fip-test-001.pub.pem"));
+                dir.resolve("aa-test-002.pub.pem"), dir.resolve("fiu-test-001.pub.pem"), dir.resolve("fip-test-001.pub.pem"),
+                dir.resolve("aa1-admin.password"));
+        Files.writeString(dir.resolve("aa1-admin.password"), "synthetic-password-aa1\n");
         Files.writeString(dir.resolve("mocks.yaml"), yaml);
         mock = new MockServer(MockConfig.load(dir.resolve("mocks.yaml")));
         mock.start();
@@ -127,15 +131,18 @@ class MockServerTest {
     }
 
     @Test
-    void iopTokenIsIssuedAtItsOwnPathAndMarked() throws Exception {
-        // a second token, at /entity/iopToken/generate, same form and response shape
-        HttpResponse<String> r = post("/entity/iopToken/generate", "id=aa-test-001&secret=synthetic-secret-aa-test-001");
+    void iopTokenComesFromTheSamePathWithUseIop() throws Exception {
+        // the same call with the form field use=iop added; same response shape
+        HttpResponse<String> r = post("/entity/token/generate", "id=aa-test-001&secret=synthetic-secret-aa-test-001&use=iop");
         assertEquals(200, r.statusCode(), r.body());
-        String iop = JSON.readTree(r.body()).get("accessToken").asText();
-        assertEquals("iop", com.nimbusds.jwt.SignedJWT.parse(iop).getJWTClaimsSet().getStringClaim("tokenUse"));
-        assertEquals("access", com.nimbusds.jwt.SignedJWT.parse(token("aa-test-001")).getJWTClaimsSet().getStringClaim("tokenUse"));
-        assertEquals("aa-test-001", com.nimbusds.jwt.SignedJWT.parse(iop).getJWTClaimsSet().getStringClaim("azp"));
-        assertEquals(401, post("/entity/iopToken/generate", "id=aa-test-001&secret=wrong").statusCode());
+        var iop = com.nimbusds.jwt.SignedJWT.parse(JSON.readTree(r.body()).get("accessToken").asText()).getJWTClaimsSet();
+        assertEquals("iop", iop.getStringClaim("token_use"), "an IopToken carries token_use: iop");
+        assertEquals("aa-test-001", iop.getStringClaim("azp"));
+        var access = com.nimbusds.jwt.SignedJWT.parse(token("aa-test-001")).getJWTClaimsSet();
+        assertEquals(null, access.getClaim("token_use"), "the access token has no token_use");
+        assertEquals(401, post("/entity/token/generate", "id=aa-test-001&secret=wrong&use=iop").statusCode());
+        assertEquals(404, post("/entity/iopToken/generate", "id=aa-test-001&secret=synthetic-secret-aa-test-001").statusCode(),
+                "there is no separate IopToken path");
     }
 
     @Test
@@ -210,14 +217,53 @@ class MockServerTest {
         assertEquals(403, get("/v1/aig/aa", aa).statusCode(), "AA tokens may not read the AA graph");
         assertEquals(403, get("/v1/aig/fiu", fiu).statusCode(), "FIU tokens may not read the FIU graph");
 
-        HttpResponse<String> put = client.send(HttpRequest.newBuilder(URI.create(base + "/v1/aig/update"))
-                .header("Authorization", "Bearer " + aa)
-                .PUT(HttpRequest.BodyPublishers.ofString("{\"ver\":\"1.0.0\",\"fip\":[\"fip-test-001\"]}")).build(),
-                HttpResponse.BodyHandlers.ofString());
-        assertEquals(200, put.statusCode());
+        assertTrue(mock.knownIds().containsAll(List.of("aa-test-001", "fiu-test-001")));
+    }
+
+    @Test
+    void aigPublishNeedsAUserTokenOfThatAa() throws Exception {
+        String aa = token("aa-test-001");
+        String user = userToken("aa1-admin@example.test", "synthetic-password-aa1");
+        SignedJWT jwt = SignedJWT.parse(user);
+        assertEquals(Map.of("aa-test-001", List.of("admin")), jwt.getJWTClaimsSet().getJSONObjectClaim("entity_meta"));
+        assertEquals(null, jwt.getJWTClaimsSet().getClaim("azp"), "a user token is not an entity token");
+
+        String links = "{\"ver\":\"1.0.0\",\"fip\":[\"fip-test-001\"]}";
+        assertEquals(404, put("/v1/aig/update/aa-test-001", user, links), "The publish path is /v1/aig/<AA id>");
+        assertEquals(401, put("/v1/aig/aa-test-001", aa, links), "an entity token cannot publish");
+        assertEquals(403, put("/v1/aig/aa-test-002", user, links), "the user is not linked to aa-test-002");
+        assertEquals(401, get("/v1/aig/fip", user).statusCode(), "a user token cannot read the AIG");
+        assertEquals(200, put("/v1/aig/aa-test-001", user, links));
         JsonNode after = JSON.readTree(get("/v1/aig/fip", aa).body());
         assertEquals(2, after.get("fip").get(0).get("inter-AA").size(), "aa-test-001 published its link to fip-test-001");
-        assertTrue(mock.knownIds().containsAll(List.of("aa-test-001", "fiu-test-001")));
-        assertEquals(Map.of(), Map.of());
+    }
+
+    @Test
+    void userTokenRefusals() throws Exception {
+        assertEquals(400, userTokenStatus("username=aa1-admin@example.test"));
+        assertEquals(401, userTokenStatus("username=aa1-admin@example.test&password=wrong"));
+        assertEquals(401, userTokenStatus("username=nobody@example.test&password=x"));
+    }
+
+    private int put(String path, String bearer, String body) throws Exception {
+        return client.send(HttpRequest.newBuilder(URI.create(base + path)).header("Authorization", "Bearer " + bearer)
+                .PUT(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString()).statusCode();
+    }
+
+    private String userToken(String username, String password) throws Exception {
+        HttpResponse<String> r = userTokenCall("username=" + java.net.URLEncoder.encode(username, java.nio.charset.StandardCharsets.UTF_8)
+                + "&password=" + password);
+        assertEquals(200, r.statusCode(), r.body());
+        return JSON.readTree(r.body()).get("accessToken").asText();
+    }
+
+    private int userTokenStatus(String form) throws Exception {
+        return userTokenCall(form).statusCode();
+    }
+
+    private HttpResponse<String> userTokenCall(String form) throws Exception {
+        return client.send(HttpRequest.newBuilder(URI.create(base + "/user/token/generate"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form)).build(), HttpResponse.BodyHandlers.ofString());
     }
 }

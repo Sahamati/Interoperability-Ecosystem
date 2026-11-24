@@ -1,0 +1,27 @@
+# One IOP Gateway (FIU mode) serving two FIUs: multiTenant: on. This main file holds
+# the settings common to both; each FIU's own settings are in its entity file in
+# entities/ (keys, credentials, core, internal API token, linkedAAs). Entity files
+# are read again every entityRescanSeconds: add, change or disable one without a restart.
+# Production sources, pointed at iop-gw-mocks.
+mode: FIU
+multiTenant: on
+entityConfigPath: /etc/iop-gw/entities
+entityRescanSeconds: 10
+logging: {level: INFO, audit: true, statsIntervalSeconds: 60}
+listenAddr: "0.0.0.0:8080"
+tokenService:
+  baseUrl: "https://mocks:9443"
+apiKey:
+  mode: jwt
+  issuerKeysUrl: "https://mocks:9443/tokenservice/jwks"
+  issuer: "https://mock-token-service.local/realms/sahamati"
+jws: {algorithm: RS256}
+cr: {source: api, baseUrl: "https://mocks:9443"}
+aigSource: api
+aigBaseUrl: "https://mocks:9443"
+gwApi:
+  listenAddr: "0.0.0.0:8443"
+  httpListenAddr: "0.0.0.0:8081"
+  tls: {certFile: /etc/iop-gw/generated/gw-tls.crt, keyFile: /etc/iop-gw/generated/gw-tls.key}
+forwarding: {timeoutSeconds: 10}
+cache: {dir: /var/lib/iop-gw/cache}

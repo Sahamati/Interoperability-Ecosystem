@@ -42,7 +42,10 @@ public final class Main {
             System.exit(1);
             return;
         }
-        log.atInfo().addKeyValue("mode", c.mode).addKeyValue("self", c.self.id).log("IOP Gateway started");
+        log.atInfo().addKeyValue("mode", c.mode)
+                .addKeyValue("multiTenant", c.isMultiTenant() ? "on" : "off")
+                .addKeyValue("entities", running.gateway.tenants.ids())
+                .log("IOP Gateway started");
         CountDownLatch stop = new CountDownLatch(1);
         Bootstrap.Running r = running;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

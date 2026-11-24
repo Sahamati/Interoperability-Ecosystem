@@ -118,17 +118,17 @@ class IopPipelineTest {
         byte[] body = Json.bytes(envelope());
         Map<String, String> none = signedBy(body);
         none.remove("client_api_key");
-        expect(post("/iop/Consent", body, none), 401, "InvalidSecurity", null);
+        expect(post("/iop/Consent", body, none), 400, "InvalidSecurity", null);
         Map<String, String> two = signedBy(body);
         two.put("x-cust_aa_api_key", fiu.apiKey());
-        expect(post("/iop/Consent", body, two), 401, "InvalidSecurity", null);
+        expect(post("/iop/Consent", body, two), 400, "InvalidSecurity", null);
         Map<String, String> notOnPath = signedBy(body);
         notOnPath.remove("client_api_key");
         notOnPath.put("fip_api_key", fiu.apiKey());
         expect(post("/iop/Consent", body, notOnPath), 403, "InvalidSecurity", null);
         Map<String, String> unknownKey = signedBy(body);
         unknownKey.put("client_api_key", "not-a-known-key");
-        expect(post("/iop/Consent", body, unknownKey), 401, "InvalidSecurity", null);
+        expect(post("/iop/Consent", body, unknownKey), 400, "InvalidSecurity", null);
         Map<String, String> wrongOwner = signedBy(body);
         wrongOwner.remove("client_api_key");
         wrongOwner.put("x-orig_aa_api_key", fiu.apiKey()); // an FIU using an AA's key header
@@ -140,10 +140,10 @@ class IopPipelineTest {
         byte[] body = Json.bytes(envelope());
         Map<String, String> noSig = signedBy(body);
         noSig.remove("x-jws-signature");
-        expect(post("/iop/Consent", body, noSig), 401, "InvalidSecurity", null);
+        expect(post("/iop/Consent", body, noSig), 400, "InvalidSecurity", null);
         Map<String, String> h = signedBy(body);
         byte[] tampered = new String(body, StandardCharsets.UTF_8).replace("\"2.0.0\"", "\"2.0.1\"").getBytes(StandardCharsets.UTF_8);
-        expect(post("/iop/Consent", tampered, h), 401, "SignatureDoesNotMatch", null);
+        expect(post("/iop/Consent", tampered, h), 400, "SignatureDoesNotMatch", null);
     }
 
     @Test

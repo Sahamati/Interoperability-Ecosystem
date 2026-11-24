@@ -1,4 +1,5 @@
 {{- $persistent := .Values.cache.persistent -}}
+{{- $multi := include "iop-gw.multiTenant" . -}}
 {{- include "iop-gw.validate" . -}}
 {{- if not (include "iop-gw.envSecret" .) }}{{ fail "set secretEnv.existingSecret (or createSecrets.enabled for testing)" }}{{ end -}}
 {{- if not (include "iop-gw.filesSecret" .) }}{{ fail "set files.existingSecret (or createSecrets.enabled for testing)" }}{{ end -}}
@@ -58,6 +59,9 @@ spec:
           volumeMounts:
             - {name: config, mountPath: /etc/iop-gw/config.yaml, subPath: config.yaml, readOnly: true}
             - {name: secrets, mountPath: /etc/iop-gw/secrets, readOnly: true}
+            {{- if $multi }}
+            - {name: entities, mountPath: /etc/iop-gw/entities, readOnly: true}
+            {{- end }}
             - {name: tmp, mountPath: /tmp}
             {{- if .Values.truststore.existingSecret }}
             - {name: truststore, mountPath: /etc/iop-gw/truststore, readOnly: true}
@@ -72,6 +76,10 @@ spec:
           secret: {secretName: {{ include "iop-gw.filesSecret" . }}, defaultMode: 0440}
         - name: tmp
           emptyDir: {medium: Memory, sizeLimit: 64Mi}
+        {{- if $multi }}
+        - name: entities
+          configMap: {name: {{ include "iop-gw.fullname" . }}-entities}
+        {{- end }}
         {{- if .Values.truststore.existingSecret }}
         - name: truststore
           secret:

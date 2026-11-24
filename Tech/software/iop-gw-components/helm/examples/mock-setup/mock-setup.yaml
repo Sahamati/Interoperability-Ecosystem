@@ -12,8 +12,8 @@ namespace: iop-gw-mock-setup
 # Images. The cluster must be able to pull them: push them to a registry it can
 # reach, or load them into a local cluster with that tool's own command.
 images:
-  gateway: iop-gw:0.0.0.0
-  mocks: iop-gw-mocks:0.0.0.0
+  gateway: iop-gw:0.1.0.0
+  mocks: iop-gw-mocks:0.1.0.0
   coreStub: python:3.13-alpine
 
 # Where each gateway delivers messages to its core. Leave a value empty to use

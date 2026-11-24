@@ -70,8 +70,16 @@ public final class LinkedAAs {
 
     /** One pull from the core. */
     public boolean pull(String url, String token, Http http, Duration timeout) {
+        return pull(url, token, Map.of(), http, timeout);
+    }
+
+    /** One pull from the core; {@code extraHeaders} go with the bearer token (multi-tenant mode: {@code Core-Entity-Id}). */
+    public boolean pull(String url, String token, Map<String, String> extraHeaders, Http http, Duration timeout) {
         try {
-            Http.Response r = http.send("GET", url, Map.of("Authorization", "Bearer " + token), null, timeout, 1 << 20);
+            Map<String, String> h = new java.util.LinkedHashMap<>();
+            h.put("Authorization", "Bearer " + token);
+            h.putAll(extraHeaders);
+            Http.Response r = http.send("GET", url, h, null, timeout, 1 << 20);
             if (r.status() != 200) {
                 LOG.atWarn().addKeyValue("status", r.status()).log("linkedAAs pull failed; current list kept");
                 return false;

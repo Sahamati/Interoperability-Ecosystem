@@ -35,7 +35,7 @@ class ConfigTest {
             Config c = net.config(fiu);
             assertEquals("FIU", c.mode);
             assertEquals("/fiu-core", c.core.pathPrefix);
-            assertEquals(TestNet.GW_TOKEN, c.secret("gwApi.token"));
+            assertEquals(TestNet.GW_TOKEN, c.single.secret("gwApi.token"));
         }
     }
 
@@ -133,8 +133,8 @@ class ConfigTest {
                     .replaceFirst("signingKey: \\{source: file, kid: [^}]*}", "signingKey: {source: api, token: \"\\${KEYS_TOKEN}\"}")
                     .replaceFirst("decryptionKeys: \\{source: file, keys: \\[[^]]*]}", "decryptionKeys: {source: api, token: \"\\${KEYS_TOKEN}\"}");
             Config c = new ConfigLoader(net.env()).parse(ok);
-            assertEquals("https://127.0.0.1:9/fiu-core/keys/signing", c.keyUrl("signing"));
-            assertEquals("https://127.0.0.1:9/fiu-core/keys/decryption", c.keyUrl("decryption"));
+            assertEquals("https://127.0.0.1:9/fiu-core/keys/signing", c.single.keyUrl("signing"));
+            assertEquals("https://127.0.0.1:9/fiu-core/keys/decryption", c.single.keyUrl("decryption"));
             assertEquals(3600, c.self.signingKey.refreshSeconds);
             // mixing file fields with source api is refused
             String mixed = ok.replace("signingKey: {source: api,", "signingKey: {source: api, kid: k1,");

@@ -57,14 +57,13 @@ import java.util.regex.Pattern;
  * <b>Testing only.</b>
  *
  * <ul>
- *   <li>Token service, shaped like the Sahamati token service: {@code POST /entity/token/generate}
- *       (the access token) and {@code POST /entity/iopToken/generate} (the IopToken; not yet in the
- *       Sahamati token service), form {@code id}, {@code secret} → {@code {ver, timestamp, txnId,
- *       accessToken, expiresIn, refreshExpiresIn, tokenType, notBeforePolicy, scope}}. The token is
- *       an RS256 JWT with {@code azp}, {@code clientId} and {@code client_id} = the entity id,
- *       {@code roles} = its type, {@code aud} "account" and {@code typ} "Bearer", plus
- *       {@code tokenUse} = {@code access} or {@code iop} (this mock's own marker: how a receiver
- *       tells an IopToken apart is not yet specified). Errors: {@code 400 TKN_2014} "&lt;param&gt; is
+ *   <li>Token service, shaped like the Sahamati token service: {@code POST /entity/token/generate},
+ *       form {@code id}, {@code secret} → {@code {ver, timestamp, txnId, accessToken, expiresIn,
+ *       refreshExpiresIn, tokenType, notBeforePolicy, scope}}: the access token, or, with the form
+ *       field {@code use=iop} added, the IopToken. The token is an RS256 JWT with {@code azp},
+ *       {@code clientId} and {@code client_id} = the entity id, {@code roles} = its type, {@code aud}
+ *       "account" and {@code typ} "Bearer"; an IopToken also carries {@code token_use} = {@code iop}.
+ *       Errors: {@code 400 TKN_2014} "&lt;param&gt; is
  *       missing in the request", {@code 401 TKN_2025} "Invalid id/secret", as {@code {ver,
  *       timestamp, txnId, errorCode, errorMsg}}. The issuer key is published at
  *       {@code GET /tokenservice/jwks} and at the Keycloak path
@@ -74,7 +73,11 @@ import java.util.regex.Pattern;
  *       {@code keys.signature} / {@code keys.encryption} is {@code {key: <JWK>, validFrom, validTo}}
  *, {@code certificate} a bare JWK.</li>
  *   <li>AIG: {@code GET /v1/aig/fiu}, {@code /v1/aig/fip} (AA token),
- *       {@code GET /v1/aig/aa} (FIU or FIP token), {@code PUT /v1/aig/update} (AA token).</li>
+ *       {@code GET /v1/aig/aa} (FIU or FIP token), {@code PUT /v1/aig/{aaid}} (user token of
+ *       a user linked to that AA).</li>
+ *   <li>User token: {@code POST /user/token/generate}, form {@code username}, {@code password};
+ *       the token's {@code entity_meta} claim maps each linked entity id to the user's roles there.
+ *       Errors: {@code 400 TKN_2014}, {@code 401 TKN_2025} "Invalid username/password".</li>
  * </ul>
  *
  * At start-up it writes to {@code outDir}: {@code tls.crt} and {@code truststore.p12} (password
@@ -181,6 +184,7 @@ public final class MockServer implements AutoCloseable {
     }
 
     private static final Pattern ENTITY_INFO = Pattern.compile("^/v2/entityInfo/(AA|FIP|FIU)$");
+    private static final Pattern AIG_UPDATE = Pattern.compile("^/v1/aig/([^/]+)$");
 
     private void handle(HttpExchange ex) throws IOException {
         String method = ex.getRequestMethod();
@@ -192,9 +196,16 @@ public final class MockServer implements AutoCloseable {
             if ("/healthz".equals(path)) {
                 r = new Reply(200, "ok".getBytes(StandardCharsets.UTF_8));
             } else if (cfg.tokenService.path.equals(path)) {
-                r = "POST".equals(method) ? token(body, "access") : error(405, "InvalidRequest", "method not allowed");
-            } else if (cfg.tokenService.iopPath.equals(path)) {
-                r = "POST".equals(method) ? token(body, "iop") : error(405, "InvalidRequest", "method not allowed");
+                r = "POST".equals(method) ? token(body) : error(405, "InvalidRequest", "method not allowed");
+            } else if (cfg.tokenService.userPath.equals(path)) {
+                r = "POST".equals(method) ? userToken(body) : error(405, "InvalidRequest", "method not allowed");
+            } else if ("PUT".equals(method) && AIG_UPDATE.matcher(path).matches()) {
+                // PUT /v1/aig/<AA entity id>, with the token of a user associated with the AA
+                String aaid = path.substring("/v1/aig/".length());
+                Optional<MockConfig.User> user = bearerUser(ex.getRequestHeaders().getFirst("Authorization"));
+                caller = user.map(u -> u.username).orElse(null);
+                r = user.isEmpty() ? error(401, "Unauthorized", "Invalid or expired token")
+                        : aigUpdate(method, aaid, user.get(), body);
             } else if ("/tokenservice/jwks".equals(path) || "/.well-known/jwks.json".equals(path)
                     || "/auth/realms/sahamati/protocol/openid-connect/certs".equals(path)) {
                 r = new Reply(200, new JWKSet(issuerKey.toPublicJWK()).toString().getBytes(StandardCharsets.UTF_8));
@@ -202,7 +213,8 @@ public final class MockServer implements AutoCloseable {
                 Optional<MockConfig.Entity> who = bearer(ex.getRequestHeaders().getFirst("Authorization"));
                 caller = who.map(e -> e.id).orElse(null);
                 Matcher m = ENTITY_INFO.matcher(path);
-                if (m.matches() || path.startsWith("/v1/aig/")) {
+                boolean graph = "/v1/aig/fiu".equals(path) || "/v1/aig/fip".equals(path) || "/v1/aig/aa".equals(path);
+                if (m.matches() || graph) {
                     if (who.isEmpty()) {
                         r = error(401, "Unauthorized", "Invalid or expired token");
                     } else if (m.matches()) {
@@ -239,7 +251,8 @@ public final class MockServer implements AutoCloseable {
 
     // ---------------- token service ----------------
 
-    private Reply token(byte[] body, String use) throws Exception {
+    /** An entity token: the access token, or the IopToken when the form carries {@code use=iop}. */
+    private Reply token(byte[] body) throws Exception {
         Map<String, String> form = new LinkedHashMap<>();
         for (String pair : new String(body, StandardCharsets.UTF_8).split("&")) {
             int i = pair.indexOf('=');
@@ -250,6 +263,7 @@ public final class MockServer implements AutoCloseable {
         }
         String id = form.get("id");
         String secret = form.get("secret");
+        boolean iop = "iop".equals(form.get("use"));
         if (id == null) {
             return tsError(400, "TKN_2014", "id is missing in the request");
         }
@@ -273,10 +287,13 @@ public final class MockServer implements AutoCloseable {
                 .issuer(cfg.tokenService.issuer).audience("account")
                 .subject(UUID.nameUUIDFromBytes(id.getBytes(StandardCharsets.UTF_8)).toString())
                 .claim("typ", "Bearer").claim("azp", id).claim("clientId", id).claim("client_id", id)
-                .claim("scope", SCOPE).claim("tokenUse", use)
+                .claim("scope", SCOPE)
                 .issueTime(Date.from(now)).expirationTime(Date.from(now.plusSeconds(ttl))).jwtID(UUID.randomUUID().toString());
         if (e != null) {
             claims.claim("roles", e.type);
+        }
+        if (iop) {
+            claims.claim("token_use", "iop");
         }
         SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).type(com.nimbusds.jose.JOSEObjectType.JWT)
                 .keyID(cfg.tokenService.signingKeyId).build(), claims.build());
@@ -296,19 +313,77 @@ public final class MockServer implements AutoCloseable {
 
     private static final String SCOPE = "email microprofile-jwt profile address phone offline_access";
 
-    /** An error as the Sahamati token service answers it. */
-    private static Reply tsError(int status, String code, String msg) {
+    /**
+     * A user token, as the Sahamati token service issues it: form {@code username}, {@code password}.
+     * The token names the user's entities in {@code entity_meta}; it has no {@code azp} or
+     * {@code clientId}, so it is never taken for an entity token.
+     */
+    private Reply userToken(byte[] body) throws Exception {
+        Map<String, String> form = form(body);
+        String username = form.get("username");
+        String password = form.get("password");
+        if (username == null) {
+            return tsError(400, "TKN_2014", "username is missing in the request");
+        }
+        if (password == null) {
+            return tsError(400, "TKN_2014", "password is missing in the request");
+        }
+        MockConfig.User u = users().get(username);
+        if (u == null) {
+            return tsError(401, "TKN_2025", "Invalid username/password");
+        }
+        // Read afresh, so a changed password is picked up.
+        String expected = Files.readString(Path.of(u.passwordFile)).strip();
+        if (expected.isEmpty() || !MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), password.getBytes(StandardCharsets.UTF_8))) {
+            return tsError(401, "TKN_2025", "Invalid username/password");
+        }
+        Instant now = Instant.now();
+        int ttl = cfg.tokenService.ttlSeconds;
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .issuer(cfg.tokenService.issuer).audience("account")
+                .subject(UUID.nameUUIDFromBytes(("user:" + username).getBytes(StandardCharsets.UTF_8)).toString())
+                .claim("typ", "Bearer").claim("preferred_username", username)
+                .claim("entity_meta", u.entities).claim("scope", SCOPE)
+                .issueTime(Date.from(now)).expirationTime(Date.from(now.plusSeconds(ttl))).jwtID(UUID.randomUUID().toString())
+                .build();
+        SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).type(com.nimbusds.jose.JOSEObjectType.JWT)
+                .keyID(cfg.tokenService.signingKeyId).build(), claims);
+        jwt.sign(new RSASSASigner(issuerKey));
         ObjectNode o = JSON.createObjectNode();
         o.put("ver", "1.0.0");
-        o.put("timestamp", Instant.now().toString());
+        o.put("timestamp", now.toString());
         o.put("txnId", UUID.randomUUID().toString());
-        o.put("errorCode", code);
-        o.put("errorMsg", msg);
-        return Reply.json(status, o);
+        o.put("accessToken", jwt.serialize());
+        o.put("expiresIn", ttl);
+        o.put("refreshExpiresIn", 0);
+        o.put("tokenType", "Bearer");
+        o.put("notBeforePolicy", 0);
+        o.put("scope", SCOPE);
+        return Reply.json(200, o);
     }
 
-    /** The entity a bearer token from this mock names, if the token is valid. */
-    private Optional<MockConfig.Entity> bearer(String auth) {
+    private Map<String, MockConfig.User> users() {
+        Map<String, MockConfig.User> m = new LinkedHashMap<>();
+        for (MockConfig.User u : cfg.users) {
+            m.put(u.username, u);
+        }
+        return m;
+    }
+
+    private static Map<String, String> form(byte[] body) {
+        Map<String, String> form = new LinkedHashMap<>();
+        for (String pair : new String(body, StandardCharsets.UTF_8).split("&")) {
+            int i = pair.indexOf('=');
+            if (i > 0) {
+                form.put(URLDecoder.decode(pair.substring(0, i), StandardCharsets.UTF_8),
+                        URLDecoder.decode(pair.substring(i + 1), StandardCharsets.UTF_8));
+            }
+        }
+        return form;
+    }
+
+    /** The claims of a valid token from this mock, if it is one. */
+    private Optional<JWTClaimsSet> validClaims(String auth) {
         if (auth == null || !auth.startsWith("Bearer ")) {
             return Optional.empty();
         }
@@ -322,10 +397,33 @@ public final class MockServer implements AutoCloseable {
                     || c.getExpirationTime().before(new Date())) {
                 return Optional.empty();
             }
-            return Optional.ofNullable(entities.get(String.valueOf(c.getClaim("azp"))));
+            return Optional.of(c);
         } catch (Exception e) {
             return Optional.empty();
         }
+    }
+
+    /** The user a valid user token names, if the user is still configured. */
+    private Optional<MockConfig.User> bearerUser(String auth) {
+        return validClaims(auth).filter(c -> c.getClaim("azp") == null && c.getClaim("preferred_username") != null)
+                .map(c -> users().get(String.valueOf(c.getClaim("preferred_username"))));
+    }
+
+    /** An error as the Sahamati token service answers it. */
+    private static Reply tsError(int status, String code, String msg) {
+        ObjectNode o = JSON.createObjectNode();
+        o.put("ver", "1.0.0");
+        o.put("timestamp", Instant.now().toString());
+        o.put("txnId", UUID.randomUUID().toString());
+        o.put("errorCode", code);
+        o.put("errorMsg", msg);
+        return Reply.json(status, o);
+    }
+
+    /** The entity a bearer token from this mock names, if the token is valid. */
+    private Optional<MockConfig.Entity> bearer(String auth) {
+        return validClaims(auth).filter(c -> c.getClaim("azp") != null)
+                .map(c -> entities.get(String.valueOf(c.getClaim("azp"))));
     }
 
     // ---------------- Central Registry ----------------
@@ -427,31 +525,37 @@ public final class MockServer implements AutoCloseable {
                 }
                 return Reply.json(200, graphResponse("aa", "peer-AA"));
             }
-            case "/v1/aig/update" -> {
-                if (!"PUT".equals(method)) {
-                    return error(405, "InvalidRequest", "method not allowed");
-                }
-                if (!"AA".equals(who.type)) {
-                    return error(403, "Forbidden", "Cannot access resource");
-                }
-                JsonNode req = JSON.readTree(body);
-                if (req == null || !req.isObject()) {
-                    return error(400, "InvalidRequest", "body must be a JSON object");
-                }
-                update("fip", who.id, req.get("fip"));
-                update("fiu", who.id, req.get("fiu"));
-                updatePeers(who.id, req.get("aa"));
-                ObjectNode o = base();
-                o.put("responseText", "Uploaded");
-                return Reply.json(200, o);
-            }
             default -> {
                 return error(404, "InvalidRequest", "unknown path");
             }
         }
     }
 
-    /** The caller AA's published links replace its previous ones. */
+    /**
+     * {@code PUT /v1/aig/{aaid}}: publishes the AA's links. Needs a user token of a user
+     * linked to that AA ({@code entity_meta}).
+     */
+    private Reply aigUpdate(String method, String aaid, MockConfig.User user, byte[] body) throws Exception {
+        if (!"PUT".equals(method)) {
+            return error(405, "InvalidRequest", "method not allowed");
+        }
+        MockConfig.Entity aa = entities.get(aaid);
+        if (aa == null || !"AA".equals(aa.type) || !user.entities.containsKey(aaid)) {
+            return error(403, "Forbidden", "Cannot access resource");
+        }
+        JsonNode req = JSON.readTree(body);
+        if (req == null || !req.isObject()) {
+            return error(400, "InvalidRequest", "body must be a JSON object");
+        }
+        update("fip", aaid, req.get("fip"));
+        update("fiu", aaid, req.get("fiu"));
+        updatePeers(aaid, req.get("aa"));
+        ObjectNode o = base();
+        o.put("responseText", "Uploaded");
+        return Reply.json(200, o);
+    }
+
+    /** The publishing AA's links replace its previous ones. */
     private void update(String kind, String aa, JsonNode ids) {
         if (ids == null || !ids.isArray()) {
             return;

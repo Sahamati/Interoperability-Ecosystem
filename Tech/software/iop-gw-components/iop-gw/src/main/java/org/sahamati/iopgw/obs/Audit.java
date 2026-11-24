@@ -17,7 +17,7 @@ import java.util.Set;
 public final class Audit {
     private static final Logger LOG = LoggerFactory.getLogger(Logs.AUDIT_LOGGER);
 
-    private static final Set<String> SHOWN = Set.of("target-entity", "correlation-id", "forwarding-hop", "preferred-hop",
+    private static final Set<String> SHOWN = Set.of("core-entity-id", "target-id", "target-entity", "correlation-id", "forwarding-hop", "preferred-hop",
             "http-retries", "route-retries", "initiator-entity", "iop-gw-error", "content-type", "content-length",
             "accept", "allow");
     /** Never logged by value: the tokens, the signature, and every role api-key header (from Roles, so they stay in step). */
@@ -32,12 +32,10 @@ public final class Audit {
     }
 
     private final boolean enabled;
-    private final String self;
     private final String mode;
 
-    public Audit(boolean enabled, String self, String mode) {
+    public Audit(boolean enabled, String mode) {
         this.enabled = enabled;
-        this.self = self;
         this.mode = mode;
     }
 
@@ -57,8 +55,11 @@ public final class Audit {
         return out;
     }
 
-    /** Writes one record. {@code fields} holds the audit record fields that are known; nulls are dropped. */
-    public void record(String event, String leg, String role, Map<String, Object> fields) {
+    /**
+     * Writes one record. {@code self} is the entity the call belongs to ({@code -} while it is not
+     * known, multi-tenant mode). {@code fields} holds the audit record fields that are known; nulls are dropped.
+     */
+    public void record(String event, String leg, String role, String self, Map<String, Object> fields) {
         if (!enabled) {
             return;
         }

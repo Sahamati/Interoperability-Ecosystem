@@ -180,6 +180,15 @@ class RoutingE2ETest {
     }
 
     @Test
+    void iopHeartbeatIsPostOnly() throws Exception {
+        // /iop/Heartbeat is always a POST; a GET is refused before anything else is checked.
+        HttpResponse<byte[]> r = net.client.send(java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create(net.get("aa-test-002").publicUrl() + "/iop/Heartbeat")).GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertEquals(405, r.statusCode(), new String(r.body()));
+    }
+
+    @Test
     void targetCoreErrorIsPassedOnWithoutGatewayMarker() throws Exception {
         aa3.core.answer = c -> TestNet.CoreAnswer.json(400,
                 "{\"ver\":\"2.0.0\",\"txnid\":\"t-1\",\"errorCode\":\"InvalidConsentDetail\",\"errorMsg\":\"synthetic\"}");
@@ -269,7 +278,7 @@ class RoutingE2ETest {
             Map<String, String> h = TestNet.coreHeaders("AA", "aa-test-003", UUID.randomUUID().toString());
             h.put("Preferred-Hop", "aa-test-002");
             HttpResponse<byte[]> r = net.call(fiu, "POST", "/fiu-dgw/Consent", h, payload());
-            assertEquals(502, r.statusCode());
+            assertEquals(500, r.statusCode(), "the Target answered 500 InternalError: its core's Correlation-Id was missing");
             assertEquals(0, r.body().length);
         } finally {
             aa3.core.echoCorrelation = true;
@@ -292,7 +301,7 @@ class RoutingE2ETest {
         cases.add(new Case("wrong method", "GET", "/fiu-dgw/Consent", ok, null, 405, "InvalidRequest", "method not allowed"));
         Map<String, String> badToken = new java.util.LinkedHashMap<>(ok);
         badToken.put("Authorization", "Bearer wrong");
-        cases.add(new Case("wrong token", "POST", "/fiu-dgw/Consent", badToken, payload(), 401, "InvalidSecurity", "invalid or missing internal API token"));
+        cases.add(new Case("wrong token", "POST", "/fiu-dgw/Consent", badToken, payload(), 400, "InvalidSecurity", "invalid or missing internal API token"));
         Map<String, String> noCorr = new java.util.LinkedHashMap<>(ok);
         noCorr.remove("Correlation-Id");
         cases.add(new Case("no Correlation-Id", "POST", "/fiu-dgw/Consent", noCorr, payload(), 400, "InvalidRequest", "Correlation-Id header is required, in standard UUID format"));

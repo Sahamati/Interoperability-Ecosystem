@@ -11,7 +11,7 @@
 # options below (the real services have publicly trusted certificates).
 
 x-gateway: &gateway
-  image: iop-gw:0.0.0.0
+  image: iop-gw:0.1.0.0
   env_file: .env
   environment:
     # The image's JVM options, plus trust for the mocks' self-signed certificate.
@@ -31,7 +31,7 @@ x-gateway: &gateway
 
 services:
   mocks:
-    image: iop-gw-mocks:0.0.0.0
+    image: iop-gw-mocks:0.1.0.0
     volumes:
       - ./mocks.yaml:/etc/iop-gw-mocks/mocks.yaml:ro
       - ./generated:/etc/iop-gw-mocks/generated:ro

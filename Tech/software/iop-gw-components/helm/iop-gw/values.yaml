@@ -47,6 +47,30 @@ config:
     token: "${IOPGW_API_TOKEN}"
   linkedAAs: {source: config, aas: []}       # required: the AAs you are linked to
   forwarding: {timeoutSeconds: 30}
+  # multiTenant: on                          # FIU or FIP mode only: serve several entities (entityFiles below)
+
+# Multi-tenant mode (config.multiTenant: on, FIU or FIP mode): one entity file per
+# entity, as file name: content (.yaml is added to a name without .yaml or .yml).
+# The chart mounts them at /etc/iop-gw/entities and sets config.entityConfigPath
+# to that folder. The mode decides which settings are used: with multiTenant on,
+# config.self, core, linkedAAs, hopPreference, aigToken,
+# tokenService.credentialsFile and gwApi.token are left out of the main file
+# (each entity sets its own in its entity file); with it off, or in AA mode
+# (always single-tenant), entityFiles is not used. Settings left out are listed
+# in the install notes. Adding or changing an entity with helm upgrade
+# needs no restart: the gateway reads the folder again every
+# config.entityRescanSeconds (default 60). Put each entity's key and credentials
+# files in the files Secret, and its internal API token in the env Secret.
+entityFiles: {}
+#  fiu-test-001.yaml:
+#    entityId: fiu-test-001
+#    enable: true
+#    signingKey: {source: file, kid: fiu-test-001-sig, file: /etc/iop-gw/secrets/fiu-test-001-signing.pem}
+#    decryptionKeys: {source: file, keys: [{kid: fiu-test-001-enc, file: /etc/iop-gw/secrets/fiu-test-001-decryption.pem}]}
+#    tokenService: {credentialsFile: /etc/iop-gw/secrets/fiu-test-001-credentials.json}
+#    core: {baseUrl: "http://fiu-test-001-core.your-namespace.svc:8090"}
+#    gwApi: {token: "${IOPGW_API_TOKEN_FIU_TEST_001}"}
+#    linkedAAs: {source: config, aas: [aa-test-002]}
 
 # Container ports; keep them in step with config listenAddr / gwApi.
 ports:

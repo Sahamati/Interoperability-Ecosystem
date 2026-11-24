@@ -1,0 +1,14 @@
+{{- if include "iop-gw.multiTenant" . }}
+# The entity files (multiTenant: on), mounted as a folder at /etc/iop-gw/entities.
+# A change is picked up by the gateway's rescan, without a restart.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "iop-gw.fullname" . }}-entities
+  labels: {{- include "iop-gw.labels" . | nindent 4 }}
+data:
+{{- range $name, $body := .Values.entityFiles }}
+  {{ include "iop-gw.entityFileName" $name }}: |
+{{ (ternary $body (toYaml $body) (kindIs "string" $body)) | indent 4 }}
+{{- end }}
+{{- end }}

@@ -3,7 +3,7 @@
 #
 # Builds from source; nothing but Docker is needed (from
 # iop-gw-components/iop-gw-mocks):
-#   docker build -t iop-gw-mocks:0.0.0.0 .
+#   docker build -t iop-gw-mocks:0.1.0.0 .
 #
 # Run: mount mocks.yaml (and the public keys and credentials files it names)
 # read-only, and a writable directory for its output (outDir: the TLS

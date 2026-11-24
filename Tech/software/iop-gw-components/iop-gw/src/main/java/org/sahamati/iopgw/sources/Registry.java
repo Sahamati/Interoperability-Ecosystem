@@ -208,10 +208,7 @@ public final class Registry {
         if (id == null || id.isEmpty()) {
             return null;
         }
-        String baseUrl = trimSlash(Json.text(info, "baseurl"));
-        if (baseUrl != null && !isHttpUrl(baseUrl)) {
-            baseUrl = null;
-        }
+        String baseUrl = trimSlash(pickBaseUrl(Json.text(info, "baseurl"), id));
         JsonNode interopNode = info.get("interop");
         boolean interop = interopNode != null && interopNode.isBoolean() && interopNode.asBoolean();
         JsonNode keys = info.get("keys");
@@ -308,6 +305,51 @@ public final class Registry {
             }
         }
         return List.copyOf(out);
+    }
+
+    private static final java.util.regex.Pattern PREFIXED = java.util.regex.Pattern.compile("^([A-Za-z0-9]+):(?!//)(.*)$");
+
+    /**
+     * {@code baseurl} is one URL, or a comma-separated list whose entries may carry a version
+     * prefix ({@code v1:<url>, v2:<url>}). The {@code v2} URL is used if present, else the {@code v1}
+     * URL, else a URL without a prefix; other prefixes are ignored. Only an absolute http(s) URL is
+     * accepted: an entry that is not one is skipped with a warning and the next is tried in the same
+     * order. Null when no entry is valid.
+     */
+    static String pickBaseUrl(String raw, String entityId) {
+        if (raw == null) {
+            return null;
+        }
+        List<String> v2 = new ArrayList<>();
+        List<String> v1 = new ArrayList<>();
+        List<String> plain = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            String entry = part.trim();
+            if (entry.isEmpty()) {
+                continue;
+            }
+            java.util.regex.Matcher m = PREFIXED.matcher(entry);
+            if (m.matches()) {
+                String url = m.group(2).trim();
+                if ("v2".equals(m.group(1))) {
+                    v2.add(url);
+                } else if ("v1".equals(m.group(1))) {
+                    v1.add(url);
+                }
+            } else {
+                plain.add(entry);
+            }
+        }
+        List<String> order = new ArrayList<>(v2);
+        order.addAll(v1);
+        order.addAll(plain);
+        for (String url : order) {
+            if (isHttpUrl(url)) {
+                return url;
+            }
+            LOG.atWarn().addKeyValue("entity", entityId).log("baseurl entry skipped: not an absolute http(s) URL");
+        }
+        return null;
     }
 
     /** A base URL with trailing '/' removed, so that '/iop/<api>' is appended cleanly. */

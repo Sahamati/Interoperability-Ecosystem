@@ -25,6 +25,7 @@ public final class GwError extends Exception {
     public static final String SIG_MISMATCH = "SignatureDoesNotMatch";
     public static final String DOWNSTREAM = "IopDownstreamError";
     public static final String INTERNAL = "InternalError";
+    public static final String SERVICE_UNAVAILABLE = "ServiceUnavailable";
     public static final String BAD_GATEWAY = "BadGateway";
     public static final String GATEWAY_TIMEOUT = "GatewayTimeout";
     public static final String ALL_ROUTES = "AllRoutesUnavailable";

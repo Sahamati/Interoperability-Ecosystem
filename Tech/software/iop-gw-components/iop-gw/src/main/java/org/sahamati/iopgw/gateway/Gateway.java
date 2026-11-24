@@ -11,67 +11,70 @@ import org.sahamati.iopgw.obs.Audit;
 import org.sahamati.iopgw.obs.Stats;
 import org.sahamati.iopgw.sources.Aig;
 import org.sahamati.iopgw.sources.ApiKeyVerifier;
-import org.sahamati.iopgw.sources.LinkedAAs;
 import org.sahamati.iopgw.sources.Registry;
 import org.sahamati.iopgw.sources.TokenService;
+import org.sahamati.iopgw.tenant.Tenant;
+import org.sahamati.iopgw.tenant.Tenants;
 
 import java.time.Duration;
 import java.util.Optional;
 
-/** Everything a running gateway needs, shared by the /iop and internal API handlers. */
+/**
+ * Everything a running gateway needs, shared by the /iop and internal API handlers: the shared
+ * data (entity registry, AIG, token issuer keys) and the loaded entities.
+ */
 public final class Gateway {
     public final Config config;
     public final Mode mode;
-    public final String selfId;
     public final String jwsAlg;
-    public final KeyRing signing;
-    public final KeyRing decryption;
     public final Registry registry;
     public final Aig aig;
-    public final LinkedAAs linkedAAs;
     public final ApiKeyVerifier apiKeys;
-    public final TokenService tokenService; // the access token; null without tokenService
-    public final TokenService iopTokenService; // the IopToken; null without tokenService
+    public final Tenants tenants;
     public final Http http;
     public final Audit audit;
     public final Stats stats;
-    /** Keys from the core; null with source file. Set by Bootstrap. */
-    public volatile org.sahamati.iopgw.sources.CoreKeys coreSigning;
-    public volatile org.sahamati.iopgw.sources.CoreKeys coreDecryption;
 
-    public Gateway(Config config, KeyRing signing, KeyRing decryption, Registry registry, Aig aig, LinkedAAs linkedAAs,
-                   ApiKeyVerifier apiKeys, TokenService tokenService, TokenService iopTokenService, Http http, Audit audit, Stats stats) {
+    public Gateway(Config config, Registry registry, Aig aig, ApiKeyVerifier apiKeys, Tenants tenants, Http http,
+                   Audit audit, Stats stats) {
         this.config = config;
         this.mode = Mode.valueOf(config.mode);
-        this.selfId = config.self.id;
         this.jwsAlg = config.jws.algorithm;
-        this.signing = signing;
-        this.decryption = decryption;
         this.registry = registry;
         this.aig = aig;
-        this.linkedAAs = linkedAAs;
         this.apiKeys = apiKeys;
-        this.tokenService = tokenService;
-        this.iopTokenService = iopTokenService;
+        this.tenants = tenants;
         this.http = http;
         this.audit = audit;
         this.stats = stats;
     }
 
-    public String corePrefix() {
-        return config.core.pathPrefix;
+    public boolean multiTenant() {
+        return tenants.multiTenant();
+    }
+
+    /** Single-tenant mode: the one entity. */
+    public Tenant single() {
+        return tenants.only().orElseThrow();
+    }
+
+    /** The entity named in audit and stats records: the call's entity, else {@code -} (multi-tenant) or the one entity. */
+    public String recordId(Tenant t) {
+        if (t != null) {
+            return t.id;
+        }
+        if (multiTenant()) {
+            return Stats.UNKNOWN;
+        }
+        return tenants.only().map(x -> x.id).orElse(Stats.UNKNOWN);
     }
 
     public String gwVer() {
-        return config.gwApi != null ? config.gwApi.ver : "2.0.0";
+        return config.gwApi != null ? config.gwApi.ver : "1.1.0";
     }
 
     public Duration forwardingTimeout() {
         return Duration.ofSeconds(config.forwarding.timeoutSeconds);
-    }
-
-    public Duration coreTimeout() {
-        return Duration.ofSeconds(config.core.timeoutSeconds);
     }
 
     public long maxUpstream() {
@@ -79,35 +82,36 @@ public final class Gateway {
     }
 
     /**
-     * The role api-key on an {@code /iop} call to {@code hop}: the hop's own
-     * {@code outboundApiKey}, else {@code self.outboundApiKey} (testing), else the IopToken.
+     * The role api-key on an {@code /iop} call of entity {@code t} to {@code hop}: the hop's own
+     * {@code outboundApiKey}, else the entity's {@code outboundApiKey} (testing), else the IopToken in
+     * AA mode or the access token in FIU and FIP mode.
      */
-    public Optional<String> outboundKey(Registry.Entity hop) {
-        return key(hop, iopTokenService);
+    public Optional<String> outboundKey(Tenant t, Registry.Entity hop) {
+        return key(t, hop, mode == Mode.AA ? t.iopTokens : t.tokens);
     }
 
     /**
-     * The api-key on a Direct API call to {@code entity}: its own
-     * {@code outboundApiKey}, else {@code self.outboundApiKey} (testing), else the access token.
+     * The api-key on a Direct API call of entity {@code t} to {@code entity}: its own
+     * {@code outboundApiKey}, else the entity's {@code outboundApiKey} (testing), else the access token.
      */
-    public Optional<String> directKey(Registry.Entity entity) {
-        return key(entity, tokenService);
+    public Optional<String> directKey(Tenant t, Registry.Entity entity) {
+        return key(t, entity, t.tokens);
     }
 
-    private Optional<String> key(Registry.Entity peer, TokenService tokens) {
+    private static Optional<String> key(Tenant t, Registry.Entity peer, TokenService tokens) {
         if (peer.outboundApiKey() != null) {
             return Optional.of(peer.outboundApiKey());
         }
-        String fixed = config.secret("self.outboundApiKey");
+        String fixed = t.outboundApiKey();
         if (fixed != null) {
             return Optional.of(fixed);
         }
         return tokens == null ? Optional.empty() : tokens.get();
     }
 
-    /** Signs {@code body} with a usable signing key (detached JWS), or fails with a bare 500. */
-    public String signDetached(byte[] body) throws GwError {
-        KeyRing.PrivKey k = signing.pickSigning().orElseThrow(() -> new GwError(500, GwError.INTERNAL, "unable to sign"));
+    /** Signs {@code body} with a usable signing key of {@code t} (detached JWS), or fails with a bare 500. */
+    public String signDetached(Tenant t, byte[] body) throws GwError {
+        KeyRing.PrivKey k = t.signing.pickSigning().orElseThrow(() -> new GwError(500, GwError.INTERNAL, "unable to sign"));
         try {
             return Jose.signDetached(body, k, jwsAlg);
         } catch (Jose.JoseException e) {
@@ -115,8 +119,8 @@ public final class Gateway {
         }
     }
 
-    public String signCompact(byte[] body) throws GwError {
-        KeyRing.PrivKey k = signing.pickSigning().orElseThrow(() -> new GwError(500, GwError.INTERNAL, "unable to sign payload"));
+    public String signCompact(Tenant t, byte[] body) throws GwError {
+        KeyRing.PrivKey k = t.signing.pickSigning().orElseThrow(() -> new GwError(500, GwError.INTERNAL, "unable to sign payload"));
         try {
             return Jose.signCompact(body, k, jwsAlg);
         } catch (Jose.JoseException e) {

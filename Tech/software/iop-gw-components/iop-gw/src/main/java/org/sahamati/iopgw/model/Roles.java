@@ -21,6 +21,8 @@ public final class Roles {
     public static final String INTER_AA = "x-inter_aa_api_key";
 
     public static final List<String> ALL_KEYS = List.of(CLIENT, CONN_AA, CUST_AA, ORIG_AA, FIP_KEY, INTER_AA);
+    /** The AA role api-keys: each must carry an IopToken ({@code token_use: iop}). */
+    public static final java.util.Set<String> IOP_TOKEN_KEYS = java.util.Set.of(CONN_AA, CUST_AA, ORIG_AA, INTER_AA);
 
     /** Type of the sender that owns each key header. */
     public static final Map<String, EntityType> KEY_OWNER = Map.of(

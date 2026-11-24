@@ -1,7 +1,7 @@
 swagger: '2.0'
 info:
   title: fip-iop-gw to fip-core
-  version: 1.0.0-draft.1
+  version: 3.0.0-draft.1
   description: |
     **Disclaimer:** Please review and verify the contents of this document against the applicable system requirements and specifications.
 
@@ -24,16 +24,35 @@ info:
 
     Initiators: An Origin-AA (delivered by one of the FIP's Inter-AAs): `{"type":"AA","id":"<Origin-AA id>"}`.
 
-    Source: IOP Gateway — Integration Guide for the fip-core (iop-gateway-fip-core-prd.md), sections 4, 5.1 and 6.1. Where this file and the guide differ, the guide applies.
+    Source: IOP Gateway — Integration Guide for the fip-core (`Tech/PRDs/ecosystem/IOP-APIs-Implementation/Sahamati-Reference-Implementation/FIP/interop-ecosystem_fip-core-interface-to-iop-gw-prd.md`), sections 4, 5.1 and 6.1. Where this file and the guide differ, the guide applies.
 
     All identifiers in examples are synthetic.
+
+    # Single-tenant and multi-tenant mode
+
+    The fip-iop-gw runs in one of two modes, set with `multiTenant` in its main configuration file.
+
+    | Item | Single-tenant mode (default, `multiTenant: off`) | Multi-tenant mode (`multiTenant: on`) |
+    |---|---|---|
+    | FIPs per fip-iop-gw | One | One or more |
+    | fip-core URLs and tokens | In the main configuration file | In each FIP's entity file |
+    | `Core-Entity-Id` to the fip-core | Never sent | Sent on every request |
+
+    **Multi-tenant mode only.** One fip-iop-gw can serve more than one FIP. Each FIP has its own entity
+    file on the gateway, with its own fip-core URLs and tokens. Every request to the fip-core (messages,
+    Heartbeat, key pull, linkedAAs pull) carries `Core-Entity-Id: <FIP entity id>`: the FIP the call is
+    for. It is sent even when only one FIP is loaded; a fip-core serving one FIP may ignore it.
+    Responses carry no `Core-Entity-Id`.
 
     # Transport
 
     - Message APIs and linkedAAs: `<fip-core base URL>/fip-core/<api>`, HTTPS or plain HTTP, as set in the
-      fip-iop-gw configuration. Expose them only to the fip-iop-gw.
-    - Key APIs: **HTTPS only**, at the key base URL set in the fip-iop-gw configuration (it can differ from the
-      other endpoints). The fip-iop-gw refuses an `http://` key URL at start-up.
+      fip-iop-gw configuration (in multi-tenant mode, in that FIP's entity file). Expose them only to the
+      fip-iop-gw.
+    - Key APIs: **HTTPS only**, at the key base URL set in the fip-iop-gw configuration (in multi-tenant
+      mode, in that FIP's entity file); it can differ from the other endpoints. An `http://` key URL is
+      refused at start-up in single-tenant mode; in multi-tenant mode it makes that FIP's entity file
+      invalid: the FIP is not loaded and the error is logged (the gateway still starts).
     - The role api-key header of the calling AA and `Content-Type` are not sent to the fip-core.
       `Content-Type` is not required on responses.
 
@@ -42,10 +61,10 @@ info:
     - **De-duplicate on the payload's `txnid`.** Gateways retry and try other routes, so the same
       message can arrive more than once. A repeated `txnid` must not be processed again: answer it
       with `409` and `errorCode` `IdempotencyError` (as in the ReBIT specification).
-    - **Return `Correlation-Id` unchanged** on every message response.
+    - **Return `Correlation-Id` unchanged** on every message and Heartbeat response.
     - Respond within the fip-iop-gw's core timeout (30 seconds by default).
-    - A status of 300 or above reaches the Initiator as an error. On an error reply (`400` or above) the
-      fip-iop-gw adds `errorSource` `{"type":"FIP","id":"<the FIP's id>"}` to the reply envelope;
+    - A status of 400 or above is an error; 2xx and 3xx are passed on as success. On an error reply (`400` or above) the
+      fip-iop-gw adds `errorSource` `{"type":"FIP","id":"<the FIP's id>"}` (in multi-tenant mode, the FIP named in `Core-Entity-Id`) to the reply envelope;
       the fip-core does not set it.
 
     # When the fip-iop-gw cannot use the response
@@ -55,7 +74,7 @@ info:
     does not verify with the FIP's signing keys; `500 InternalError` when the gateway cannot sign
     or encrypt the response.
   x-custom-tags:
-    x-generated: '2026-11-13'
+    x-generated: '2026-11-23'
     x-caller: fip-iop-gw
     x-callee: fip-core
 host: fip-core.example.internal
@@ -72,12 +91,17 @@ securityDefinitions:
     type: apiKey
     in: header
     name: Authorization
-    description: '`Bearer <token>`, set in the fip-iop-gw configuration for calls to the core. When it is configured, the fip-core should reject calls without it or with a different value.'
+    description: '`Bearer <token>`, set in the fip-iop-gw configuration (in multi-tenant mode, in that FIP''s entity file) as `core.token`, for calls to the core. When it is configured, the fip-core should reject calls without it or with a different value.'
   keyFetchToken:
     type: apiKey
     in: header
     name: Authorization
-    description: '`Bearer <key-fetch token>`, set in the fip-iop-gw configuration. The fip-core must reject key requests without it.'
+    description: '`Bearer <key-fetch token>`, set in the fip-iop-gw configuration (in multi-tenant mode, in that FIP''s entity file) as `signingKey.token` and `decryptionKeys.token`. The fip-core must reject key requests without it.'
+  linkedAAsToken:
+    type: apiKey
+    in: header
+    name: Authorization
+    description: '`Bearer <token>`, set in the fip-iop-gw configuration (in multi-tenant mode, in that FIP''s entity file) as `linkedAAs.token`. The fip-core should reject calls without it or with a different value.'
 security:
 - coreToken: []
 tags:
@@ -86,10 +110,17 @@ tags:
 - name: Heartbeat
   description: Called when the fip-iop-gw receives `POST /iop/Heartbeat`. No body and no `x-jws-signature`.
 - name: Keys
-  description: Key pull. Called at start-up, then every hour by default, and every 30 seconds while the fip-iop-gw has no keys of that type. HTTPS only; the only request header is `Authorization` with the key-fetch token. Serve these only to the fip-iop-gw and never log key material.
+  description: Key pull. Called at start-up, then every hour by default, and every 30 seconds while the fip-iop-gw has no keys of that type. HTTPS only; the only request headers are `Authorization` with the key-fetch token and, in multi-tenant mode, `Core-Entity-Id` (the FIP whose keys are asked for). Serve these only to the fip-iop-gw and never log key material.
 - name: Linked AAs
   description: Linked AAs pull. Called at start-up, then every hour by default, and every 30 seconds while the fip-iop-gw has no list. The fip-iop-gw keeps the list in memory and in its persistent cache. HTTP or HTTPS.
 parameters:
+  CoreEntityId:
+    name: Core-Entity-Id
+    in: header
+    required: false
+    type: string
+    x-example: fip-test-001
+    description: 'Sent only in multi-tenant mode (`multiTenant: on`): the FIP the call is for. In that mode it is always sent, even when only one FIP is loaded on the fip-iop-gw (a fip-core serving one FIP may ignore it). Never sent in single-tenant mode. Not returned on responses.'
   InitiatorEntity:
     name: Initiator-Entity
     in: header
@@ -134,6 +165,7 @@ paths:
       operationId: post_fip_core_Accounts_discover
       description: 'Same payload as the Direct API `/Accounts/discover`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -157,7 +189,7 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         default:
-          description: An error, as the FIP returns it in the Direct API `/Accounts/discover` call. A status of 300 or above reaches the Initiator as an error.
+          description: Any other status, as the FIP returns it in the Direct API `/Accounts/discover` call. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
           headers: *id001
           schema:
             $ref: '#/definitions/DirectApiResponse'
@@ -169,6 +201,7 @@ paths:
       operationId: post_fip_core_Accounts_link
       description: 'Same payload as the Direct API `/Accounts/link`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -186,7 +219,7 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         default:
-          description: An error, as the FIP returns it in the Direct API `/Accounts/link` call. A status of 300 or above reaches the Initiator as an error.
+          description: Any other status, as the FIP returns it in the Direct API `/Accounts/link` call. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
           headers: *id001
           schema:
             $ref: '#/definitions/DirectApiResponse'
@@ -198,6 +231,7 @@ paths:
       operationId: post_fip_core_Accounts_link_verify
       description: 'Same payload as the Direct API `/Accounts/link/verify`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -215,7 +249,7 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         default:
-          description: An error, as the FIP returns it in the Direct API `/Accounts/link/verify` call. A status of 300 or above reaches the Initiator as an error.
+          description: Any other status, as the FIP returns it in the Direct API `/Accounts/link/verify` call. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
           headers: *id001
           schema:
             $ref: '#/definitions/DirectApiResponse'
@@ -227,6 +261,7 @@ paths:
       operationId: post_fip_core_Accounts_link_reverify
       description: 'Same payload as the Direct API `/Accounts/link/reverify`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -244,7 +279,7 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         default:
-          description: An error, as the FIP returns it in the Direct API `/Accounts/link/reverify` call. A status of 300 or above reaches the Initiator as an error.
+          description: Any other status, as the FIP returns it in the Direct API `/Accounts/link/reverify` call. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
           headers: *id001
           schema:
             $ref: '#/definitions/DirectApiResponse'
@@ -256,6 +291,7 @@ paths:
       operationId: post_fip_core_Accounts_delink
       description: 'Same payload as the Direct API `/Accounts/delink`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -273,7 +309,7 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         default:
-          description: An error, as the FIP returns it in the Direct API `/Accounts/delink` call. A status of 300 or above reaches the Initiator as an error.
+          description: Any other status, as the FIP returns it in the Direct API `/Accounts/delink` call. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
           headers: *id001
           schema:
             $ref: '#/definitions/DirectApiResponse'
@@ -285,6 +321,7 @@ paths:
       operationId: post_fip_core_Consent
       description: 'Same payload as the Direct API `/Consent`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -302,7 +339,7 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         default:
-          description: An error, as the FIP returns it in the Direct API `/Consent` call. A status of 300 or above reaches the Initiator as an error.
+          description: Any other status, as the FIP returns it in the Direct API `/Consent` call. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
           headers: *id001
           schema:
             $ref: '#/definitions/DirectApiResponse'
@@ -314,6 +351,7 @@ paths:
       operationId: post_fip_core_FI_request
       description: 'Same payload as the Direct API `/FI/request`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -331,7 +369,7 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         default:
-          description: An error, as the FIP returns it in the Direct API `/FI/request` call. A status of 300 or above reaches the Initiator as an error.
+          description: Any other status, as the FIP returns it in the Direct API `/FI/request` call. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
           headers: *id001
           schema:
             $ref: '#/definitions/DirectApiResponse'
@@ -343,6 +381,7 @@ paths:
       operationId: post_fip_core_FI_fetch
       description: 'Same payload as the Direct API `/FI/fetch`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -360,7 +399,7 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         default:
-          description: An error, as the FIP returns it in the Direct API `/FI/fetch` call. A status of 300 or above reaches the Initiator as an error.
+          description: Any other status, as the FIP returns it in the Direct API `/FI/fetch` call. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
           headers: *id001
           schema:
             $ref: '#/definitions/DirectApiResponse'
@@ -372,6 +411,7 @@ paths:
       operationId: post_fip_core_Consent_Notification
       description: 'Same payload as the Direct API `/Consent/Notification`. De-duplicate on the payload''s `txnid`: answer a repeat with `409 IdempotencyError`.'
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -389,7 +429,7 @@ paths:
           schema:
             $ref: '#/definitions/DirectApiResponse'
         default:
-          description: An error, as the FIP returns it in the Direct API `/Consent/Notification` call. A status of 300 or above reaches the Initiator as an error.
+          description: Any other status, as the FIP returns it in the Direct API `/Consent/Notification` call. A status of 400 or above is an error; 2xx and 3xx are passed on as success.
           headers: *id001
           schema:
             $ref: '#/definitions/DirectApiResponse'
@@ -401,6 +441,7 @@ paths:
       operationId: get_fip_core_Heartbeat
       description: Same payload as the Direct API `/Heartbeat`.
       parameters:
+      - $ref: '#/parameters/CoreEntityId'
       - $ref: '#/parameters/InitiatorEntity'
       - $ref: '#/parameters/CorrelationId'
       - $ref: '#/parameters/ForwardingHop'
@@ -412,11 +453,9 @@ paths:
           schema:
             $ref: '#/definitions/HeartbeatResponse'
         default:
-          description: Any other status reaches the Initiator as an error.
+          description: 'Any other status. The fip-iop-gw reads only the status: 400 or above is an error; 2xx and 3xx are passed on as success.'
           headers:
             Correlation-Id: *id002
-          schema:
-            $ref: '#/definitions/ErrorResponse'
       consumes: []
   /fip-core/keys/signing:
     get:
@@ -429,6 +468,8 @@ paths:
       - https
       security:
       - keyFetchToken: []
+      parameters:
+      - $ref: '#/parameters/CoreEntityId'
       responses:
         '200':
           description: The signing key set.
@@ -449,6 +490,8 @@ paths:
       - https
       security:
       - keyFetchToken: []
+      parameters:
+      - $ref: '#/parameters/CoreEntityId'
       responses:
         '200':
           description: The decryption key set.
@@ -464,7 +507,11 @@ paths:
       - Linked AAs
       summary: The list of linked AAs
       operationId: get_fip_core_linkedAAs
-      description: The only request header is `Authorization` (set in the gateway configuration). No response headers are needed.
+      description: The only request headers are `Authorization` (`linkedAAs.token`, set in the fip-iop-gw configuration; in multi-tenant mode, in that FIP's entity file) and, in multi-tenant mode, `Core-Entity-Id` (the FIP whose list is asked for). No response headers are needed.
+      security:
+      - linkedAAsToken: []
+      parameters:
+      - $ref: '#/parameters/CoreEntityId'
       responses:
         '200':
           description: The list of linked AAs.

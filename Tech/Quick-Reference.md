@@ -2,6 +2,12 @@
 
 Paths are relative to the `Tech` folder.
 
+## FAQ
+
+| Item | Path |
+|---|---|
+| AA Interoperability: Frequently Asked Questions | [FAQ.pdf](FAQ.pdf) |
+
 ## Generic PRD
 
 PRDs for any AA, FIU or FIP building interoperability.
